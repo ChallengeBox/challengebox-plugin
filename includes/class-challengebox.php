@@ -100,6 +100,7 @@ class ChallengeBox {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-challengebox-i18n.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-challengebox-admin.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-challengebox-fitbit-api.php';
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-challengebox-challenge-shortcode.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'public/class-challengebox-public.php';
 		$this->loader = new ChallengeBox_Loader();
 
