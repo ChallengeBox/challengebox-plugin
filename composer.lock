@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "9bd88393bdad2b37886bf7ce197ede28",
-    "content-hash": "64c54ebecbd2d107f40d77413f085c92",
+    "hash": "56cdb59009defedf5a29a75cf53ea6fe",
+    "content-hash": "c937c41426d65ff79e6c3c375023c8fb",
     "packages": [
         {
             "name": "djchen/oauth2-fitbit",
@@ -435,6 +435,47 @@
                 "response"
             ],
             "time": "2015-05-04 20:22:00"
+        },
+        {
+            "name": "woothemes/woocommerce-api",
+            "version": "2.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kloon/WooCommerce-REST-API-Client-Library.git",
+                "reference": "66fb772d21822dde0a07ea083953a5873a390e07"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/kloon/WooCommerce-REST-API-Client-Library/zipball/66fb772d21822dde0a07ea083953a5873a390e07",
+                "reference": "66fb772d21822dde0a07ea083953a5873a390e07",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "php": ">= 5.2.0"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "lib/woocommerce-api"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL v3"
+            ],
+            "authors": [
+                {
+                    "name": "Max Rice",
+                    "email": "max@maxrice.com"
+                },
+                {
+                    "name": "Gerhard Potgieter"
+                }
+            ],
+            "description": "A client library for the WooCommerce REST API",
+            "time": "2015-07-13 21:19:17"
         }
     ],
     "packages-dev": [],
