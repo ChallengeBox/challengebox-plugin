@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "56cdb59009defedf5a29a75cf53ea6fe",
-    "content-hash": "c937c41426d65ff79e6c3c375023c8fb",
+    "hash": "6f98c99a1b41bb2f22c429307b2c522f",
+    "content-hash": "01ee9c4db6de1b18e3a3aee7ff8c31cd",
     "packages": [
         {
             "name": "djchen/oauth2-fitbit",
@@ -438,16 +438,16 @@
         },
         {
             "name": "woothemes/woocommerce-api",
-            "version": "2.0.1",
+            "version": "dev-master",
             "source": {
                 "type": "git",
-                "url": "https://github.com/kloon/WooCommerce-REST-API-Client-Library.git",
-                "reference": "66fb772d21822dde0a07ea083953a5873a390e07"
+                "url": "https://github.com/ryanwitt/WooCommerce-REST-API-Client-Library.git",
+                "reference": "a91cade21ca4a7a21f42e67bb44ff4f57762521d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kloon/WooCommerce-REST-API-Client-Library/zipball/66fb772d21822dde0a07ea083953a5873a390e07",
-                "reference": "66fb772d21822dde0a07ea083953a5873a390e07",
+                "url": "https://api.github.com/repos/ryanwitt/WooCommerce-REST-API-Client-Library/zipball/a91cade21ca4a7a21f42e67bb44ff4f57762521d",
+                "reference": "a91cade21ca4a7a21f42e67bb44ff4f57762521d",
                 "shasum": ""
             },
             "require": {
@@ -461,7 +461,6 @@
                     "lib/woocommerce-api"
                 ]
             },
-            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "GPL v3"
             ],
@@ -475,13 +474,18 @@
                 }
             ],
             "description": "A client library for the WooCommerce REST API",
-            "time": "2015-07-13 21:19:17"
+            "support": {
+                "source": "https://github.com/ryanwitt/WooCommerce-REST-API-Client-Library/tree/master"
+            },
+            "time": "2016-04-27 17:35:09"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {
+        "woothemes/woocommerce-api": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": [],
