@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Implements example command.
+ * Commands for managing ChallengeBox.
  */
 class CBCmd extends WP_CLI_Command {
 
@@ -41,6 +41,7 @@ class CBCmd extends WP_CLI_Command {
 	 *    - table
 	 *    - yaml
 	 *    - csv
+	 *    - json
 	 *  ---
 	 *
 	 * ## EXAMPLES
@@ -91,13 +92,13 @@ class CBCmd extends WP_CLI_Command {
 		WP_CLI::debug("User $id...");
 
 		$warnings = array();
-		$customer = $this->api()->customers->get($id)->customer;
+		$customer = $this->get_customer($id);
 		$orders = array_filter( // Only non-cancelled orders
-			//$this->api()->customers->get_orders($id)->orders,
 			$this->get_customer_orders($id),
 			function($o) { return $o->status == 'processing' || $o->status == 'completed'; }
 		);
-		$parsed = CBCmd::get_order_data($orders);
+		$subscriptions = $this->get_customer_subscriptions($id);
+		$parsed = CBCmd::valid_box_orders($orders);
 
 		if ($verbose)
 			WP_CLI::debug(var_export($parsed, true));
@@ -182,6 +183,129 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Generates rush orders for users who have chosen this option with their subscription
+	 * but do not yet have a rush order.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to check or order generation.
+	 *
+	 * [--all]
+	 * : Generate orders for all users. (Ignores <id>... if found).
+	 *
+	 * [--pretend]
+	 * : Don't actually generate any orders, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--continue]
+	 * : Continue, even if errors are encountered on a given user.
+	 *
+	 * [--skip]
+	 * : Skip users that have a value for clothing_gender in their metadata.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb generate_rush_orders 167
+	 */
+	function generate_rush_orders($args, $assoc_args) {
+		$all = !empty($assoc_args['all']);
+		if ($all) {
+			WP_CLI::debug("Grabbing user ids...");
+			$args = array_map(function ($user) { return $user->id; }, get_users());
+		}
+		$not_pretend = empty($assoc_args['pretend']);
+		$verbose = !empty($assoc_args['verbose']);
+		$continue = !empty($assoc_args['continue']);
+		$overwrite = !empty($assoc_args['overwrite']);
+		$skip = !empty($assoc_args['skip']);
+		$format = !empty($assoc_args['format']) ? $assoc_args['format'] : 'table';
+		$results = array();
+		sort($args);
+		foreach ($args as $id) {
+
+			WP_CLI::debug("Checking $id for rush orders...");
+
+			$user_data = get_user_meta($id);
+			if ($verbose) WP_CLI::debug(var_export(array('user_data'=>$user_data), true));
+
+			if ($skip && !empty($user_data['_rush_order_checked'])) {
+				WP_CLI::debug("\tSkipping $id. (was marked as already checked)");	
+				continue;
+			}
+
+			$orders = $this->get_customer_orders($id);
+			$customer_has_rush_order = CBCmd::any(
+				// Return true if any order has a rush order set
+				array_filter($orders, function ($order) {
+					// Return true if any fee line indicates a rush order
+					return CBCmd::any(
+						array_filter($order->fee_lines, function ($line) {
+							return 'Rush My Box' == $line->title;
+						})
+					);
+				})
+			);
+			$customer_has_valid_box_order = CBCmd::any(CBCmd::valid_box_orders($orders));
+
+			// Did they select a rush order at all?
+			if ($customer_has_rush_order) {
+				if ($not_pretend) update_user_meta($id, '_rush_order', 1); 
+				WP_CLI::debug("\t1 -> $id._rush_order");
+
+				// If they selected rush order, did an order get generated?
+				if (!$customer_has_valid_box_order) {
+					// Need to generate an order
+					WP_CLI::debug("\tGenerating rush order");
+					//if ($not_pretend) update_user_meta($id, '_rush_order_generated', 1);
+					WP_CLI::debug("\t1 -> $id._rush_order_generated");
+				} else {
+					WP_CLI::debug("\tValid box order already found, no need to generate.");
+				}
+			}
+
+			// Speed up checks next time by noticing if we checked it
+			if ($not_pretend) update_user_meta($id, '_rush_order_checked', 1);
+			WP_CLI::debug("\t1 -> $id._rush_order_checked");
+
+			/*
+			try {
+				// Determine if 
+				$result['error'] = NULL;
+				array_push($results, $result);
+			} catch (Exception $ex) {
+				WP_CLI::debug("Error for user $id: " . $ex->getMessage());	
+				array_push($results, array(
+					'id' => $id, 
+					'error' => $ex->getMessage(),
+					'clothing_gender' => NULL,
+					'tshirt_size' => NULL,
+					'box_month' => NULL,
+					'ordered_this_month' => NULL,
+					'warnings' => NULL,
+				));
+			}
+			*/
+		}
+	}
+
+
+	/**
 	 * Prints out an estimate of what orders will need to be shipped.
 	 *
 	 * ## OPTIONS
@@ -194,11 +318,11 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * (DEBUG COMMAND) Prints out and parses skus from a user.
+	 * Prints out and parses skus from a user.
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <user_id>
 	 * : The user id to check.
 	 *
 	 * ## EXAMPLES
@@ -207,8 +331,8 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function skus( $args, $assoc_args ) {
 		list( $id ) = $args;
-		$customer = $this->api()->customers->get($id)->customer;
-		$orders = $this->api()->customers->get_orders($id)->orders;
+		$customer = $this->get_customer($id);
+		$orders = $this->get_customer_orders($id);
 		$skus = CBCmd::get_customer_skus($customer, $orders);
 		$parsed = CBCmd::parse_skus($skus);
 		uasort($parsed, function ($a, $b) { return $b->month - $a->month; });
@@ -223,7 +347,7 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <user_id>
 	 * : The user id to check.
 	 *
 	 * ## EXAMPLES
@@ -231,9 +355,23 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb customer 167
 	 */
 	function customer( $args, $assoc_args ) {
-		list( $id ) = $args;
-		$customer = $this->api()->customers->get($id)->customer;
-		WP_CLI::line(var_export($customer));
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_customer($id)));
+	}
+
+	/**
+	 * Prints out order data for the given order.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <order_id>
+	 * : The user id to check.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb order 1039
+	 */
+	function order( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_order($id), true));
 	}
 
 	/**
@@ -241,7 +379,7 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <user_id>
 	 * : The user id to check.
 	 *
 	 * ## EXAMPLES
@@ -249,27 +387,23 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb orders 167
 	 */
 	function orders( $args, $assoc_args ) {
-		list( $id ) = $args;
-		WP_CLI::line(var_export($this->get_customer_orders($id), true));
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_customer_orders($id), true));
 	}
 
 	/**
-	 * Prints out subscription data for the given customer.
+	 * Prints data for box orders for the given customer.
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <user_id>
 	 * : The user id to check.
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb subscriptions 167
+	 *     wp cb box_orders 167
 	 */
-	function subscriptions( $args, $assoc_args ) {
-		list( $id ) = $args;
-		WP_CLI::line(var_export(
-			wcs_get_users_subscriptions($id)
-		, true));
+	function box_orders( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export(CBCmd::valid_box_orders($this->get_customer_orders($id)), true));
 	}
 
 	/**
@@ -277,67 +411,43 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <subscription_id>
 	 * : The subscription id to check.
 	 *
 	 * ## EXAMPLES
-	 *
 	 *     wp cb subscription 6691
 	 */
 	function subscription( $args, $assoc_args ) {
-		list( $id ) = $args;
-		WP_CLI::line(var_export(
-			$this->get_customer_subscriptions($id)
-		, true));
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_subscription($id), true));
 	}
 
-
 	/**
-	 * Prints out order data for the given customer.
+	 * Prints out subscription data for the given customer.
 	 *
 	 * ## OPTIONS
 	 *
-	 * <id>
+	 * <user_id>
 	 * : The user id to check.
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb orders 167
+	 *     wp cb subscriptions 167
 	 */
-	function order_data( $args, $assoc_args ) {
-		list( $id ) = $args;
-		WP_CLI::line(var_export(
-				CBCmd::get_order_data(
-					$this->get_customer_orders($id)->orders
-				)
-		, true));
+	function subscriptions( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_customer_subscriptions($id), true));
 	}
 
 	//
 	// Utility functions
 	//
 
-	private function get_customer_orders($id) {
-		/*
-		return (object) array(
-			'orders' => array_map(
-				function ($o) { return (object) $o; },
-				$this->wapi()->WC_API_Customers->get_customer_orders($id)['orders']
-			)
-		);
-		*/
-		return $this->api()->customers->get_orders($id)->orders;
-	}
-	private function get_customer_subscriptions($id) {
-		// return $this->wapi()->WC_API_Subscriptions_Customers->get_customer_subscriptions($id);
-		return $this->api()->customers->get_subscriptions($id)->subscriptions;
-	}
-	//private function get_subscription($id) {
-		//return $this->wapi()->WC_API_Subscriptions->get_subscription($id);
-	//	return $this->api()->customers->get_subscriptions($id)->subscriptions;
-	//}
+	private function get_customer($id) { return $this->api()->customers->get($id)->customer; }
+	private function get_order($id) { return $this->api()->orders->get($id)->order; }
+	private function get_subscription($id) { return $this->api()->subscriptions->get($id)->subscription; }
+	private function get_customer_orders($id) { return $this->api()->customers->get_orders($id)->orders; }
+	private function get_customer_subscriptions($id) { return $this->api()->customers->get_subscriptions($id)->customer_subscriptions; }
 
-	// Returns a (cached) woocommerce api object
+	// XXX: experimental internal wp api thing. Returns a (cached) woocommerce api object
 	private $_woo_api;
 	private function wapi() {
 		if (empty($this->_woo_api)) {
@@ -424,9 +534,10 @@ class CBCmd extends WP_CLI_Command {
 		return $skus;
 	}
 
-	// Returns all skus found in customer's orders, parsed
+	// Returns all valid box skus found in customer's orders, parsed
 	// and with the date included.
-	private static function get_order_data($orders) {
+	// Does not return a sku if it is not a box.
+	private static function valid_box_orders($orders) {
 		$result = array();
 		foreach ($orders as $order) {
 			foreach ($order->line_items as $line_item) {
@@ -468,7 +579,7 @@ class CBCmd extends WP_CLI_Command {
 
 	// Returns true if customer has a valid order this month
 	private static function customer_has_box_order_this_month($orders) {
-		$parsed = CBCmd::get_order_data($orders);
+		$parsed = CBCmd::valid_box_orders($orders);
 		$this_month = (new DateTime())->format('Y-m');
 		foreach ($parsed as $candidate) {
 			if ($candidate->date->format('Y-m') == $this_month) {
@@ -478,9 +589,13 @@ class CBCmd extends WP_CLI_Command {
 		return false;
 	}
 
-	// Similar to python's all(), returns true if all elements are true (or for empty array).
+	// Similar to python's all(), returns true if all elements are true (true for empty array).
 	private static function all($a) {
 		return (bool) !array_filter($a, function ($x) {return !$x;});
+	}
+	// Similar to python's any(), returns true if any element is true (false for empty array).
+	private static function any($a) {
+		return (bool) sizeof(array_filter($a));
 	}
 
 }
