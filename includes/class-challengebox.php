@@ -105,6 +105,9 @@ class ChallengeBox {
  		if (defined( 'WP_CLI' ) && WP_CLI) {
 			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-commands.php';
 		}
+ 		if (defined( 'WC_API_Client_Resource' ) && WC_API_Client_Resource) {
+			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-wc-api-client-resource-subscriptions.php';
+		}
 
 		$this->loader = new ChallengeBox_Loader();
 

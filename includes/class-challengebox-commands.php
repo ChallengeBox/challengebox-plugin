@@ -5,38 +5,6 @@
  */
 class CBCmd extends WP_CLI_Command {
 
-
-	/**
-	 * Prints a greeting.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <name>
-	 * : The name of the person to greet.
-	 *
-	 * [--type=<type>]
-	 * : Whether or not to greet the person with success or error.
-	 * ---
-	 * default: success
-	 * options:
-	 *   - success
-	 *   - error
-	 * ---
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     wp example hello Newman
-	 *
-	 * @when before_wp_load
-	 */
-	function hello( $args, $assoc_args ) {
-		list( $name ) = $args;
-
-		// Print the message with type
-		$type = $assoc_args['type'];
-		WP_CLI::$type( "Hello, $name!" );
-	}
-
 	/**
 	 * Migrates a user to the data storage scheme we introduced in April 2016.
 	 *
@@ -125,10 +93,11 @@ class CBCmd extends WP_CLI_Command {
 		$warnings = array();
 		$customer = $this->api()->customers->get($id)->customer;
 		$orders = array_filter( // Only non-cancelled orders
-			$this->api()->customers->get_orders($id)->orders,
+			//$this->api()->customers->get_orders($id)->orders,
+			$this->get_customer_orders($id),
 			function($o) { return $o->status == 'processing' || $o->status == 'completed'; }
 		);
-		$parsed = CBCmd::get_parsed_customer_skus_with_date($orders);
+		$parsed = CBCmd::get_order_data($orders);
 
 		if ($verbose)
 			WP_CLI::debug(var_export($parsed, true));
@@ -142,6 +111,10 @@ class CBCmd extends WP_CLI_Command {
 
 		// Assume last order is the latest
 		$basis = $parsed[sizeof($parsed)-1];
+
+		//
+		// Calculate properties
+		//
 
 		$tshirt_size = $basis->size;
 		$clothing_gender = $basis->gender;
@@ -158,6 +131,10 @@ class CBCmd extends WP_CLI_Command {
 		$box_month = max($box_month, sizeof($parsed));
 
 		$ordered = CBCmd::customer_has_box_order_this_month($orders);
+
+		//
+		// Update metadata
+		//
 
 		// Warn if acount differs from last order
 		$account_clothing_gender = get_user_meta($id, 'clothing_gender', true);
@@ -202,6 +179,18 @@ class CBCmd extends WP_CLI_Command {
 				'warnings' => implode(". ", $warnings),
 		);
 		
+	}
+
+	/**
+	 * Prints out an estimate of what orders will need to be shipped.
+	 *
+	 * ## OPTIONS
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb shipping_estimate
+	 */
+	function shipping_estimate( $args, $assoc_args ) {
 	}
 
 	/**
@@ -261,13 +250,104 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function orders( $args, $assoc_args ) {
 		list( $id ) = $args;
-		$orders = $this->api()->customers->get_orders($id)->orders;
-		WP_CLI::line(var_export($orders));
+		WP_CLI::line(var_export($this->get_customer_orders($id), true));
+	}
+
+	/**
+	 * Prints out subscription data for the given customer.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : The user id to check.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb subscriptions 167
+	 */
+	function subscriptions( $args, $assoc_args ) {
+		list( $id ) = $args;
+		WP_CLI::line(var_export(
+			wcs_get_users_subscriptions($id)
+		, true));
+	}
+
+	/**
+	 * Prints out the given subscription.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : The subscription id to check.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb subscription 6691
+	 */
+	function subscription( $args, $assoc_args ) {
+		list( $id ) = $args;
+		WP_CLI::line(var_export(
+			$this->get_customer_subscriptions($id)
+		, true));
+	}
+
+
+	/**
+	 * Prints out order data for the given customer.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : The user id to check.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb orders 167
+	 */
+	function order_data( $args, $assoc_args ) {
+		list( $id ) = $args;
+		WP_CLI::line(var_export(
+				CBCmd::get_order_data(
+					$this->get_customer_orders($id)->orders
+				)
+		, true));
 	}
 
 	//
 	// Utility functions
 	//
+
+	private function get_customer_orders($id) {
+		/*
+		return (object) array(
+			'orders' => array_map(
+				function ($o) { return (object) $o; },
+				$this->wapi()->WC_API_Customers->get_customer_orders($id)['orders']
+			)
+		);
+		*/
+		return $this->api()->customers->get_orders($id)->orders;
+	}
+	private function get_customer_subscriptions($id) {
+		// return $this->wapi()->WC_API_Subscriptions_Customers->get_customer_subscriptions($id);
+		return $this->api()->customers->get_subscriptions($id)->subscriptions;
+	}
+	//private function get_subscription($id) {
+		//return $this->wapi()->WC_API_Subscriptions->get_subscription($id);
+	//	return $this->api()->customers->get_subscriptions($id)->subscriptions;
+	//}
+
+	// Returns a (cached) woocommerce api object
+	private $_woo_api;
+	private function wapi() {
+		if (empty($this->_woo_api)) {
+			wp_set_current_user(167);
+			WC()->api->includes();
+			WC()->api->register_resources( new WC_API_Server( '/' ) );
+			$this->_woo_api = WC()->api;
+		}
+		return $this->_woo_api;
+	}
 
 	// Returns a (cached) api object
 	private $_api;
@@ -346,19 +426,41 @@ class CBCmd extends WP_CLI_Command {
 
 	// Returns all skus found in customer's orders, parsed
 	// and with the date included.
-	private static function get_parsed_customer_skus_with_date($orders) {
+	private static function get_order_data($orders) {
 		$result = array();
 		foreach ($orders as $order) {
 			foreach ($order->line_items as $line_item) {
+
+				$item = array(
+					'month' => 1,
+					'gender' => NULL,
+					'size' => NULL,
+					'plan' => '1m',
+					'date' => new DateTime($order->created_at),
+				);
+
+				// Gather data from the sku
 				if (!empty($line_item->sku)) {
 					try {
-						$parsed_sku = (array) CBCmd::parse_sku($line_item->sku);
-						$parsed_sku['date'] = new DateTime($order->created_at);
-						array_push($result, (object) $parsed_sku);
+						$sku = CBCmd::parse_sku($line_item->sku);
+						$item['gender'] = $sku->gender;
+						$item['size'] = $sku->size;
+						$item['month'] = $sku->month;
+						$item['plan'] = $sku->plan;
 					} catch (Exception $ex) {
-						continue;
 					}
 				}
+
+				// Gather data from the meta
+				if (!empty($line_item->meta)) {
+					foreach ($line_item->meta as $m) {
+						if ($m->key == 'pa_gender') $item['gender'] = strtolower($m->value);
+						if ($m->key == 'pa_size') $item['size'] = strtolower($m->value);
+					}
+				}
+
+				// Accept this sku if we have all the properties
+				if (CBCmd::all($item)) array_push($result, (object) $item);
 			}
 		}
 		return $result;
@@ -366,7 +468,7 @@ class CBCmd extends WP_CLI_Command {
 
 	// Returns true if customer has a valid order this month
 	private static function customer_has_box_order_this_month($orders) {
-		$parsed = CBCmd::get_parsed_customer_skus_with_date($orders);
+		$parsed = CBCmd::get_order_data($orders);
 		$this_month = (new DateTime())->format('Y-m');
 		foreach ($parsed as $candidate) {
 			if ($candidate->date->format('Y-m') == $this_month) {
@@ -374,6 +476,11 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 		return false;
+	}
+
+	// Similar to python's all(), returns true if all elements are true (or for empty array).
+	private static function all($a) {
+		return (bool) !array_filter($a, function ($x) {return !$x;});
 	}
 
 }
