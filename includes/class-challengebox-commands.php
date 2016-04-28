@@ -73,18 +73,40 @@ class CBCmd extends WP_CLI_Command {
 				array_push($results, $result);
 			} catch (Exception $ex) {
 				WP_CLI::debug("Error for user $id: " . $ex->getMessage());	
-				array_push($results, array(
+				$result = array(
 					'id' => $id, 
 					'error' => $ex->getMessage(),
 					'clothing_gender' => NULL,
 					'tshirt_size' => NULL,
+					'_old_month' => NULL,
 					'box_month' => NULL,
 					'ordered_this_month' => NULL,
+					'_orders' => NULL,
+					'_orders_shipped' => NULL,
 					'warnings' => NULL,
-				));
+				);
+				foreach ($this->get_order_statuses() as $short_name=>$long_name) {
+					$result['total_orders_' . $short_name] = NULL;
+				}
+				array_push($results, $result);
 			}
 		}
-		WP_CLI\Utils\format_items($format, $results, array('id', 'clothing_gender', 'tshirt_size', 'box_month', 'ordered_this_month', 'warnings', 'error'));
+		$columns = array(
+			'id',
+			'clothing_gender',
+			'tshirt_size',
+			'_old_month',
+			'box_month',
+			'ordered_this_month',
+			'_orders',
+			'_orders_shipped',
+			'warnings',
+			'error'
+		);
+		foreach ($this->get_order_statuses() as $short_name=>$long_name) {
+			array_push($columns, '_orders_' . $short_name);
+		}
+		WP_CLI\Utils\format_items($format, $results, $columns);
 	}
 
 	private function _migrate_user_april($id, $not_pretend, $verbose, $overwrite) {
@@ -93,12 +115,37 @@ class CBCmd extends WP_CLI_Command {
 
 		$warnings = array();
 		$customer = $this->get_customer($id);
-		$orders = array_filter( // Only non-cancelled orders
-			$this->get_customer_orders($id),
-			function($o) { return $o->status == 'processing' || $o->status == 'completed'; }
-		);
+		$orders = $this->get_customer_orders($id);
 		$subscriptions = $this->get_customer_subscriptions($id);
 		$parsed = CBCmd::valid_box_orders($orders);
+
+		// Arrange orders by status
+		$orders_by_status = array();
+		foreach ($this->get_order_statuses() as $short_name=>$long_name) {
+			$orders_by_status[$short_name] = array_filter(
+				$orders, 
+				function ($o) use ($short_name) { 
+					return $o->status == $short_name;
+				}
+			);
+		}
+		//var_export($orders_by_status);
+
+		// Figure out how many orders shipped
+		$orders_that_shipped = array();
+		foreach ($orders as $order) {
+			$notes = $this->get_order_notes($order->id);
+			//var_export($notes);
+			if (
+				CBCmd::any(array_filter($notes, function ($note) {
+					return strpos(strtolower($note->note), 'shipped') !== false;
+				}))
+					||
+				'completed' == $order->status
+			) {
+				array_push($orders_that_shipped, $order);
+			}
+		}
 
 		if ($verbose)
 			WP_CLI::debug(var_export($parsed, true));
@@ -129,7 +176,8 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 		// Also make sure that box_month is at least the number of valid skus we've seen
-		$box_month = max($box_month, sizeof($parsed));
+		$_old_month = max($box_month, sizeof($parsed));
+		$box_month = sizeof($orders_that_shipped);
 
 		$ordered = CBCmd::customer_has_box_order_this_month($orders);
 
@@ -171,14 +219,23 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug($box_month . ' -> $id.box_month_of_latest_order');
 		}
 
-		return array(
+		$result = array(
 				'id' => $id,
 				'tshirt_size' => $tshirt_size,
 				'clothing_gender' => $clothing_gender,
+				'_old_month' => $_old_month,
 				'box_month' => $box_month,
 				'ordered_this_month' => $ordered,
 				'warnings' => implode(". ", $warnings),
+				'_orders' => sizeof($orders),
+				'_orders_shipped' => sizeof($orders_that_shipped),
 		);
+
+		foreach ($this->get_order_statuses() as $short_name=>$long_name) {
+			$result['_orders_'.$short_name] = sizeof($orders_by_status[$short_name]);
+		}
+
+		return $result;
 		
 	}
 
@@ -359,6 +416,17 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Prints out order statuses available.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb order_statuses
+	 */
+	function order_statuses( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export($this->get_order_statuses(), true));
+	}
+
+	/**
 	 * Prints out order data for the given order.
 	 *
 	 * ## OPTIONS
@@ -519,6 +587,7 @@ class CBCmd extends WP_CLI_Command {
 	private function get_product_by_sku($id) { return $this->api()->products->get_by_sku($id)->product; }
 	private function get_customer($id) { return $this->api()->customers->get($id)->customer; }
 	private function get_order($id) { return $this->api()->orders->get($id)->order; }
+	private function get_order_notes($id) { return $this->api()->order_notes->get($id)->order_notes; }
 	private function get_subscription($id) { return $this->api()->subscriptions->get($id)->subscription; }
 	private function get_customer_orders($id) { return $this->api()->customers->get_orders($id)->orders; }
 	private function get_customer_subscriptions($id) { 
@@ -526,6 +595,14 @@ class CBCmd extends WP_CLI_Command {
 			function ($s) {return $s->subscription;},
 			$this->api()->customers->get_subscriptions($id)->customer_subscriptions
 		);
+	}
+
+	private $_order_statuses;
+	private function get_order_statuses() { 
+		if (empty($this->_order_statuses)) {
+			$this->_order_statuses = (array) $this->api()->orders->get_statuses()->order_statuses;
+		}
+		return $this->_order_statuses;
 	}
 
 	// XXX: experimental internal wp api thing. Returns a (cached) woocommerce api object
