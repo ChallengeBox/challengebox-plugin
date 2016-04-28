@@ -364,7 +364,7 @@ class CBCmd extends WP_CLI_Command {
 	 * ## OPTIONS
 	 *
 	 * <order_id>
-	 * : The user id to check.
+	 * : The order id to check.
 	 *
 	 * ## EXAMPLES
 	 *
@@ -372,6 +372,81 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function order( $args, $assoc_args ) {
 		list( $id ) = $args; WP_CLI::line(var_export($this->get_order($id), true));
+	}
+
+	/**
+	 * Generates the next order for all subscribers.
+	 *
+	 * Outputs a log of what it did.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--pretend]
+	 * : Don't do anything, just print out what we would have done.
+	 *
+	 * [--force]
+	 * : Create the next order for the customer, even if they already have an order this month.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb generate_orders
+	 */
+	function generate_orders( $args, $assoc_args ) {
+		WP_CLI::debug("Grabbing user ids...");
+		$args = array_map(function ($user) { return $user->id; }, get_users());
+		foreach ($args as $user_id) {
+			$this->generate_order(array($user_id), $assoc_args);
+		}
+	}
+
+	/**
+	 * Generates the next order for a given subscriber.
+	 *
+	 * Only generates an order if the subscription is active (or pending cancel), and
+	 * if they have no other box order that month.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <user_id>
+	 * : The user id to check.
+	 *
+	 * [--pretend]
+	 * : Don't do anything, just print out what we would have done.
+	 *
+	 * [--force]
+	 * : Create the next order for the customer, even if they already have an order this month.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb generate_order 167
+	 */
+	function generate_order( $args, $assoc_args ) {
+		list( $user_id ) = $args;
+		$force = !empty($assoc_args['force']);
+		$not_pretend = empty($assoc_args['pretend']);
+
+		$customer = $this->get_customer($user_id);
+		$orders = $this->get_customer_orders($user_id);
+		$subscriptions = CBCmd::filter_subscriptions(
+			$this->get_customer_subscriptions($user_id),
+			array('active', 'pending-cancel')
+		);
+
+		// Choose a subscription
+		$subscription = reset($subscriptions);
+
+		if (! $force && $this->customer_has_box_order_this_month($orders)) {
+			WP_CLI::debug("\tCustomer already has a valid order this month.");
+			return;
+		} 
+
+		$next_order = $this->next_order_data($customer, $subscription);
+		WP_CLI::debug("\tNext order: " . var_export($next_order, true));
+
+		if ($not_pretend) {
+			$response = $this->write_api()->orders->create($next_order);
+			WP_CLI::debug("\tCreated new order: " . var_export($response, true));
+		}
 	}
 
 	/**
@@ -441,11 +516,17 @@ class CBCmd extends WP_CLI_Command {
 	// Utility functions
 	//
 
+	private function get_product_by_sku($id) { return $this->api()->products->get_by_sku($id)->product; }
 	private function get_customer($id) { return $this->api()->customers->get($id)->customer; }
 	private function get_order($id) { return $this->api()->orders->get($id)->order; }
 	private function get_subscription($id) { return $this->api()->subscriptions->get($id)->subscription; }
 	private function get_customer_orders($id) { return $this->api()->customers->get_orders($id)->orders; }
-	private function get_customer_subscriptions($id) { return $this->api()->customers->get_subscriptions($id)->customer_subscriptions; }
+	private function get_customer_subscriptions($id) { 
+		return array_map(
+			function ($s) {return $s->subscription;},
+			$this->api()->customers->get_subscriptions($id)->customer_subscriptions
+		);
+	}
 
 	// XXX: experimental internal wp api thing. Returns a (cached) woocommerce api object
 	private $_woo_api;
@@ -577,6 +658,23 @@ class CBCmd extends WP_CLI_Command {
 		return $result;
 	}
 
+	// Filters out subscriptions that don't have any of the allowed statuses
+	private static function filter_subscriptions($subscriptions, $allowed_statuses = array('active', 'pending-cancel')) {
+		return array_filter(
+			$subscriptions,
+			function ($s) use ($allowed_statuses) {
+				return CBCmd::any(
+					array_filter(
+						$allowed_statuses,
+						function ($allowed_status) use ($s) {
+							return $allowed_status == $s->status;
+						}
+					)
+				);
+			}
+		);
+	}
+
 	// Returns true if customer has a valid order this month
 	private static function customer_has_box_order_this_month($orders) {
 		$parsed = CBCmd::valid_box_orders($orders);
@@ -587,6 +685,71 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 		return false;
+	}
+
+	// Returns a sku formatted from its components
+	private static function format_sku($month, $clothing_gender, $tshirt_size) {
+		return implode('_', array(
+			'cb', 
+			'm' . $month,
+			strtolower($clothing_gender),
+			strtolower($tshirt_size),
+		));
+	}
+
+	// Returns the sku for the next box to be shipped
+	private static function get_users_next_box_sku($user_id) {
+		$user_data = get_user_meta($user_id);
+		return CBCmd::format_sku(
+			$user_data['box_month_of_latest_order'][0] + 1,
+			$user_data['clothing_gender'][0],
+			$user_data['tshirt_size'][0]
+		);
+	}
+
+	// Returns the sku for the latest box to have been ordered
+	// NOTE: supposedly! This doesn't mean it matches!
+	private static function get_users_current_box_sku($user_id) {
+		$user_data = get_user_meta($user_id);
+		return CBCmd::format_sku(
+			$user_data['box_month_of_latest_order'][0],
+			$user_data['clothing_gender'][0],
+			$user_data['tshirt_size'][0]
+		);
+	}
+
+	// Generates the request data for the next order in the customer's sequence
+	private function next_order_data($customer, $subscription, $date=false) {
+		$user_id = $customer->id;
+		$sku = $this->get_users_next_box_sku($user_id);
+		$product = $this->get_product_by_sku($sku);
+		$order = array(
+			'status' => 'processing',
+			'customer_id' => $customer->id,
+			'billing_address' => (array) $subscription->billing_address,
+			'shipping_address' => (array) $subscription->shipping_address,
+			'line_items' => array(
+				array(
+					'product_id' => $product->id,
+					'sku' => $sku,
+					'quantity' => 1,
+					'subtotal' => 0,
+					'subtotal_tax' => 0,
+					'total' => 0,
+					'total_tax' => 0,
+				)
+			),
+			'payment_details' => (array) $subscription->payment_details,
+		);
+		// Default to credit card if subscription doesn't have payment info
+		if (empty($order['payment_details']['method_id'])) {
+			$order['payment_details']['method_id'] = 'stripe';
+		}
+		if (empty($order['payment_details']['method_title'])) {
+			$order['payment_details']['method_title'] = 'Credit Card';
+		}
+		$order['payment_details']['paid'] = true;
+		return array('order' => $order);
 	}
 
 	// Similar to python's all(), returns true if all elements are true (true for empty array).
