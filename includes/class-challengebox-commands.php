@@ -83,10 +83,13 @@ class CBCmd extends WP_CLI_Command {
 					'ordered_this_month' => NULL,
 					'_orders' => NULL,
 					'_orders_shipped' => NULL,
+					'_subs' => NULL,
+					'_subs_valid' => NULL,
+					'active_subscriber' => NULL,
 					'warnings' => NULL,
 				);
 				foreach ($this->get_order_statuses() as $short_name=>$long_name) {
-					$result['total_orders_' . $short_name] = NULL;
+					$result['_orders_' . $short_name] = NULL;
 				}
 				array_push($results, $result);
 			}
@@ -100,6 +103,9 @@ class CBCmd extends WP_CLI_Command {
 			'ordered_this_month',
 			'_orders',
 			'_orders_shipped',
+			'_subs',
+			'_subs_valid',
+			'active_subscriber',
 			'warnings',
 			'error'
 		);
@@ -115,9 +121,8 @@ class CBCmd extends WP_CLI_Command {
 
 		$warnings = array();
 		$customer = $this->get_customer($id);
-		$orders = $this->get_customer_orders($id);
+		$orders = array_filter($this->get_customer_orders($id), function ($o) { return CBCmd::is_valid_box_order($o); });
 		$subscriptions = $this->get_customer_subscriptions($id);
-		$parsed = CBCmd::valid_box_orders($orders);
 
 		// Arrange orders by status
 		$orders_by_status = array();
@@ -147,12 +152,26 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 
+		// Figure out how many subscriptions are active
+		$active_or_pending_subscriptions = array();
+		foreach ($subscriptions as $subscription) {
+			if ('active' == $subscription->status || 'pending-cancel' == $subscription->status) {
+				array_push($active_or_pending_subscriptions, $subscription);
+			}
+		}
+
+
+		// Figure out gender, size, etc.
+		$parsed = CBCmd::valid_box_orders($orders);
+		if (0 == sizeof($parsed)) {
+			$parsed = CBCmd::valid_box_orders($subscriptions);
+		}
+		if (0 == sizeof($parsed)) {
+			throw new Exception("User had no orders or subscriptions.");
+		}
 		if ($verbose)
 			WP_CLI::debug(var_export($parsed, true));
 
-		if (0 == sizeof($parsed)) {
-			throw new Exception("User had no orders.");
-		}
 
 		// Sort by month to get latest order first
 		//uasort($parsed, function ($a, $b) { return $a->date->diff($b->date)->format('%d')+0; });
@@ -178,8 +197,8 @@ class CBCmd extends WP_CLI_Command {
 		// Also make sure that box_month is at least the number of valid skus we've seen
 		$_old_month = max($box_month, sizeof($parsed));
 		$box_month = sizeof($orders_that_shipped);
-
 		$ordered = CBCmd::customer_has_box_order_this_month($orders);
+		$active_subscriber = sizeof($active_or_pending_subscriptions) > 0;
 
 		//
 		// Update metadata
@@ -219,6 +238,11 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug($box_month . ' -> $id.box_month_of_latest_order');
 		}
 
+		if ($not_pretend) {
+			update_user_meta($id, 'active_subscriber', $active_subscriber);
+			WP_CLI::debug($box_month . ' -> $id.active_subscriber');
+		}
+
 		$result = array(
 				'id' => $id,
 				'tshirt_size' => $tshirt_size,
@@ -229,6 +253,9 @@ class CBCmd extends WP_CLI_Command {
 				'warnings' => implode(". ", $warnings),
 				'_orders' => sizeof($orders),
 				'_orders_shipped' => sizeof($orders_that_shipped),
+				'_subs' => sizeof($subscriptions),
+				'_subs_valid' => sizeof($active_or_pending_subscriptions),
+				'active_subscriber' => $active_subscriber,
 		);
 
 		foreach ($this->get_order_statuses() as $short_name=>$long_name) {
@@ -690,6 +717,43 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 		return $skus;
+	}
+
+	// Returns true if the sku looks like a valid box order
+	private static function is_valid_box_order($order) {
+		foreach ($order->line_items as $line_item) {
+			$item = array(
+				'month' => 1,
+				'gender' => NULL,
+				'size' => NULL,
+				'plan' => '1m',
+				'date' => new DateTime($order->created_at),
+			);
+
+			// Gather data from the sku
+			if (!empty($line_item->sku)) {
+				try {
+					$sku = CBCmd::parse_sku($line_item->sku);
+					$item['gender'] = $sku->gender;
+					$item['size'] = $sku->size;
+					$item['month'] = $sku->month;
+					$item['plan'] = $sku->plan;
+				} catch (Exception $ex) {
+				}
+			}
+
+			// Gather data from the meta
+			if (!empty($line_item->meta)) {
+				foreach ($line_item->meta as $m) {
+					if ($m->key == 'pa_gender') $item['gender'] = strtolower($m->value);
+					if ($m->key == 'pa_size') $item['size'] = strtolower($m->value);
+				}
+			}
+
+			// Accept this sku if we have all the properties
+			if (CBCmd::all($item)) return true;
+		}
+		return false;
 	}
 
 	// Returns all valid box skus found in customer's orders, parsed
