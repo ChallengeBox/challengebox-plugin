@@ -160,7 +160,6 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 
-
 		// Figure out gender, size, etc.
 		$parsed = CBCmd::valid_box_orders($orders);
 		if (0 == sizeof($parsed)) {
@@ -171,7 +170,6 @@ class CBCmd extends WP_CLI_Command {
 		}
 		if ($verbose)
 			WP_CLI::debug(var_export($parsed, true));
-
 
 		// Sort by month to get latest order first
 		//uasort($parsed, function ($a, $b) { return $a->date->diff($b->date)->format('%d')+0; });

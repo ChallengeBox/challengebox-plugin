@@ -174,9 +174,9 @@ class CBFitbitAPI {
 	}
 
 	/*
-   * Internal logic for sending a user out to fitbit's authorization page
-   * and saving their tokens on return.
-   */
+	 * Internal logic for sending a user out to fitbit's authorization page
+	 * and saving their tokens on return.
+	 */
 	public function do_oauth_v2() {
 		//if ($this->has_v2()) return;
 		if (!isset($_GET['code'])) {
@@ -220,12 +220,12 @@ class CBFitbitAPI {
 	}
 
 	//
-  // Brokered API (calls the appropriate version)
-  //
+	// Brokered API (calls the appropriate version)
+	//
 
 	/**
-   * Returns user profile (same results with both APIs)
-   */
+	 * Returns user profile (same results with both APIs)
+	 */
 	public function getProfile() {
 		try {
 
@@ -248,8 +248,8 @@ class CBFitbitAPI {
 	}
 
 	/**
-   * Returns time series as a simple array of values only, not labeled with dates.
-   */
+	 * Returns time series as a simple array of values only, not labeled with dates.
+	 */
 	public function getTimeSeries($activity, $start_date, $end_date) {
 		try {
 
@@ -311,8 +311,8 @@ class CBFitbitAPI {
 	}
 
 	/**
-   * Returns time series (same format as old api).
-   */
+	 * Returns time series (same format as old api).
+	 */
 	public function oldGetTimeSeries($activity, $start_date, $end_date) {
 		try {
 
@@ -379,13 +379,13 @@ class CBFitbitAPI {
 	//
 
 	/**
-   * OAuth 2.0 endpoint shortcode.
-   *
-   * Instructions:
-   *  1) Place this shortcode on its own page. 
+	 * OAuth 2.0 endpoint shortcode.
+	 *
+	 * Instructions:
+	 *  1) Place this shortcode on its own page. 
 	 *  2) Make sure to set the variable $authentication_url to the permalink for this page.
 	 *  3) Make sure to set permalink as the callback url in the fitbit app settings.
-   */
+	 */
 	public static function cb_fitbit_ouath2_endpoint( $atts, $content = "" ) {
 		if (is_user_logged_in()) {
 			error_reporting(E_ALL);
@@ -397,12 +397,12 @@ class CBFitbitAPI {
 	}
 
 	/**
-   * Account unlinking shortcode.
-   *
-   * Instructions:
-   *  1) Place this shortcode on its own page. 
+	 * Account unlinking shortcode.
+	 *
+	 * Instructions:
+	 *  1) Place this shortcode on its own page. 
 	 *  2) Make sure to set the variable $unlink_url to the relative link (or permalink) for this page.
-   */
+	 */
 	public static function cb_fitbit_unlink_account( $atts, $content = "" ) {
 		if (is_user_logged_in()) {
 			error_reporting(E_ALL);
@@ -417,10 +417,10 @@ class CBFitbitAPI {
 	}
 
 	/**
-   * Account link/unlink shortcode. This shortcode displays the fitbit logo and a link
-   * for the user to either link or unlink their account. You may place this anywhere
+	 * Account link/unlink shortcode. This shortcode displays the fitbit logo and a link
+	 * for the user to either link or unlink their account. You may place this anywhere
 	 * inside a page.
-   */
+	 */
 	public static function cb_fitbit_account_link( $atts, $content = "" ) {
 		if (is_user_logged_in()) {
 			$user_id = get_current_user_id();
@@ -440,8 +440,8 @@ class CBFitbitAPI {
 	}
 
 	/**
-   * Testing shortcode.
-   */
+	 * Testing shortcode.
+	 */
 	public static function cb_fitbit_apitest( $atts, $content = "" ) {
 		if (is_user_logged_in()) {
 			error_reporting(E_ALL);
