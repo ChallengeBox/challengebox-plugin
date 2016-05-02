@@ -147,7 +147,7 @@ class CBChallengeShortcode {
 		$now = new DateTime();
 		$last_day_of_next_month = clone $now; $last_day_of_next_month->modify('last day of next month');
 		$year_string = isset($_GET['year']) ? $_GET['year'] : $now->format('Y');
-		$month_string = isset($_GET['month']) ? $_GET['month'] : $now->format('n') - 1;
+		$month_string = isset($_GET['month']) ? $_GET['month'] : $now->format('n');
 		$yearmonth_string = $year_string . '-' . $month_string . '-' . '1';
 		$month_start = new DateTime($yearmonth_string);
 		$month_end = clone $month_start; $month_end->modify('last day of');
@@ -679,7 +679,6 @@ class CBChallengeShortcode {
 					),
 				),
 			),
-			/*
 			"2016-05" => array(
 				"strength" => array(
 					"goals" => array(
@@ -783,7 +782,6 @@ class CBChallengeShortcode {
 					),
 				),
 			),
-			*/
 		);
 		/*
 		echo '<pre style="font-size: 8px;">';
