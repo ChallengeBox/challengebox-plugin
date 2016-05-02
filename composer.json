@@ -1,9 +1,12 @@
 {
-	"require": {
-		  "league/oauth2-client": "~1.3.0"
-		, "djchen/oauth2-fitbit": "~0.2.0"
-		, "woothemes/woocommerce-api": "dev-master"
-	},
+    "require": {
+          "league/oauth2-client": "~1.3.0"
+        , "djchen/oauth2-fitbit": "~0.2.0"
+        , "woothemes/woocommerce-api": "dev-master"
+    },
+    "require-dev": {
+          "phpunit/phpunit": "~4.8"
+    },
     "repositories": [
         {
               "type": "vcs"

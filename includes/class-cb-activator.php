@@ -1,6 +1,6 @@
 <?php
 
-class ChallengeBox_Activator {
+class CBActivator {
 	public static function activate() {
 
 	}

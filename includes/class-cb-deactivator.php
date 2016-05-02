@@ -1,6 +1,6 @@
 <?php
 
-class ChallengeBox_Deactivator {
+class CBDeactivator {
 	public static function deactivate() {
 	}
 }

@@ -27,7 +27,7 @@
  * @subpackage ChallengeBox/includes
  * @author     Your Name <email@example.com>
  */
-class ChallengeBox {
+class CB {
 
 	/**
 	 * The loader that's responsible for maintaining and registering all hooks that power
@@ -96,21 +96,18 @@ class ChallengeBox {
 	 */
 	private function load_dependencies() {
 		require_once plugin_dir_path(dirname(__FILE__)).'vendor/autoload.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-loader.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-i18n.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-challengebox-admin.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-fitbit-api.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-challenge-shortcode.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'public/class-challengebox-public.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-loader.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-i18n.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-wc.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-customer.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-admin.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-fitbit-api.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge-shortcode.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'public/class-cb-public.php';
  		if (defined( 'WP_CLI' ) && WP_CLI) {
-			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-challengebox-commands.php';
+			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-commands.php';
 		}
- 		if (defined( 'WC_API_Client_Resource' ) && WC_API_Client_Resource) {
-			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-wc-api-client-resource-subscriptions.php';
-		}
-
 		$this->loader = new ChallengeBox_Loader();
-
 	}
 
 	/**
@@ -200,6 +197,21 @@ class ChallengeBox {
 	 */
 	public function get_version() {
 		return $this->version;
+	}
+
+	/**
+	 * Similar to python's all(), returns true if all elements
+	 * are true (true for empty array).
+	 */
+	public static function all($a) {
+		return (bool) !array_filter($a, function ($x) {return !$x;});
+	}
+	/**
+	 * Similar to python's any(), returns true if any element
+	 * is true (false for empty array).
+	 */
+	public static function any($a) {
+		return (bool) sizeof(array_filter($a));
 	}
 
 }
