@@ -27,20 +27,20 @@ if ( ! defined( 'WPINC' ) ) {
 
 /**
  * The code that runs during plugin activation.
- * This action is documented in includes/class-challengebox-activator.php
+ * This action is documented in includes/class-cb-activator.php
  */
 function activate_plugin_name() {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-challengebox-activator.php';
-	ChallengeBox_Activator::activate();
+	require_once plugin_dir_path( __FILE__ ) . 'includes/class-cb-activator.php';
+	CBActivator::activate();
 }
 
 /**
  * The code that runs during plugin deactivation.
- * This action is documented in includes/class-challengebox-deactivator.php
+ * This action is documented in includes/class-cb-deactivator.php
  */
 function deactivate_plugin_name() {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-challengebox-deactivator.php';
-	ChallengeBox_Deactivator::deactivate();
+	require_once plugin_dir_path( __FILE__ ) . 'includes/class-cb-deactivator.php';
+	CBDeactivator::deactivate();
 }
 
 register_activation_hook( __FILE__, 'activate_plugin_name' );
@@ -50,7 +50,7 @@ register_deactivation_hook( __FILE__, 'deactivate_plugin_name' );
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.
  */
-require plugin_dir_path( __FILE__ ) . 'includes/class-challengebox.php';
+require plugin_dir_path( __FILE__ ) . 'includes/class-cb.php';
 
 /**
  * Begins execution of the plugin.
@@ -61,10 +61,10 @@ require plugin_dir_path( __FILE__ ) . 'includes/class-challengebox.php';
  *
  * @since    1.0.0
  */
-function run_plugin_name() {
+function run_challengebox() {
 
-	$plugin = new ChallengeBox();
+	$plugin = new CB();
 	$plugin->run();
 
 }
-run_plugin_name();
+run_challengebox();
