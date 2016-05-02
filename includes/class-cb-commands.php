@@ -415,6 +415,57 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Finds users with cancelled orders that don't have cancelled subscriptions.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--pretend]
+	 * : Don't do anything, just print out what we would have done.
+	 * 
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb find_forgot_to_cancel 167
+	 */
+	function find_forgot_to_cancel( $args, $assoc_args ) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("User $user_id");
+			$any_order_cancelled = CB::any(array_filter(
+				$customer->get_orders(),
+				function ($order) { return 'cancelled' == $order->status; }
+			));
+			if ($any_order_cancelled && $customer->has_active_subscription()) {
+				WP_CLI::debug("\tFound a candidate.");
+				array_push($results, array('id'=>$user_id, 'email'=>get_userdata($user_id)->user_email));
+			}
+		}
+
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, array('id', 'email'));
+		}
+	}
+
+	/**
 	 * Corrects the sku of a processing order if that sku is the wrong month.
 	 *
 	 * ## OPTIONS
