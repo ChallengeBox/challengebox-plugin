@@ -58,8 +58,12 @@ class CBCustomer {
 	 * - tshirt_size
 	 */
 	public function update_metadata($overwrite = false, $local_only = false) {
-		if ($overwrite) {
+		$clothing_gender = $this->get_meta('clothing_gender');
+		if (!$clothing_gender || $overwrite) {
 			$this->set_meta('clothing_gender', $this->estimate_clothing_gender(), $local_only);
+		}
+		$tshirt_size = $this->get_meta('tshirt_size');
+		if (!$tshirt_size || $overwrite) {
 			$this->set_meta('tshirt_size', $this->estimate_tshirt_size(), $local_only);
 		}
 		$this->set_meta('box_month_of_latest_order', $this->estimate_box_month(), $local_only);
@@ -247,7 +251,7 @@ class CBCustomer {
 	public function estimate_clothing_gender() {
 		$candidates = $this->get_sorted_gender_and_size_candidates();
 		if (0 == sizeof($candidates)) {
-			throw Exception('Cannot estimate clothing gender for customer' . $this->user_id);
+			throw new Exception('Cannot estimate clothing gender for customer #' . $this->user_id);
 		}
 		return CBWoo::parse_order_options($candidates[0])->gender;
 	}
@@ -258,7 +262,7 @@ class CBCustomer {
 	public function estimate_tshirt_size() {
 		$candidates = $this->get_sorted_gender_and_size_candidates();
 		if (0 == sizeof($candidates)) {
-			throw Exception('Cannot estimate tshirt size for customer' . $this->user_id);
+			throw new Exception('Cannot estimate tshirt size for customer #' . $this->user_id);
 		}
 		return CBWoo::parse_order_options($candidates[0])->size;
 	}
@@ -316,15 +320,19 @@ class CBCustomer {
 	/**
 	 * Generates the request data for the next order in the customer's sequence.
 	 */
-	public function next_order_data($date=false) {
+	public function next_order_data($date = false) {
 		if (!$this->has_active_subscription()) {
 			throw new Exception("Can't generate a new order if customer has no subscriptions.");
+		}
+		if (!$date) {
+			$date = new DateTime();
 		}
 		$subscription = $this->get_active_subscriptions()[0];
 		$sku = $this->get_next_box_sku($version='v1');
 		$product = $this->api->get_product_by_sku($sku);
 		$order = array(
 			'status' => 'processing',
+			'created_at' => $date->format("Y-m-d H:i:s"),
 			'customer_id' => $this->user_id,
 			'billing_address' => (array) $subscription->billing_address,
 			'shipping_address' => (array) $subscription->shipping_address,

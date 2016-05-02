@@ -79,6 +79,9 @@ class CBWoo {
 	public function create_order($order) {
 		return $this->writeapi->orders->create($order);
 	}
+	public function update_order($order_id, $order) {
+		return $this->writeapi->orders->update($order_id, $order);
+	}
 
 	//
 	// Stateful functions (these rely on caching or other state data)

@@ -22,8 +22,17 @@ class CBCmd extends WP_CLI_Command {
 			'force' => !empty($assoc_args['force']),
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
+			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 		);
+		if ($this->options->all) {
+			unset($assoc_args['all']);
+			WP_CLI::debug("Grabbing user ids...");
+			$args = array_map(function ($user) { return $user->id; }, get_users());
+		}
+		sort($args);
+		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
+		return array($args, $assoc_args);
 	}
 
 	/**
@@ -70,13 +79,7 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb update_user_metadata 167
 	 */
 	function update_user_metadata($args, $assoc_args) {
-		$this->parse_args($args, $assoc_args);
-
-		if ($this->options->all) {
-			WP_CLI::debug("Grabbing user ids...");
-			$args = array_map(function ($user) { return $user->id; }, get_users());
-		}
-		sort($args);
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		$results = array();
 
@@ -203,14 +206,7 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb generate_rush_orders 167
 	 */
 	function generate_rush_orders($args, $assoc_args) {
-
-		$this->parse_args($args, $assoc_args);
-
-		if ($this->options->all) {
-			WP_CLI::debug("Grabbing user ids...");
-			$args = array_map(function ($user) { return $user->id; }, get_users());
-		}
-		sort($args);
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
@@ -337,8 +333,7 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb generate_orders
 	 */
 	function generate_orders( $args, $assoc_args ) {
-		WP_CLI::debug("Grabbing user ids...");
-		$args = array_map(function ($user) { return $user->id; }, get_users());
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $user_id) {
 			$this->generate_order(array($user_id), $assoc_args);
 		}
@@ -352,8 +347,11 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <user_id>
-	 * : The user id to check.
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
 	 * [--pretend]
 	 * : Don't do anything, just print out what we would have done.
@@ -361,31 +359,58 @@ class CBCmd extends WP_CLI_Command {
 	 * [--force]
 	 * : Create the next order for the customer, even if they already have an order this month.
 	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 * [--date=<date>]
+	 * : Date on which to generate the order. Should be in iso 8601 format.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb generate_order 167
 	 */
 	function generate_order( $args, $assoc_args ) {
-		list( $user_id ) = $args;
-		$this->parse_args($args, $assoc_args);
-		$customer = new CBCustomer($user_id);
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		// Reasons to not generate an order
-		if (!$this->options->force && $customer->has_box_order_this_month()) {
-			WP_CLI::debug("\tCustomer already has a valid order this month.");
-			return;
-		} 
-		if (!$customer->has_active_subscription()) {
-			WP_CLI::debug("\tCustomer doesn't have an active subscription.");
-			return;
-		}
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("User $user_id");
 
-		$next_order = $customer->next_order_data();
-		WP_CLI::debug("\tNext order: " . var_export($next_order, true));
+			// Reasons to not generate an order
+			if (!$this->options->force && (
+				$customer->has_box_order_this_month($this->options->date)
+					||
+				$customer->has_box_order_this_month(new DateTime())
+			)) {
+				WP_CLI::debug("\tCustomer already has a valid order this month.");
+				continue;
+			} 
+			if (!$customer->has_active_subscription()) {
+				WP_CLI::debug("\tCustomer doesn't have an active subscription.");
+				continue;
+			}
 
-		if (!$this->options->pretend) {
-			$response = $this->api->create_order($next_order);
-			WP_CLI::debug("\tCreated new order: " . var_export($response, true));
+			$next_order = $customer->next_order_data($this->options->date);
+			WP_CLI::debug("\tGenerating order");
+			if ($this->options->verbose) {
+				WP_CLI::debug("\tNext order: " . var_export($next_order, true));
+			}
+
+			if (!$this->options->pretend) {
+				$response = $this->api->create_order($next_order);
+				WP_CLI::debug("\tCreated new order");
+				if ($this->options->verbose) {
+					WP_CLI::debug("\tResponse: " . var_export($response, true));
+				}
+				/*
+				$response = $this->api->update_order($response->order->id, array(
+					'created_at' => $this->options->date->format("Y-m-d H:i:s")
+				));
+				WP_CLI::debug("\tTried to change date");
+				if ($this->options->verbose) {
+					WP_CLI::debug("\tResponse: " . var_export($response, true));
+				}
+				*/
+			}
 		}
 	}
 
@@ -394,8 +419,11 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <user_id>
-	 * : The user id to check.
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
 	 * [--pretend]
 	 * : Don't do anything, just print out what we would have done.
@@ -409,40 +437,110 @@ class CBCmd extends WP_CLI_Command {
 	 *    - v2
 	 *  ---
 	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb correct_sku 167
 	 */
 	function correct_sku( $args, $assoc_args ) {
-		list( $user_id ) = $args;
-		$this->parse_args($args, $assoc_args);
-		$customer = new CBCustomer($user_id);
-		WP_CLI::debug("User $user_id.");
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		$processing_box_orders = array_filteR(
-			$customer->get_box_orders(),
-			function ($order) { return 'processing' == $order->status; }
-		);
+		$results = array();
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("User $user_id");
 
-		if (sizeof($processing_box_orders) < 1) {
-			WP_CLI::debug("\tCustomer has no processing orders.");
-			return;
+			$processing_box_orders = array_filter(
+				$customer->get_box_orders(),
+				function ($order) { return 'processing' == $order->status; }
+			);
+
+			if (sizeof($processing_box_orders) < 1) {
+				WP_CLI::debug("\tCustomer has no processing orders.");
+				continue;
+			}
+			if (sizeof($processing_box_orders) > 1) {
+				WP_CLI::debug("\tCustomer has more than one box order processing.");
+				continue;
+			}
+
+			$order = array_pop($processing_box_orders);
+			$current_sku = CBWoo::extract_order_sku($order);
+			$next_sku = $customer->get_next_box_sku($this->options->sku_version);
+
+			if ($next_sku !== $current_sku) {
+				WP_CLI::debug("\tSkus don't match: next $next_sku current $current_sku.");
+				$new_product = $this->api->get_product_by_sku($next_sku);
+				$old_line_item = NULL;
+				$new_order = array(
+					'line_items' => array_map(
+						function ($line_item) use ($current_sku, $next_sku, $new_product, &$old_line_item) {
+							$new_line_item = (array) clone $line_item;
+							if ($new_line_item['sku'] == $current_sku) {
+								//$new_line_item['sku'] = $next_sku;
+								//$new_line_item['product_id'] = $new_product->id;
+								$new_line_item['product_id'] = NULL;
+								//unset($new_line_item['id']);
+								//unset($new_line_item['name']);
+								//$new_line_item['quantity'] = 0;
+								$old_line_item = $new_line_item;
+							}
+							unset($new_line_item['meta']);
+							return (array) $new_line_item;
+						},
+						$order->line_items
+					)
+				);
+				array_push($new_order['line_items'], array(
+					'id' => NULL,
+					'product_id' => $new_product->id,
+					'quantity' => $old_line_item['quantity'],
+					'price' => $old_line_item['price'],
+					'subtotal' => $old_line_item['subtotal'],
+					'subtotal_tax' => $old_line_item['subtotal_tax'],
+					'total' => $old_line_item['total'],
+					'total_tax' => $old_line_item['total_tax'],
+				));
+				WP_CLI::debug(var_export($new_order, true));
+
+				if (!$this->options->pretend) {
+					try {
+						$response = $this->api->update_order($order->id, $new_order);
+						WP_CLI::debug("\tUpdate order response: " . var_export($response, true));
+						array_push($results, array(
+							'id' => $user_id,
+							'next_sku' => $next_sku,
+							'current_sku' => $current_sku,
+							'error' => NULL,
+						));
+					} catch (Exception $e) {
+						array_push($results, array(
+							'id' => $user_id,
+							'next_sku' => $next_sku,
+							'current_sku' => $current_sku,
+							'error' => $e->getMessage(),
+						));
+					}
+				}
+
+			}
+			else {
+				WP_CLI::debug("\tSkus match, no worries.");
+			}
 		}
-		if (sizeof($processing_box_orders) > 1) {
-			WP_CLI::debug("\tCustomer has more than one box order processing.");
-			return;
-		}
 
-		$order = $processing_box_orders[0];
-		$current_sku = CBWoo::extract_order_sku($order);
-		$next_sku = $customer->get_next_box_sku($this->options->sku_version);
-
-		if ($next_sku !== $current_sku) {
-			WP_CLI::debug("\t" . var_export(array(
-				'next_sku' => $next_sku,
-				'current_sku' => $current_sku,
-			)));
-			return;
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, array('id', 'next_sku', 'current_sku', 'error'));
 		}
 	}
 
