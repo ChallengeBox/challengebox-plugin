@@ -165,6 +165,101 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Synchronizes renewal dates. Ok, actually just pushes them out to the 20th of
+	 * the month if they are going to renew before.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to adjust renewal date.
+	 *
+	 * [--all]
+	 * : Adjust dates for all users. (Ignores <id>... if found).
+	 *
+	 * [--pretend]
+	 * : Don't actually adjust dates, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb synchronize_renewal 167
+	 */
+	function synchronize_renewal($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		/*
+		$1m = !empty($assoc_args['1m']);
+		$3m = !empty($assoc_args['3m']);
+		$12m = !empty($assoc_args['3m']);
+		*/
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("Synchronizing $user_id");
+
+			if (sizeof($customer->get_active_subscriptions()) == 0) {
+				WP_CLI::debug("\tNo active subscriptions. Skipping.");
+				continue;
+			}
+
+			foreach ($customer->get_active_subscriptions() as $sub) {
+
+				$sub_id = $sub->id;
+				$renewal_date = CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at);
+
+				WP_CLI::debug("\tSubscription $sub_id...");
+
+				if (!$renewal_date) {
+					WP_CLI::debug("\t\tSubscription doesn't have renewal date. Skipping.");
+					continue;
+				}
+
+				// Get a date on the 20th that has the same H:M:S as renewal date
+				// to ensure the renewals are spaced out
+				$the_20th = new DateTime("first day of this month");
+				$the_20th->add(new DateInterval("P19D"));
+				$new_date = clone $renewal_date;
+				$new_date->setDate($the_20th->format('Y'), $the_20th->format('m'), $the_20th->format('d'));
+
+				if ($this->options->verbose)
+					WP_CLI::debug(var_export(array('new'=>$new_date,'old'=>$renewal_date), true));
+
+				if ($renewal_date >= $new_date) {
+					WP_CLI::debug("\t\tRenewal too far out, doesn't need to be adjusted.");
+				} else {
+					WP_CLI::debug("\t\tExisting renewal is before the 20th, adjusting.");
+					$new_sub = array(
+						'subscription' => array(
+							'next_payment_date' => CBWoo::format_DateTime_for_api($new_date)
+						)
+					);
+					if ($this->options->verbose)
+						WP_CLI::debug("\t\tModifying date: " . var_export($new_sub, true));
+					if (!$this->options->pretend) {
+						$result = $this->api->update_subscription($sub->id, $new_sub);
+						if ($this->options->verbose)
+							WP_CLI::debug("\t\tResult: " . var_export($result, true));
+					}
+				}
+			}
+
+		}
+	}
+
+	/**
 	 * Generates rush orders for users who have chosen this option with their subscription
 	 * but do not yet have a rush order.
 	 *

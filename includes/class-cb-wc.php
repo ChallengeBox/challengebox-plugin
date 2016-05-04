@@ -82,6 +82,9 @@ class CBWoo {
 	public function update_order($order_id, $order) {
 		return $this->writeapi->orders->update($order_id, $order);
 	}
+	public function update_subscription($subscription_id, $subscription) {
+		return $this->writeapi->subscriptions->update($subscription_id, $subscription);
+	}
 
 	//
 	// Stateful functions (these rely on caching or other state data)
@@ -303,6 +306,19 @@ class CBWoo {
 				return $line_item->sku;
 			}
 		}
+	}
+
+	/**
+	 * Parses a WooCommerce REST API date into a php DateTime object.
+	 */
+	public static function parse_date_from_api($date_string) {
+		return DateTime::createFromFormat('Y-m-d?H:i:s?', $date_string);
+	}
+	/**
+	 * Formats a DateTime object so the WooCommerce REST API will accept it.
+	 */
+	public static function format_DateTime_for_api($dateTime) {
+		return $dateTime->format('Y-m-d H:i:s');
 	}
 }
 
