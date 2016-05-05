@@ -102,6 +102,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-customer.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-segment.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-admin.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-customers-stats.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-fitbit-api.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge-shortcode.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'public/class-cb-public.php';
