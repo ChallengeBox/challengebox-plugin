@@ -29,7 +29,7 @@ class CBCmd extends WP_CLI_Command {
 		if ($this->options->all) {
 			unset($assoc_args['all']);
 			WP_CLI::debug("Grabbing user ids...");
-			$args = array_map(function ($user) { return $user->id; }, get_users());
+			$args = array_map(function ($user) { return $user->ID; }, get_users());
 		}
 		sort($args);
 		if ($this->options->limit) {
@@ -91,6 +91,8 @@ class CBCmd extends WP_CLI_Command {
 			array_push($results, $result);
 			$columns = array_unique(array_merge($columns, array_keys($result)));
 		}
+
+		$segment->flush();
 
 		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}

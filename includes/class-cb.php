@@ -108,6 +108,8 @@ class CB {
  		if (defined( 'WP_CLI' ) && WP_CLI) {
 			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-commands.php';
 		}
+		// Get rid of this once we move class-cb-fitibt-api.php off of it
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-fitbit-api.php';
 		$this->loader = new ChallengeBox_Loader();
 	}
 

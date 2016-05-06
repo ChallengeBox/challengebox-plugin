@@ -16,12 +16,22 @@ class CBSegment {
 	private $active;
 	
 	public function __construct() {
-		if (defined('Segment_Analytics_WordPress')) {
+		if (class_exists('Segment_Analytics_WordPress')) {
 			$key = Segment_Analytics_WordPress::get_instance()->get_settings()['api_key'];
+			$params = array(
+				'debug' => false,
+				'ssl' => true,
+				'consumer' => 'socket',
+				'error_handler' => function ($code, $msg) {
+					throw new Exception("Error in segment. Code: $code Message: $msg");
+				}
+			);
 			if ($key) {
-				Segment::init($key);
+				Segment::init($key, $params);
 				$this->active = true;
 			}
+		} else {
+				$this->active = false;
 		}
 	}
 
@@ -31,14 +41,14 @@ class CBSegment {
 	 */
 	public function identify($customer, $pretend = false) {
 
-		$user = get_user_by('id', $customer->get_user_id());
+		$user = get_user_by('ID', $customer->get_user_id());
 
 		$traits = array_merge($customer->get_segment_data(), array(
-			'username'  => $user->user_login,
-			'email'     => $user->user_email,
-			'firstName' => $user->user_firstname,
-			'lastName'  => $user->user_lastname,
-			'url'       => $user->user_url,
+			'username'   => $user->user_login,
+			'email'      => $user->user_email,
+			'firstName'  => $user->user_firstname,
+			'lastName'   => $user->user_lastname,
+			'created_at' => $user->user_registered,
 		));
 
 		$data = array(
@@ -53,6 +63,12 @@ class CBSegment {
 		return $data;
 	}
 
+	public function flush() {
+		if ($this->active) {
+			Segment::flush();
+		}
+	}
+
 	//
 	// Static functions
 	//
@@ -63,12 +79,13 @@ class CBSegment {
 	public static function add_challengebox_data_to_segment( $identify, $settings ) {
 		if ( is_user_logged_in() && $identify && !empty($identify['user_id']) ) {
 			$customer = new CBCustomer(get_current_user_id());
-			return array_merge($identify, $customer->get_segment_data());
+			$identify['traits'] = array_merge($identify['traits'], $customer->get_segment_data());
+			return $identify;
 		}
 		return $identify;
 	}
 
 }
 
-add_filter( 'segment_get_current_user_identify', array('CBCustomer', 'add_challengebox_data_to_segment'), 10, 2 );
+add_filter( 'segment_get_current_user_identify', array('CBSegment', 'add_challengebox_data_to_segment'), 10, 2 );
 
