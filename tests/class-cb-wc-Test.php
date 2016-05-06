@@ -10,7 +10,6 @@ class Test_CBWoo extends WP_UnitTestCase {
 		unset($connection);
 	}
 
-
 	function test_get_order_statuses() {
 		$this->assertEquals(
 			$this->api->get_order_statuses(),
@@ -22,6 +21,21 @@ class Test_CBWoo extends WP_UnitTestCase {
 				'cancelled' => 'Cancelled',
 				'refunded' => 'Refunded',
 				'failed' => 'Failed',
+			)
+		);
+	}
+
+	function test_get_subscription_statuses() {
+		$this->assertEquals(
+			$this->api->get_subscription_statuses(),
+			array(
+				'pending' => 'Pending',
+				'active' => 'Active',
+				'on-hold' => 'On hold',
+				'cancelled' => 'Cancelled',
+				'switched' => 'Switched',
+				'expired' => 'Expired',
+				'pending-cancel' => 'Pending Cancellation',
 			)
 		);
 	}
@@ -323,6 +337,14 @@ class Test_CBWoo extends WP_UnitTestCase {
 				))
 			);
 		}
+	}
+
+	function test_extract_subscription_name() {
+		$sub = $this->api->get_subscription(6109);
+		$this->assertEquals(
+			CBWoo::extract_subscription_name($sub),
+			"Month to Month ChallengeBox Subscription"
+		);
 	}
 }
 

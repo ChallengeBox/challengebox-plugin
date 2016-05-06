@@ -67,7 +67,20 @@ class CBCustomer {
 			$this->set_meta('tshirt_size', $this->estimate_tshirt_size(), $local_only);
 		}
 		$this->set_meta('box_month_of_latest_order', $this->estimate_box_month(), $local_only);
-		$this->set_meta('active_subscriber', $this->has_active_subscription(), $local_only);
+
+		if ($this->has_active_subscription()) {
+			$sub = $this->get_active_subscriptions()[0];
+			$renewal_date = CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at);
+			$this->set_meta('active_subscriber', 1, $local_only);
+			$this->set_meta('subscription_status', $sub->status, $local_only);
+			$this->set_meta('subscription_type', $this->get_subscription_type(), $local_only);
+			$this->set_meta('renewal_date', $renewal_date, $local_only);
+		} else {
+			$this->set_meta('active_subscriber', 0, $local_only);
+			$this->set_meta('subscription_status', null, $local_only);
+			$this->set_meta('subscription_type', null, $local_only);
+			$this->set_meta('renewal_date', null, $local_only);
+		}
 	}
 
 	/**
@@ -80,7 +93,7 @@ class CBCustomer {
 		if (empty($this->metadata)) {
 			// All non-empty data, dereferenced
 			$this->metadata = array_filter(array_map(
-				function( $a ) { return $a[0]; },
+				function( $a ) { return maybe_unserialize($a[0]); },
 				get_user_meta($this->user_id)
 			));
 		}
@@ -152,6 +165,9 @@ class CBCustomer {
 			$this->subscriptions = $this->api->get_customer_subscriptions($this->user_id);
 		}
 		return $this->subscriptions;
+	}
+	public function get_subscriptions_by_status() {
+		return $this->api->arrange_subscriptions_by_status($this->get_subscriptions());
 	}
 
 	/**
@@ -287,6 +303,23 @@ class CBCustomer {
 		return (bool) sizeof($this->get_active_subscriptions());
 	}
 
+	/**
+	 * Returns 'Month to Month', '3 Month', or '12 Month', based on the line item
+	 * name from the first currently active subscription. Returns false if no
+	 * subscription is found.
+	 */
+	public function get_subscription_type() {
+		$sub = $this->get_active_subscriptions()[0];
+		$name = strtolower(CBWoo::extract_subscription_name($sub));
+		if ( strpos($name, '3 month') !== false ) {
+			return '3 Month';
+		} elseif ( strpos($name, '12 month') !== false ) {
+			return '12 Month';
+		} elseif ( strpos($name, 'month to month') !== false ) {
+			return 'Month to Month';
+		}
+	}
+
 	//
 	// Functions that rely on up-to-date metadata
 	//
@@ -361,8 +394,21 @@ class CBCustomer {
 	}
 
 
-	//
-	// Static functions
-	//
+	/**
+	 * Returns data to be added to segment identify() calls.
+	 * Let's keep this short for now and only use cached metadata.
+	 */
+	public function get_segment_data() {
+		return array(
+			'last_shipped_box' => $this->get_meta('box_month_of_latest_order'),
+			'clothing_gender' => $this->get_meta('clothing_gender'),
+			'tshirt_size' => $this->get_meta('tshirt_size'),
+			'active_subscriber' => $this->get_meta('active_subscriber'),
+			'subscription_status' => $this->get_meta('subscription_status'),
+			'subscription_type' => $this->get_meta('subscription_type'),
+			'renewal_date' => $this->get_meta('renewal_date') ? $this->get_meta('renewal_date')->format('U') : null,
+		);
+	}
 
 }
+

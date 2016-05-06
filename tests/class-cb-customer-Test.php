@@ -55,8 +55,8 @@ class Test_CBCustomer extends WP_UnitTestCase {
 	}
 
 	function test_estimate_box_month() {
-		$this->assertEquals((new CBCustomer(167))->estimate_box_month(), 2);
-		$this->assertEquals((new CBCustomer(1))->estimate_box_month(), 0);
+		$this->assertEquals((new CBCustomer(167))->estimate_box_month(), 3);
+		$this->assertEquals((new CBCustomer(1))->estimate_box_month(), 1);
 		$this->assertEquals((new CBCustomer(95))->estimate_box_month(), 0);
 	}
 

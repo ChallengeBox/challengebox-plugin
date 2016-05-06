@@ -15,6 +15,7 @@ class CBWoo {
 	private $api;
 	private $writeapi;
 	private $order_statuses;
+	private $subscription_statuses;
 
 	// XXX: Experimental internal api thing.
 	// private $_wooapi;
@@ -101,6 +102,20 @@ class CBWoo {
 	}
 
 	/**
+	 * Returns subscription statuses (including any custom statuses define in the admin)
+	 */
+	public function get_subscription_statuses() { 
+		if (empty($this->subscription_statuses)) {
+			$s = (array) $this->api->subscriptions->get_statuses()->subscription_statuses;
+			$this->subscription_statuses = array();
+			foreach ($s as $key => $value) {
+				$this->subscription_statuses[substr($key,3)] = $value;
+			}
+		}
+		return $this->subscription_statuses;
+	}
+
+	/**
 	 * Returns the given order objects into an array where the keys
 	 * are statuses and the values are arrays of the orders which
 	 * match that status.
@@ -144,6 +159,52 @@ class CBWoo {
 			$orders_by_status[$short_name] = $filtered;
 		}
 		return $orders_by_status;
+	}
+
+	/**
+	 * Returns the given subscription objects into an array where the keys
+	 * are statuses and the values are arrays of the subscriptions which
+	 * match that status.
+	 *
+	 * If a status did not have any matching subscriptions, the array is
+	 * empty.
+	 *
+	 * # EXAMPLE
+	 *
+	 * $subscriptions = array(
+	 * 	(object) array('id'=>1, 'status'=>'completed'),
+	 * 	(object) array('id'=>2, 'status'=>'pending'),
+	 * 	(object) array('id'=>3, 'status'=>'pending'),
+	 * );
+	 * subscriptions_by_status($subscriptions) -->
+	 * array(
+	 * 	'pending' => array(),
+	 * 	'processing' => array(
+	 *		(object) array('id'=>2, 'status'=>'processing'),
+	 *		(object) array('id'=>3, 'status'=>'processing')
+	 *	),
+	 * 	'on-hold' => array(),
+	 * 	'completed' => array(
+	 *		(object) array('id'=>1, 'status'=>'completed')
+	 * 	),
+	 *	'cancelled' => array(),
+	 *	'refunded' => array(),
+	 *	'failed' => array()
+	 * )
+	 */
+	public function arrange_subscriptions_by_status($subscriptions) {
+		$subscriptions_by_status = array();
+		foreach ($this->get_subscription_statuses() as $short_name => $long_name) {
+			$filtered = array_filter(
+				$subscriptions, 
+				function ($s) use ($short_name) { 
+					return $s->status == $short_name;
+				}
+			);
+			reset($filtered);
+			$subscriptions_by_status[$short_name] = $filtered;
+		}
+		return $subscriptions_by_status;
 	}
 
 	//
@@ -304,6 +365,13 @@ class CBWoo {
 		foreach ($order->line_items as $line_item) {
 			if (!empty($line_item->sku)) {
 				return $line_item->sku;
+			}
+		}
+	}
+	public static function extract_subscription_name($sub) {
+		foreach ($sub->line_items as $line_item) {
+			if (!empty($line_item->name)) {
+				return $line_item->name;
 			}
 		}
 	}

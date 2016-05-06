@@ -24,6 +24,7 @@ class CBCmd extends WP_CLI_Command {
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
+			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 		);
 		if ($this->options->all) {
 			unset($assoc_args['all']);
@@ -31,6 +32,9 @@ class CBCmd extends WP_CLI_Command {
 			$args = array_map(function ($user) { return $user->id; }, get_users());
 		}
 		sort($args);
+		if ($this->options->limit) {
+			$args = array_slice($args, 0, $this->options->limit);
+		}
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
 		return array($args, $assoc_args);
 	}
@@ -62,6 +66,9 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * [--skip]
 	 * : Skip users that have a value for clothing_gender in their metadata.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
 	 *
 	 * [--format=<format>]
 	 * : Output format.
@@ -98,6 +105,9 @@ class CBCmd extends WP_CLI_Command {
 				'tshirt_before' => $customer->get_meta('tshirt_size'),
 				'box_before' => $customer->get_meta('box_month_of_latest_order') + 0,
 				'active_before' => $customer->get_meta('active_subscriber'),
+				'renewal_before' => $customer->get_meta('renewal_date') ? $customer->get_meta('renewal_date')->format('Y-m-d') : null,
+				'status_before' => $customer->get_meta('subscription_status'),
+				'type_before' => $customer->get_meta('subscription_type'),
 			);
 
 			try {
@@ -109,6 +119,9 @@ class CBCmd extends WP_CLI_Command {
 					'tshirt_after' => $customer->get_meta('tshirt_size'),
 					'box_after' => $customer->get_meta('box_month_of_latest_order') + 0,
 					'active_after' => $customer->get_meta('active_subscriber'),
+					'renewal_after' => $customer->get_meta('renewal_date') ? $customer->get_meta('renewal_date')->format('Y-m-d') : null,
+					'status_after' => $customer->get_meta('subscription_status'),
+					'type_after' => $customer->get_meta('subscription_type'),
 					'has_order' => $customer->has_box_order_this_month(),
 					'#orders' => sizeof($customer->get_orders()),
 					'#box_orders' => sizeof($customer->get_box_orders()),
@@ -126,6 +139,9 @@ class CBCmd extends WP_CLI_Command {
 					'tshirt_after' => NULL,
 					'box_after' => NULL,
 					'active_after' => NULL,
+					'renewal_after' => NULL,
+					'status_after' => NULL,
+					'type_after' => NULL,
 					'has_order' => NULL,
 					'#orders' => NULL,
 					'#box_orders' => NULL,
@@ -153,6 +169,12 @@ class CBCmd extends WP_CLI_Command {
 			'box_after',
 			'active_before',
 			'active_after',
+			'renewal_before',
+			'renewal_after',
+			'status_before',
+			'status_after',
+			'type_before',
+			'type_after',
 			'has_order',
 			'#orders',
 			'#box_orders',
