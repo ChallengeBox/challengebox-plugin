@@ -91,9 +91,9 @@ class CBCustomer {
 	 * Returns a cached assossiative array of the customer's wordpress metadata.
 	 * All data is dereferenced, to save you a call to get_user_meta();
 	 * If used with the $key option, returns just the value of that key.
-	 * Keys with no data are returned as NULL.
+	 * Keys with no data are returned as $default.
 	 */
-	public function get_meta($key = false) {
+	public function get_meta($key = false, $default = NULL) {
 		if (empty($this->metadata)) {
 			// All non-empty data, dereferenced
 			$this->metadata = array_filter(array_map(
@@ -102,7 +102,7 @@ class CBCustomer {
 			));
 		}
 		if ($key) {
-			return isset($this->metadata[$key]) ? $this->metadata[$key] : NULL;
+			return isset($this->metadata[$key]) ? $this->metadata[$key] : $default;
 		}
 		return $this->metadata;
 	}
@@ -411,6 +411,15 @@ class CBCustomer {
 			'subscription_status' => $this->get_meta('subscription_status'),
 			'subscription_type' => $this->get_meta('subscription_type'),
 			'renewal_date' => $this->get_meta('renewal_date') ? $this->get_meta('renewal_date')->format('U') : null,
+			'challenge_points' => $this->get_meta('cb-points-v1') ? intval($this->get_meta('cb-points-v1')) : 0,
+			'cp_2016_02' => intval($this->get_meta('cb-points-month-v1_2016-02', 0)),
+			'cp_2016_03' => intval($this->get_meta('cb-points-month-v1_2016-03', 0)),
+			'cp_2016_04' => intval($this->get_meta('cb-points-month-v1_2016-04', 0)),
+			'cp_2016_05' => intval($this->get_meta('cb-points-month-v1_2016-05', 0)),
+			'met_goal_2016_02' => $this->get_meta('cb-points-detail-v1_2016-02_personal-goals', 0) == 40,
+			'met_goal_2016_03' => $this->get_meta('cb-points-detail-v1_2016-03_personal-goals', 0) == 40,
+			'met_goal_2016_04' => $this->get_meta('cb-points-detail-v1_2016-04_personal-goals', 0) == 40,
+			'met_goal_2016_05' => $this->get_meta('cb-points-detail-v1_2016-05_personal-goals', 0) == 40,
 		);
 	}
 
