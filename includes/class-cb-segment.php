@@ -52,7 +52,7 @@ class CBSegment {
 		));
 
 		$data = array(
-			'userId' => $user->user_email,
+			'userId' => $user->ID,
 			'traits' => $traits
 		);
 
@@ -79,6 +79,7 @@ class CBSegment {
 	public static function add_challengebox_data_to_segment( $identify, $settings ) {
 		if ( is_user_logged_in() && $identify && !empty($identify['user_id']) ) {
 			$customer = new CBCustomer(get_current_user_id());
+			$identify['user_id'] = $customer->get_user_id();
 			$identify['traits'] = array_merge($identify['traits'], $customer->get_segment_data());
 			return $identify;
 		}
