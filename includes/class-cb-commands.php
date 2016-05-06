@@ -40,6 +40,62 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Identifies a user to Segment without having them visit the website.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to migrate.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <id>... if found).
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb identify 167
+	 */
+	function identify($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array();
+		$segment = new CBSegment();
+
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id");
+			$customer = new CBCustomer($user_id);
+			$data = $segment->identify($customer, $this->options->pretend);
+			$result = array_merge(array('id' => $user_id), $data['traits']);
+			array_push($results, $result);
+			$columns = array_unique(array_merge($columns, array_keys($result)));
+		}
+
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
 	 * Migrates a user to the data storage scheme we introduced in April 2016.
 	 *
 	 * Writes a list of what it did to stdout.

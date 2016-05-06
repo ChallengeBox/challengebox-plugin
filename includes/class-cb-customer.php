@@ -42,6 +42,10 @@ class CBCustomer {
 		$this->api = new CBWoo();
 	}
 
+	public function get_user_id() {
+		return $this->user_id;
+	}
+
 	/**
 	 * Updates metadata variables in the user's account so other operations
 	 * relying on these values can be done quickly.
