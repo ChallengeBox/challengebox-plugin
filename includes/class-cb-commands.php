@@ -98,7 +98,7 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Migrates a user to the data storage scheme we introduced in April 2016.
+	 * Rebuilds user metadata (in wp_usermeta) from source tables.
 	 *
 	 * Writes a list of what it did to stdout.
 	 *
@@ -837,6 +837,42 @@ class CBCmd extends WP_CLI_Command {
 		list( $user_id ) = $args;
 		$customer = new CBCustomer($user_id);
 		WP_CLI::line(var_export($customer->get_subscriptions(), true));
+	}
+
+	/**
+	 * Clears a user's fitbit cache for a given month.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <user_id>
+	 * : The user id to check.
+	 *
+	 * <year_month>
+	 * : The year and month to check. (i.e. 2016-04)
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb clear_fitbit_month_cache 167 2016-04
+	 */
+	function clear_fitbit_month_cache( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		list( $user_id, $year_month ) = $args;
+		$customer = new CBCustomer($user_id);
+		$month_start = new DateTime($year_month);
+		$month_start->setTime(0,0);
+		$month_end = clone $month_start; $month_end->modify('last day of');
+		WP_CLI::debug('BEFORE: ' . var_export(
+				$customer->inspect_fitbit_cache($month_start, $month_end), true)
+		);
+		if (! $this->options->pretend) {
+			$customer->clear_fitbit_cache($month_start, $month_end);
+		}
+		WP_CLI::debug('AFTER: ' . var_export(
+				$customer->inspect_fitbit_cache($month_start, $month_end), true)
+		);
 	}
 
 }
