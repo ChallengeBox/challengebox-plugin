@@ -245,7 +245,7 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Synchronizes renewal dates. Ok, actually just pushes them out to the 20th of
+	 * Synchronizes renewal dates. Ok, actually just pushes them out to the 26th of
 	 * the month if they are going to renew before.
 	 *
 	 * ## OPTIONS
@@ -307,20 +307,21 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				// Get a date on the 20th that has the same H:M:S as renewal date
+				// Get a date on the 26th that has the same H:M:S as renewal date
 				// to ensure the renewals are spaced out
-				$the_20th = new DateTime("first day of this month");
-				$the_20th->add(new DateInterval("P19D"));
+				$the_26th = new DateTime("first day of this month");
+				$the_26th->add(new DateInterval("P25D"));
 				$new_date = clone $renewal_date;
-				$new_date->setDate($the_20th->format('Y'), $the_20th->format('m'), $the_20th->format('d'));
+				$new_date->setDate($the_26th->format('Y'), $the_26th->format('m'), $the_26th->format('d'));
 
 				if ($this->options->verbose)
 					WP_CLI::debug(var_export(array('new'=>$new_date,'old'=>$renewal_date), true));
 
 				if ($renewal_date >= $new_date) {
 					WP_CLI::debug("\t\tRenewal too far out, doesn't need to be adjusted.");
+					continue;
 				} else {
-					WP_CLI::debug("\t\tExisting renewal is before the 20th, adjusting.");
+					WP_CLI::debug("\t\tExisting renewal is before the 26th, adjusting.");
 					$new_sub = array(
 						'subscription' => array(
 							'next_payment_date' => CBWoo::format_DateTime_for_api($new_date)

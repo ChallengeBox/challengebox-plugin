@@ -63,7 +63,7 @@ class CBFitbitAPI {
 		$v1_token = get_user_meta($this->user_id, $this->v1_token_key, true);
 		$v1_secret = get_user_meta($this->user_id, $this->v1_secret_key, true);
 
-		if (!empty($v1_token) && !empty($v1_secret)) {
+		if (is_object($fitbit_php) && !empty($v1_token) && !empty($v1_secret)) {
 			$_SESSION['fitbit_Session'] = 2;
 			$_SESSION['fitbit_Token'] = $v1_token;
 			$_SESSION['fitbit_Secret'] = $v1_secret;
