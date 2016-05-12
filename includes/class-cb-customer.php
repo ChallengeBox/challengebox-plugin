@@ -166,6 +166,73 @@ class CBCustomer {
 	}
 
 	/**
+	 * Returns subscriptions for which we should recognize revenue during the given period.
+	 */
+	public function get_mrr_subscriptions_during_period($start, $end) {
+		return array_filter($this->get_subscriptions(), function ($sub) use ($start, $end) {
+			$sub_start = CBWoo::parse_date_from_api($sub->billing_schedule->start_at);
+
+			// Active subscriptions have an empty end_at parameter
+			if ($sub->billing_schedule->end_at) {
+				$sub_end = CBWoo::parse_date_from_api($sub->billing_schedule->end_at);
+			} else {
+				$sub_end = false;
+			}
+
+			// For ending subscriptions, don't count the period in which the end occurs.
+			if ($sub_end) {
+				return $sub_end > $end && $sub_start < $end;
+			} else {
+				return $sub_start < $end;
+			}
+		});
+	}
+
+	/**
+	 * Returns the start date of the earliest subscription. Can be used to determine cohort.
+	 */
+	public function earliest_subscription_date() {
+		$earliest = new DateTime();
+		foreach ($this->get_subscriptions() as $sub) {
+			if ($sub->created_at) {
+				$created = new DateTime($sub->created_at);
+				if ($created < $earliest) {
+					$earliest = $created;
+				}
+			}
+		}
+		return $earliest;
+	}
+
+	/**
+	 * Returns the amount of monthly recurring revenue (in dollars) during
+	 * the given period.
+	 * Subscriptions that last n months count 1/n revenue per month.
+	 */
+	public function mrr_during_period($start, $end) {
+		$revenue = 0;
+		foreach ($this->get_mrr_subscriptions_during_period($start, $end) as $sub) {
+			if ($sub->total) {
+				switch (CBWoo::extract_subscription_type($sub)) {
+					case '3 Month':
+						$revenue += doubleval($sub->total) / 3.0;
+						break;
+					case '12 Month':
+						$revenue += doubleval($sub->total) / 12.0;
+						break;
+					case 'Month to Month':
+						$revenue += doubleval($sub->total);
+						break;
+					default:
+						throw new Exception('Unknown subscription type');
+						break;
+				}
+			}
+		}
+		return $revenue;
+	}
+
+	/**
 	 * Returns a cached assossiative array of the customer's wordpress metadata.
 	 * All data is dereferenced, to save you a call to get_user_meta();
 	 * If used with the $key option, returns just the value of that key.
@@ -392,14 +459,7 @@ class CBCustomer {
 	 */
 	public function get_subscription_type() {
 		$sub = $this->get_active_subscriptions()[0];
-		$name = strtolower(CBWoo::extract_subscription_name($sub));
-		if ( strpos($name, '3 month') !== false ) {
-			return '3 Month';
-		} elseif ( strpos($name, '12 month') !== false ) {
-			return '12 Month';
-		} elseif ( strpos($name, 'month to month') !== false ) {
-			return 'Month to Month';
-		}
+		return CBWoo::extract_subscription_type($sub);
 	}
 
 	//

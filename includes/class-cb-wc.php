@@ -361,6 +361,9 @@ class CBWoo {
 		return !empty($parsed->gender) && !empty($parsed->size);
 	}
 
+	/**
+	 * Returns the first order sku found in a given order object line item.
+	 */
 	public static function extract_order_sku($order) {
 		foreach ($order->line_items as $line_item) {
 			if (!empty($line_item->sku)) {
@@ -368,11 +371,29 @@ class CBWoo {
 			}
 		}
 	}
+
+	/**
+	 * Returns the first subscription name found in a subscription object line item.
+	 */
 	public static function extract_subscription_name($sub) {
 		foreach ($sub->line_items as $line_item) {
 			if (!empty($line_item->name)) {
 				return $line_item->name;
 			}
+		}
+	}
+
+	/**
+	 * Returns '3 Month', '12 Month', 'Month to Month', or false.
+	 */
+	public static function extract_subscription_type($sub) {
+		$name = strtolower(CBWoo::extract_subscription_name($sub));
+		if ( strpos($name, '3 month') !== false ) {
+			return '3 Month';
+		} elseif ( strpos($name, '12 month') !== false ) {
+			return '12 Month';
+		} elseif ( strpos($name, 'month to month') !== false ) {
+			return 'Month to Month';
 		}
 	}
 

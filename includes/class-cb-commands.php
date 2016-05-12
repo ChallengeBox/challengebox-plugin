@@ -876,6 +876,87 @@ class CBCmd extends WP_CLI_Command {
 		);
 	}
 
+	/**
+	 * Calculates churn variables for a user for a given month.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--date]
+	 * : The year and month to check. (i.e. 2016-04). Defaults to current month.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb calculate_churn 167 --date=2016-04
+	 */
+	function calculate_churn( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+
+		$month_start = clone $this->options->date;
+		$month_start->setTime(0,0);
+		$month_end = clone $month_start; $month_end->modify('last day of');
+		$month = $month_start->format('Y-m');
+		//$last_month_start = clone $month_start; $last_month_start->modify('first day of last month');
+		//$last_month_end = clone $month_start; $last_month_end->modify('last day of last month');
+		$columns = array('id', 'cohort', 'first_sub', 'mrr_' . $month);
+
+		foreach ($args as $user_id) {
+
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			$registered = new DateTime(get_userdata($user_id)->user_registered);
+			if ($registered > $month_end) {
+				WP_CLI::debug("\tSkipping, user registered after month end.");
+				continue;
+			}
+
+			//$is_active = $customer->is_active_during_period($month_start, $month_end);
+			//$is_active_last = $customer->is_active_during_period($last_month_start, $last_month_end);
+			$cohort = $customer->earliest_subscription_date()->format('Y-m');
+			$mrr = $customer->mrr_during_period($month_start, $month_end);
+
+			if (! $this->options->pretend) {
+				$customer->set_meta('cohort', $registered->format('Y-m'));
+				$customer->set_meta('mrr_' . $month, $mrr);
+			}
+
+			array_push($results, array(
+				'id' => $user_id,
+				'cohort' => $registered->format('Y-m'),
+				'first_sub' => $cohort,
+				'mrr_'. $month => $mrr,
+			));
+
+		}
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );
