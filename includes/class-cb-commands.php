@@ -962,9 +962,11 @@ class CBCmd extends WP_CLI_Command {
 					'id' => $user_id,
 					'cohort' => isset($registered) ? $registered->format('Y-m') : NULL,
 					'first_sub' => isset($cohort) ? $cohort : NULL,
-					$mrr_key => $mrr,
+					$mrr_key => isset($mrr) ? $mrr : NULL,
 					'error' => $e->getMessage(),
 				));
+				if ($this->options->verbose)
+					var_dump($e->getTrace());
 			}
 
 		}

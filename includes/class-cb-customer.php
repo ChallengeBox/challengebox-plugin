@@ -41,7 +41,13 @@ class CBCustomer {
 	public function __construct($user_id) {
 		$this->user_id = 0 + $user_id;
 		$this->api = new CBWoo();
-		$this->fitbit = new CBFitbitAPI($this->user_id);
+	}
+
+	public function fitbit() {
+		if (!isset($this->fitbit)) {
+			$this->fitbit = new CBFitbitAPI($this->user_id);
+		}
+		return $this->fitbit;
 	}
 
 	public function get_user_id() {
