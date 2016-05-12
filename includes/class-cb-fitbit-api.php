@@ -83,6 +83,7 @@ class CBFitbitAPI {
 			'clientId'          => '227FVP',
 			'clientSecret'      => '0efeaaef00ab4b529781cf79862a412f',
 			'redirectUri'       => $this->authentication_url,
+			'verify'            => false,
 		]);
 
 		$this->v2_token = get_user_meta($this->user_id, $this->v2_token_key, true);

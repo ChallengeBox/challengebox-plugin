@@ -10,6 +10,7 @@ class CBCustomer {
 
 	private $user_id;
 	private $api;
+	private $fitbit;
 	private $orders;
 	private $subscriptions;
 	private $metadata;
