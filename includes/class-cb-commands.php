@@ -924,34 +924,48 @@ class CBCmd extends WP_CLI_Command {
 		$month = $month_start->format('Y-m');
 		//$last_month_start = clone $month_start; $last_month_start->modify('first day of last month');
 		//$last_month_end = clone $month_start; $last_month_end->modify('last day of last month');
-		$columns = array('id', 'cohort', 'first_sub', 'mrr_' . $month);
+		$mrr_key = 'mrr_' . $month;
+		$columns = array('id', 'cohort', 'first_sub', $mrr_key, 'error');
 
 		foreach ($args as $user_id) {
 
-			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
-			$registered = new DateTime(get_userdata($user_id)->user_registered);
-			if ($registered > $month_end) {
-				WP_CLI::debug("\tSkipping, user registered after month end.");
-				continue;
+			try {
+				WP_CLI::debug("User $user_id.");
+				$customer = new CBCustomer($user_id);
+				$registered = new DateTime(get_userdata($user_id)->user_registered);
+				if ($registered > $month_end) {
+					WP_CLI::debug("\tSkipping, user registered after month end.");
+					continue;
+				}
+
+				//$is_active = $customer->is_active_during_period($month_start, $month_end);
+				//$is_active_last = $customer->is_active_during_period($last_month_start, $last_month_end);
+				$cohort = $customer->earliest_subscription_date()->format('Y-m');
+				$mrr = $customer->mrr_during_period($month_start, $month_end);
+
+				if (! $this->options->pretend) {
+					$customer->set_meta('cohort', $registered->format('Y-m'));
+					$customer->set_meta($mrr_key, $mrr);
+				}
+
+				array_push($results, array(
+					'id' => $user_id,
+					'cohort' => $registered->format('Y-m'),
+					'first_sub' => $cohort,
+					$mrr_key => $mrr,
+					'error' => NULL,
+				));
+
+			} catch (Exception $e) {
+				WP_CLI::debug("\tError: " . $e->getMessage());	
+				array_push($results, array(
+					'id' => $user_id,
+					'cohort' => isset($registered) ? $registered->format('Y-m') : NULL,
+					'first_sub' => isset($cohort) ? $cohort : NULL,
+					$mrr_key => $mrr,
+					'error' => $e->getMessage(),
+				));
 			}
-
-			//$is_active = $customer->is_active_during_period($month_start, $month_end);
-			//$is_active_last = $customer->is_active_during_period($last_month_start, $last_month_end);
-			$cohort = $customer->earliest_subscription_date()->format('Y-m');
-			$mrr = $customer->mrr_during_period($month_start, $month_end);
-
-			if (! $this->options->pretend) {
-				$customer->set_meta('cohort', $registered->format('Y-m'));
-				$customer->set_meta('mrr_' . $month, $mrr);
-			}
-
-			array_push($results, array(
-				'id' => $user_id,
-				'cohort' => $registered->format('Y-m'),
-				'first_sub' => $cohort,
-				'mrr_'. $month => $mrr,
-			));
 
 		}
 		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
