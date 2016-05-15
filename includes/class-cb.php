@@ -161,6 +161,9 @@ class CB {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
+		// add the WooCommerce core actions event descriptions
+		add_filter( 'wc_points_rewards_event_description', array( $this, 'add_points_event_descriptions' ), 10, 3 );
+
 	}
 
 	/**
@@ -217,5 +220,22 @@ class CB {
 	public static function any($a) {
 		return (bool) sizeof(array_filter($a));
 	}
+
+	/**
+	 * Provides WooCommerce Points event description if the event type is one of 'product-review' or
+	 * 'account-signup'
+	 */
+	public function add_points_event_descriptions( $event_description, $event_type, $event ) {
+		switch ( $event_type ) {
+			case 'monthly-challenge':
+				$event_description = sprintf('%s challenge.', $event->data->format('F'));
+				break;
+			case 'point-adjustment':
+				$event_description = sprintf('Point adjustment: %s', $event->data);
+				break;
+		}
+		return $event_description;
+	}
+
 
 }

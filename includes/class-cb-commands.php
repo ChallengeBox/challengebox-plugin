@@ -25,6 +25,8 @@ class CBCmd extends WP_CLI_Command {
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
+			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
+			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 		);
 		if ($this->options->all) {
 			unset($assoc_args['all']);
@@ -967,6 +969,231 @@ class CBCmd extends WP_CLI_Command {
 				));
 				if ($this->options->verbose)
 					var_dump($e->getTrace());
+			}
+
+		}
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Applies points from month to account.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--date]
+	 * : The year and month to check. (i.e. 2016-04). Defaults to current month.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb apply_month_points 167 --date=2016-04
+	 */
+	function apply_month_points( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+
+		$month_start = clone $this->options->date;
+		$month_start->setTime(0,0);
+		$month_end = clone $month_start; $month_end->modify('last day of');
+		$month = $month_start->format('Y-m');
+		$points_key = 'cb-points-month-v1_' . $month;
+		$points_applied_key = 'cb-points-applied-month-v1_' . $month;
+		$columns = array(
+			'id', 'before total', 'month points',
+			'month points previously applied',
+			'difference', 'after total', 'error'
+		);
+
+		foreach ($args as $user_id) {
+
+			try {
+				WP_CLI::debug("User $user_id.");
+				$customer = new CBCustomer($user_id);
+				$before_total = WC_Points_Rewards_Manager::get_users_points($user_id);
+				$points = $customer->get_meta($points_key, 0);
+				$points_applied = $customer->get_meta($points_applied_key, 0);
+				$difference = $points - $points_applied;
+
+				WP_CLI::debug("\tpoints $points applied $points_applied difference $difference");
+
+				if ($points === 0) {
+					WP_CLI::debug("\tSkipping, user has no points recorded this month.");
+					continue;
+				}
+
+				if ($difference >= 0) {
+					WP_CLI::debug("\tAdding $difference points.");
+					if (! $this->options->pretend) {
+						WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'monthly-challenge', $month_start);
+						$customer->set_meta($points_applied_key, $points);
+					}
+				}
+				elseif ($difference < 0) {
+					$difference = -$difference;
+					WP_CLI::debug("\tSubtracting $difference points.");
+					if (! $this->options->pretend) {
+						WC_Points_Rewards_Manager::decrease_points($user_id, $difference, 'monthly-challenge', $month_start);
+						$customer->set_meta($points_applied_key, $points);
+					}
+				}
+
+				$after_total = WC_Points_Rewards_Manager::get_users_points($user_id);
+
+				$results[] = array(
+					'id' => $user_id,
+					'before total' => $before_total,
+					'month points' => $points,
+					'month points previously applied' => $points_applied,
+					'difference' => $difference,
+					'after total' => $after_total,
+					'error' => NULL,
+				);
+
+			} catch (Exception $e) {
+				WP_CLI::debug("\tError: " . $e->getMessage());
+
+				$results[] = array(
+					'id' => $user_id,
+					'before total' => isset($before_total) ? $before_total : NULL,
+					'month points' => isset($points) ? $points : NULL,
+					'month points previously applied' => isset($points_applied) ? : NULL,
+					'difference' => isset($difference) ? $difference : NULL,
+					'after total' => isset($after_total) ? $after_total : NULL,
+					'error' => NULL,
+				);
+
+				if ($this->options->verbose) {
+					var_dump($e->getTrace());
+				}
+			}
+
+		}
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Applies points to account.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * --points=<points>
+	 * : Number of points to add or subtract.
+	 *
+	 * --note=<note>
+	 * : A note to include with this points adjustment.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb apply_points 167 --points=100 --note="Thanks for bearing with us!"
+	 */
+	function apply_points( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id', 'before total', 'points applied',
+			'note', 'after total', 'error'
+		);
+		$points = $this->options->points;
+		$note = $this->options->note;
+
+		foreach ($args as $user_id) {
+
+			try {
+				WP_CLI::debug("User $user_id.");
+				$customer = new CBCustomer($user_id);
+				$before_total = WC_Points_Rewards_Manager::get_users_points($user_id);
+
+				if ($points >= 0) {
+					WP_CLI::debug("\tAdding $points points.");
+					if (! $this->options->pretend) {
+						WC_Points_Rewards_Manager::increase_points($user_id, $points, 'point-adjustment', $note);
+					}
+				}
+				elseif ($points < 0) {
+					$points = -$points;
+					WP_CLI::debug("\tSubtracting $points points.");
+					if (! $this->options->pretend) {
+						WC_Points_Rewards_Manager::decrease_points($user_id, $points, 'point-adjustment', $note);
+					}
+				}
+
+				$after_total = WC_Points_Rewards_Manager::get_users_points($user_id);
+
+				$results[] = array(
+					'id' => $user_id,
+					'before total' => $before_total,
+					'points applied' => $points,
+					'note' => $note,
+					'after total' => $after_total,
+					'error' => NULL,
+				);
+
+			} catch (Exception $e) {
+				WP_CLI::debug("\tError: " . $e->getMessage());
+
+				$results[] = array(
+					'id' => $user_id,
+					'before total' => NULL,
+					'points applied' => isset($points) ? $points : NULL,
+					'note' => isset($note) ? : NULL,
+					'after total' => NULL,
+					'error' => NULL,
+				);
+
+				if ($this->options->verbose) {
+					var_dump($e->getTrace());
+				}
 			}
 
 		}
