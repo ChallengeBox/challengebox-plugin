@@ -1,0 +1,2 @@
+0 0 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb update_user_metadata --all --format=csv)
+0 4 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb identify --all --format=csv)
