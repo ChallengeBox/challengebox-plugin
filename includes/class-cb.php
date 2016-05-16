@@ -231,7 +231,7 @@ class CB {
 				$event_description = sprintf('%s challenge.', $event->data->format('F'));
 				break;
 			case 'point-adjustment':
-				$event_description = sprintf('Point adjustment: %s', $event->data);
+				$event_description = sprintf('%s', $event->data);
 				break;
 		}
 		return $event_description;

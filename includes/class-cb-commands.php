@@ -1046,7 +1046,7 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				if ($difference >= 0) {
+				if ($difference > 0) {
 					WP_CLI::debug("\tAdding $difference points.");
 					if (! $this->options->pretend) {
 						WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'monthly-challenge', $month_start);

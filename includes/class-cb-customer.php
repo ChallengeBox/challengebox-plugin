@@ -170,6 +170,8 @@ class CBCustomer {
 			$this->set_meta('subscription_type', null, $local_only);
 			$this->set_meta('renewal_date', null, $local_only);
 		}
+
+		$this->set_meta('wc_points_balance', WC_Points_Rewards_Manager::get_users_points($this->user_id), $local_only);
 	}
 
 	/**
@@ -556,7 +558,8 @@ class CBCustomer {
 			'subscription_status' => $this->get_meta('subscription_status'),
 			'subscription_type' => $this->get_meta('subscription_type'),
 			'renewal_date' => $this->get_meta('renewal_date') ? $this->get_meta('renewal_date')->format('U') : null,
-			'challenge_points' => $this->get_meta('cb-points-v1') ? intval($this->get_meta('cb-points-v1')) : 0,
+			//'challenge_points' => $this->get_meta('cb-points-v1') ? intval($this->get_meta('cb-points-v1')) : 0,
+			'challenge_points' => $this->get_meta('wc_points_balance') ? intval($this->get_meta('wc_points_balance')) : 0,
 			'cp_2016_02' => intval($this->get_meta('cb-points-month-v1_2016-02', 0)),
 			'cp_2016_03' => intval($this->get_meta('cb-points-month-v1_2016-03', 0)),
 			'cp_2016_04' => intval($this->get_meta('cb-points-month-v1_2016-04', 0)),
