@@ -26,7 +26,7 @@ class CBChallengeShortcode {
 		$return = "";
 
 		if (!is_user_logged_in()) {
-			$return = __( 'You must be logged in to authorize Fitbit', 'fitpress' );
+			$return = 'You must be logged in to authorize Fitbit';
 			$return .= ' <a href="/my-account/">'.__( 'Log in' ).'</a>';
 			return $return;
 		} 
@@ -213,6 +213,7 @@ class CBChallengeShortcode {
 					'light_30' => array_reduce(array_map(function ($v) { return $v >= 30; }, $any_activity), "sum", 0),
 					'light_60' => array_reduce(array_map(function ($v) { return $v >= 60; }, $any_activity), "sum", 0),
 					'light_90' => array_reduce(array_map(function ($v) { return $v >= 90; }, $any_activity), "sum", 0),
+					'moderate_10' => array_reduce(array_map(function ($v) { return $v >= 10; }, $medium_activity), "sum", 0),
 					'moderate_30' => array_reduce(array_map(function ($v) { return $v >= 30; }, $medium_activity), "sum", 0),
 					'moderate_45' => array_reduce(array_map(function ($v) { return $v >= 45; }, $medium_activity), "sum", 0),
 					'moderate_60' => array_reduce(array_map(function ($v) { return $v >= 60; }, $medium_activity), "sum", 0),
@@ -685,7 +686,7 @@ class CBChallengeShortcode {
 						create_goal("45 minutes of activity on at least %d days this month.",
 							'moderate_45', 8, 20, $data, $data_last, $days_so_far, $days_in_month),
 						create_goal("%d days of at least 10 minutes cardio (running, biking, hiking, eliptical) this month.",
-							'heavy_10', 4, 15, $data, $data_last, $days_so_far, $days_in_month),
+							'moderate_10', 4, 15, $data, $data_last, $days_so_far, $days_in_month),
 						create_goal("Log water intake on %d days this month.",
 							'water_days', 15, 28, $data, $data_last, $days_so_far, $days_in_month),
 						create_goal("Log foods for %d days this month.",
@@ -1075,6 +1076,7 @@ class CBChallengeShortcode {
 			<br/>
 
 			<br/>Moderate activity (Fitbit standard): <?php echo bar_graph('medium_activity', $data) ?>
+			<br/>Days with at least 10 minutes of moderate activity: <?php echo bullet_chart('moderate_10','wearing_fitbit',$data,$days_in_month) ?>
 			<br/>Days with at least 30 minutes of moderate activity: <?php echo bullet_chart('moderate_30','wearing_fitbit',$data,$days_in_month) ?>
 			<br/>Days with at least 45 minutes of moderate activity: <?php echo bullet_chart('moderate_45','wearing_fitbit',$data,$days_in_month) ?>
 			<br/>Days with at least 60 minutes of moderate activity: <?php echo bullet_chart('moderate_60','wearing_fitbit',$data,$days_in_month) ?>
