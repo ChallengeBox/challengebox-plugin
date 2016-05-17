@@ -568,6 +568,7 @@ class CBCustomer {
 			'met_goal_2016_03' => $this->get_meta('cb-points-detail-v1_2016-03_personal-goals', 0) == 40,
 			'met_goal_2016_04' => $this->get_meta('cb-points-detail-v1_2016-04_personal-goals', 0) == 40,
 			'met_goal_2016_05' => $this->get_meta('cb-points-detail-v1_2016-05_personal-goals', 0) == 40,
+			'special_segment' => $this->get_meta('special_segment'),
 		);
 	}
 

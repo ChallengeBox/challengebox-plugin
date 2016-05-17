@@ -27,6 +27,7 @@ class CBCmd extends WP_CLI_Command {
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
+			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 		);
 		if ($this->options->all) {
 			unset($assoc_args['all']);
@@ -1198,6 +1199,60 @@ class CBCmd extends WP_CLI_Command {
 
 		}
 		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Set special segment in customer.io. Overwrites existing special segment.
+	 *
+	 * Writes a list of what it did to stdout.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * --segment=<segment>
+	 * : Name of the special segment.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb special_segment 167 --segment="Missing Resistance Bands"
+	 */
+	function special_segment( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		$segment_name = $this->options->segment;
+		$segment = new CBSegment();
+
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			if (! $this->options->pretend) {
+				WP_CLI::debug("\tSetting special_segment to $segment_name.");
+				$customer->set_meta('special_segment', $segment_name);
+			}
+			WP_CLI::debug("\tcalling identify().");
+			$data = $segment->identify($customer, $this->options->pretend);
+		}
 	}
 
 }
