@@ -408,6 +408,10 @@ class CBWoo {
 		$parsed = CBWoo::parse_order_options($order);
 		return $parsed->sku_version === 'single-v2';
 	}
+	public static function is_subscription_order($order) {
+		$parsed = CBWoo::parse_order_options($order);
+		return 0 === strpos($parsed->sku, 'sub_');
+	}
 
 	/**
 	 * Returns the first order sku found in a given order object line item.
