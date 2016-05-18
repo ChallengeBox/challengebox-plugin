@@ -255,6 +255,18 @@ class CBWoo {
 					strtolower($clothing_gender),
 					strtolower($tshirt_size),
 				));
+			case 'single-v2':
+				// Translate tshirt sizes
+				switch ($tshirt_size) {
+					case 'xxl': $tshirt_size = '2xl'; break;
+					case 'xxxl': $tshirt_size = '3xl'; break;
+					default: break;
+				}	
+				return implode('_', array(
+					'sbox',
+					strtolower($clothing_gender)[0],
+					strtolower($tshirt_size),
+				));
 			default:
 				throw new Exception('Invalid sku version');
 		}
@@ -289,6 +301,37 @@ class CBWoo {
 				'gender' => strtolower($gender),
 				'size' => strtolower($size),
 				'plan' => strtolower($plan),
+			);
+		}
+
+		// New version single box sku
+		if ('sbox' == $exploded[0]) {
+			switch (sizeof($exploded)) {
+				case 1: 
+					return (object) array(
+						'sku_version' => 'single-v2',
+						'month' => NULL,
+						'gender' => NULL,
+						'size' => NULL,
+						'plan' => NULL,
+						'diet' => NULL,
+					);
+				case 3: 
+					list($sbox, $gender, $size) = $exploded;
+					$diet = 'no_restrictions';
+					break;
+				case 4: 
+					list($cb, $gender, $size, $diet) = $exploded; break;
+				default: 
+					throw new InvalidSku($sku . ': wrong number of components');
+			}
+			return (object) array(
+				'sku_version' => 'single-v2',
+				'month' => NULL,
+				'gender' => strtolower($gender),
+				'size' => strtolower($size),
+				'plan' => NULL,
+				'diet' => strtolower($diet),
 			);
 		}
 
@@ -359,6 +402,11 @@ class CBWoo {
 		// Order is a box if it has available gender and size options.
 		$parsed = CBWoo::parse_order_options($order);
 		return !empty($parsed->gender) && !empty($parsed->size);
+	}
+	public static function is_valid_single_box_order($order) {
+		// Order is a box if it has available gender and size options.
+		$parsed = CBWoo::parse_order_options($order);
+		return $parsed->sku_version === 'single-v2';
 	}
 
 	/**

@@ -502,6 +502,19 @@ class CBCustomer {
 	}
 
 	/**
+	 * Returns customer's single box sku.
+	 * NOTE: Relies on up-to-date metadata.
+	 */
+	public function get_single_box_sku($version = 'single-v2') {
+		return CBWoo::format_sku(
+			$this->get_meta('box_month_of_latest_order'),
+			$this->get_meta('clothing_gender'),
+			$this->get_meta('tshirt_size'),
+			$version
+		);
+	}
+
+	/**
 	 * Generates the request data for the next order in the customer's sequence.
 	 */
 	public function next_order_data($date = false) {

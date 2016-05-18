@@ -691,8 +691,14 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug("User $user_id");
 
 			$processing_box_orders = array_filter(
-				$customer->get_box_orders(),
-				function ($order) { return 'processing' == $order->status; }
+				$customer->get_orders(),
+				function ($order) {
+					return (
+						CBWoo::is_valid_box_order($order) 
+							||
+						CBWoo::is_valid_single_box_order($order)
+					) && 'processing' == $order->status;
+				}
 			);
 
 			if (sizeof($processing_box_orders) < 1) {
@@ -706,7 +712,22 @@ class CBCmd extends WP_CLI_Command {
 
 			$order = array_pop($processing_box_orders);
 			$current_sku = CBWoo::extract_order_sku($order);
-			$next_sku = $customer->get_next_box_sku($this->options->sku_version);
+			if (CBWoo::is_valid_single_box_order($order)) {
+				//$next_sku = $customer->get_single_box_sku('single-' . $this->options->sku_version);
+				$next_sku = $customer->get_single_box_sku();
+				if ($next_sku == 'sbox__') {
+					WP_CLI::debug("\tCustomer missing gender and size.");
+					array_push($results, array(
+						'id' => $user_id,
+						'next_sku' => $next_sku,
+						'current_sku' => $current_sku,
+						'error' => 'Customer missing gender and size',
+					));
+					continue;
+				}
+			} else {
+				$next_sku = $customer->get_next_box_sku($this->options->sku_version);
+			}
 
 			if ($next_sku !== $current_sku) {
 				WP_CLI::debug("\tSkus don't match: next $next_sku current $current_sku.");
@@ -761,6 +782,13 @@ class CBCmd extends WP_CLI_Command {
 							'error' => $e->getMessage(),
 						));
 					}
+				} else {
+					array_push($results, array(
+						'id' => $user_id,
+						'next_sku' => $next_sku,
+						'current_sku' => $current_sku,
+						'error' => NULL,
+					));
 				}
 
 			}
