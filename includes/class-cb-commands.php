@@ -28,6 +28,7 @@ class CBCmd extends WP_CLI_Command {
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
+			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 		if ($this->options->all) {
 			unset($assoc_args['all']);
@@ -1281,6 +1282,80 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug("\tcalling identify().");
 			$data = $segment->identify($customer, $this->options->pretend);
 		}
+	}
+
+	/**
+	 * Fetch fitbit time series data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * --series=<series>
+	 * : Name of the series to fetch.
+	 *  ---
+	 *  options:
+	 *    - caloriesIn
+	 *    - water
+	 *    - caloriesOut
+	 *    - steps
+	 *    - distance
+	 *    - floors
+	 *    - elevation
+	 *    - minutesSedentary
+	 *    - minutesLightlyActive
+	 *    - minutesFairlyActive
+	 *    - minutesVeryActive
+	 *    - activityCalories
+	 *  ---
+	 *
+	 * --date=<date>
+	 * : The year and month to check. (i.e. 2016-04). 
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb fitbit_data 167 --series=water --date=2016-04
+	 */
+	function fitbit_data( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		$series = $this->options->series;
+		$results = array();
+		$columns = array('id');
+
+		$month_start = clone $this->options->date;
+		$month_start->setTime(0,0);
+		$month_end = clone $month_start; $month_end->modify('last day of');
+		$month = $month_start->format('Y-m');
+
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			$data = $customer->fitbit()->getTimeSeries($series, $month_start, $month_end);
+			// Turn keys into strings
+			$data = array_combine(array_map(function ($s) { return 'd' . $s; }, array_keys($data)), $data);
+			$data = array_merge(array('id'=>$user_id), $data);
+			$results[] = $data;
+			$columns = array_unique(array_merge($columns, array_keys($data)));
+		}
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
 }
