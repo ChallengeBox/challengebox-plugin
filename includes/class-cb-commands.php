@@ -1358,6 +1358,99 @@ class CBCmd extends WP_CLI_Command {
 		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
+	/**
+	 * Generate skus for product variations.
+	 *
+	 * Uses the parent sku, plus attributes marked for variation, in the order they appear
+	 * in the admin interface.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<product_id>...]
+	 * : The product id(s) to calculate.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb generate_skus 8514
+	 */
+	function generate_skus( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $product_id) {
+			WP_CLI::debug("Product $product_id");
+			$product = $this->api->get_product($product_id);
+			foreach ($product->variations as $variation) {
+
+				$atts = CBWoo::extract_attributes($variation->attributes);
+				$sku = '' . $product->sku;
+
+				// Add in a comonent for each attribute marked to use in variations
+				foreach ($product->attributes as $pat) {
+
+					// Only use attributes in sku that are marked to use in variations
+					if (! $pat->variation) continue;
+
+					$value = $atts[$pat->slug];
+					if (isset($value)) {
+						// Special case for diet
+						if ('diet' === $pat->slug && 'no-restrictions' === $value) {
+							// Don't add anything on the sku
+						} else {
+							$sku .= '_' . $atts[$pat->slug];
+						}
+					}
+				}
+
+				// Prep update
+				$variation_id = $variation->id;
+				$update = array('product' => array('sku' => $sku));
+				WP_CLI::debug("\tVariation $variation_id -> sku $sku");
+				if ($this->options->verbose) WP_CLI::debug(var_export($update, true));
+
+				// Apply update
+				if (! $this->options->pretend) {
+					$result = $this->api->update_product($variation_id, $update);
+					if ($this->options->verbose) WP_CLI::debug(var_export($result, true));
+				}
+			}
+		}
+	}
+
+	/**
+	 * Prints out product data available.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<product_id>...]
+	 * : The product id(s) to show.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb product 8514
+	 */
+	function product( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $product_id) {
+			$product = $this->api->get_product($product_id);
+			var_dump($product);
+			foreach ($product->attributes as $att) {
+				var_dump($att);
+			}
+		}
+	}
+
+	/**
+	 * Prints out product attributes.
+	 */
+	function product_attributes( $args, $assoc_args ) {
+		var_dump($this->api->get_attributes());
+	}
+
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );

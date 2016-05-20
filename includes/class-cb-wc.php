@@ -48,6 +48,9 @@ class CBWoo {
 	// Read
 	//
 
+	public function get_product($id) {
+		return $this->api->products->get($id)->product;
+	}
 	public function get_product_by_sku($id) {
 		return $this->api->products->get_by_sku($id)->product;
 	}
@@ -86,6 +89,9 @@ class CBWoo {
 	public function update_subscription($subscription_id, $subscription) {
 		return $this->writeapi->subscriptions->update($subscription_id, $subscription);
 	}
+	public function update_product($product_id, $product) {
+		return $this->writeapi->products->update($product_id, $product);
+	}
 
 	//
 	// Stateful functions (these rely on caching or other state data)
@@ -99,6 +105,16 @@ class CBWoo {
 			$this->order_statuses = (array) $this->api->orders->get_statuses()->order_statuses;
 		}
 		return $this->order_statuses;
+	}
+
+	public function get_attributes() { 
+		return $this->api->product_attributes->get()->product_attributes;
+		/*
+		if (empty($this->attribute_slug_map)) {
+			$attributes = $thi->api->product_attributes->get()->product_attributes;
+		}
+		return $this->attribute_slug_map;
+		*/
 	}
 
 	/**
@@ -433,6 +449,17 @@ class CBWoo {
 				return $line_item->name;
 			}
 		}
+	}
+
+	/**
+	 * Reforats an attribute array as array(attribute_slug => term_slug, ...)
+	 */
+	public static function extract_attributes($attributes) {
+		$result = array();
+		foreach ($attributes as $att) {
+			$result[$att->slug] = $att->option;
+		}
+		return $result;
 	}
 
 	/**

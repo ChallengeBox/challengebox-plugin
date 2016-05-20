@@ -427,7 +427,14 @@ class CBCustomer {
 		if (0 == sizeof($candidates)) {
 			throw new Exception('Cannot estimate clothing gender for customer #' . $this->user_id);
 		}
-		return CBWoo::parse_order_options($candidates[0])->gender;
+		switch(strtolower(CBWoo::parse_order_options($candidates[0])->gender)[0]) {
+			case 'm':
+				return 'male';
+			case 'f':
+				return 'female';
+			default:
+				throw new Exception('Cannot estimate clothing gender for customer #' . $this->user_id);
+		}
 	}
 
 	/**

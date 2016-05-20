@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "3798b830796ed4416158f16a1093198f",
+    "hash": "548c7b871b86b82fddaa50116f1940a0",
     "content-hash": "65115708055670eb20c91317fa9b0c86",
     "packages": [
         {
@@ -488,12 +488,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/ryanwitt/WooCommerce-REST-API-Client-Library.git",
-                "reference": "a91cade21ca4a7a21f42e67bb44ff4f57762521d"
+                "reference": "7ca966840688423f969c4b6eb740df098b45c8d3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ryanwitt/WooCommerce-REST-API-Client-Library/zipball/a91cade21ca4a7a21f42e67bb44ff4f57762521d",
-                "reference": "a91cade21ca4a7a21f42e67bb44ff4f57762521d",
+                "url": "https://api.github.com/repos/ryanwitt/WooCommerce-REST-API-Client-Library/zipball/7ca966840688423f969c4b6eb740df098b45c8d3",
+                "reference": "7ca966840688423f969c4b6eb740df098b45c8d3",
                 "shasum": ""
             },
             "require": {
