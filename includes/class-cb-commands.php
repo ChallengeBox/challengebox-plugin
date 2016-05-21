@@ -29,6 +29,7 @@ class CBCmd extends WP_CLI_Command {
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
+			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 		if ($this->options->all) {
 			unset($assoc_args['all']);
@@ -1294,6 +1295,313 @@ class CBCmd extends WP_CLI_Command {
 			$data = $segment->identify($customer, $this->options->pretend);
 		}
 	}
+
+	/**
+	 * Fetch fitbit time series data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * --series=<series>
+	 * : Name of the series to fetch.
+	 *  ---
+	 *  options:
+	 *    - caloriesIn
+	 *    - water
+	 *    - caloriesOut
+	 *    - steps
+	 *    - distance
+	 *    - floors
+	 *    - elevation
+	 *    - minutesSedentary
+	 *    - minutesLightlyActive
+	 *    - minutesFairlyActive
+	 *    - minutesVeryActive
+	 *    - activityCalories
+	 *  ---
+	 *
+	 * --date=<date>
+	 * : The year and month to check. (i.e. 2016-04). 
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb fitbit_data 167 --series=water --date=2016-04
+	 */
+	function fitbit_data( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		$series = $this->options->series;
+		$results = array();
+		$columns = array('id');
+
+		$month_start = clone $this->options->date;
+		$month_start->setTime(0,0);
+		$month_end = clone $month_start; $month_end->modify('last day of');
+		$month = $month_start->format('Y-m');
+
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			$data = $customer->fitbit()->getTimeSeries($series, $month_start, $month_end);
+			// Turn keys into strings
+			$data = array_combine(array_map(function ($s) { return 'd' . $s; }, array_keys($data)), $data);
+			$data = array_merge(array('id'=>$user_id), $data);
+			$results[] = $data;
+			$columns = array_unique(array_merge($columns, array_keys($data)));
+		}
+		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Generate skus for product variations.
+	 *
+	 * Uses the parent sku, plus attributes marked for variation, in the order they appear
+	 * in the admin interface.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<product_id>...]
+	 * : The product id(s) to calculate.
+	 *
+	 * [--pretend]
+	 * : Don't actually do any api calls.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb generate_skus 8514
+	 */
+	function generate_skus( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $product_id) {
+			WP_CLI::debug("Product $product_id");
+			$product = $this->api->get_product($product_id);
+			foreach ($product->variations as $variation) {
+
+				$atts = CBWoo::extract_attributes($variation->attributes);
+				$sku = '' . $product->sku;
+
+				// Add in a comonent for each attribute marked to use in variations
+				foreach ($product->attributes as $pat) {
+
+					// Only use attributes in sku that are marked to use in variations
+					if (! $pat->variation) continue;
+
+					$value = $atts[$pat->slug];
+					if (isset($value)) {
+						// Special case for diet
+						if ('diet' === $pat->slug && 'no-restrictions' === $value) {
+							// Don't add anything on the sku
+						} else {
+							$sku .= '_' . $atts[$pat->slug];
+						}
+					}
+				}
+
+				// Prep update
+				$variation_id = $variation->id;
+				$update = array('product' => array('sku' => $sku));
+				WP_CLI::debug("\tVariation $variation_id -> sku $sku");
+				if ($this->options->verbose) WP_CLI::debug(var_export($update, true));
+
+				// Apply update
+				if (! $this->options->pretend) {
+					$result = $this->api->update_product($variation_id, $update);
+					if ($this->options->verbose) WP_CLI::debug(var_export($result, true));
+				}
+			}
+		}
+	}
+
+	/**
+	 * Prints out product data available.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<product_id>...]
+	 * : The product id(s) to show.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb product 8514
+	 */
+	function product( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $product_id) {
+			$product = $this->api->get_product($product_id);
+			var_dump($product);
+			foreach ($product->attributes as $att) {
+				var_dump($att);
+			}
+		}
+	}
+
+	/**
+	 * Prints out product attributes.
+	 */
+	function product_attributes( $args, $assoc_args ) {
+		var_dump($this->api->get_attributes());
+	}
+
+	/**
+	 * Migrates old v2 style subscriptions to ones that don't generate box orders.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to adjust renewal date.
+	 *
+	 * [--all]
+	 * : Adjust dates for all users. (Ignores <id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually migrate, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb migrate_subscriptions 167
+	 */
+	function migrate_subscriptions($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array('user_id', 'sub_id', 'current_sku', 'new_sku', 'error');
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("Synchronizing $user_id");
+
+			if (sizeof($customer->get_subscriptions()) == 0) {
+				WP_CLI::debug("\tNo subscriptions. Skipping.");
+				continue;
+			}
+
+			// Convert subscriptions
+			foreach ($customer->get_subscriptions() as $sub) {
+
+				$sub_id = $sub->id;
+				$current_sku = $new_sku = $e = NULL;
+
+				try {
+					WP_CLI::debug("\tSubscription $sub_id...");
+
+					$new_sub_type = CBWoo::extract_subscription_type($sub);
+					if (!$new_sub_type) {
+						WP_CLI::debug("\t\tCan't identify subscription type. Skipping.");
+						continue;
+					}
+
+					// Figure out what we're migrating to
+					$current_sku = CBWoo::extract_order_sku($sub);
+					$new_sku = array(
+						'3 Month' => 'subscription_3month',
+						'12 Month' => 'subscription_12month',
+						'Month to Month' => 'subscription_monthly',
+					)[$new_sub_type];
+
+					if ($new_sku === $current_sku) {
+						WP_CLI::debug("\t\tSkus already match, skipping.");
+						continue;
+					}
+
+					$new_product = $this->api->get_product_by_sku($new_sku);
+
+					// Create the new subscription by:
+					// - Go through each line item in the old subscription
+					// - Remove the 'meta' seciton
+					// - For the one contaning the old sku, set the product id to null to cause
+					//   the API to remove it.
+					// - Create a new line item that copies the quantity, price, total, etc, from
+					//   the old line item, but has the product id for the new item. This line is
+					//   the replacement for the line with the old sku.
+					// Yeah, this is weird, but it's how WooCommerce API works.
+					$old_line_item = NULL;
+					$new_sub = array(
+						'line_items' => array_map(
+							function ($line_item) use ($current_sku, $new_sku, $new_product, &$old_line_item) {
+								$new_line_item = (array) clone $line_item;
+								if ($new_line_item['sku'] == $current_sku) {
+									$new_line_item['product_id'] = NULL;
+									$old_line_item = $new_line_item;
+								}
+								unset($new_line_item['meta']);
+								return (array) $new_line_item;
+							},
+							$sub->line_items
+						)
+					);
+					array_push($new_sub['line_items'], array(
+						'id' => NULL,
+						'product_id' => $new_product->id,
+						'quantity' => $old_line_item['quantity'],
+						'price' => $old_line_item['price'],
+						'subtotal' => $old_line_item['subtotal'],
+						'subtotal_tax' => $old_line_item['subtotal_tax'],
+						'total' => $old_line_item['total'],
+						'total_tax' => $old_line_item['total_tax'],
+					));
+					WP_CLI::debug(var_export($new_sub, true));
+
+					// Update the subscription
+					if (!$this->options->pretend) {
+						$result = $this->api->update_subscription($sub->id, array('subscription' => $new_sub));
+						if ($this->options->verbose)
+							WP_CLI::debug("\t\tResult: " . var_export($result, true));
+					}
+				} catch (Exception $e) {
+				}
+
+				$results[] = array(
+					'user_id' => $user_id,
+					'sub_id' => $sub_id,
+					'current_sku' => $current_sku,
+					'new_sku' => $new_sku,
+					'error' => $e
+				);
+			}
+		}
+
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
 
 }
 
