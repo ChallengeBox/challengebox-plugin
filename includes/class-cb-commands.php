@@ -1451,6 +1451,146 @@ class CBCmd extends WP_CLI_Command {
 		var_dump($this->api->get_attributes());
 	}
 
+	/**
+	 * Migrates old v2 style subscriptions to ones that don't generate box orders.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to adjust renewal date.
+	 *
+	 * [--all]
+	 * : Adjust dates for all users. (Ignores <id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually migrate, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb migrate_subscriptions 167
+	 */
+	function migrate_subscriptions($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array('user_id', 'sub_id', 'current_sku', 'new_sku', 'error');
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("Synchronizing $user_id");
+
+			if (sizeof($customer->get_subscriptions()) == 0) {
+				WP_CLI::debug("\tNo subscriptions. Skipping.");
+				continue;
+			}
+
+			// Convert subscriptions
+			foreach ($customer->get_subscriptions() as $sub) {
+
+				$sub_id = $sub->id;
+				$current_sku = $new_sku = $e = NULL;
+
+				try {
+					WP_CLI::debug("\tSubscription $sub_id...");
+
+					$new_sub_type = CBWoo::extract_subscription_type($sub);
+					if (!$new_sub_type) {
+						WP_CLI::debug("\t\tCan't identify subscription type. Skipping.");
+						continue;
+					}
+
+					// Figure out what we're migrating to
+					$current_sku = CBWoo::extract_order_sku($sub);
+					$new_sku = array(
+						'3 Month' => 'subscription_3month',
+						'12 Month' => 'subscription_12month',
+						'Month to Month' => 'subscription_monthly',
+					)[$new_sub_type];
+
+					if ($new_sku === $current_sku) {
+						WP_CLI::debug("\t\tSkus already match, skipping.");
+						continue;
+					}
+
+					$new_product = $this->api->get_product_by_sku($new_sku);
+
+					// Create the new subscription by:
+					// - Go through each line item in the old subscription
+					// - Remove the 'meta' seciton
+					// - For the one contaning the old sku, set the product id to null to cause
+					//   the API to remove it.
+					// - Create a new line item that copies the quantity, price, total, etc, from
+					//   the old line item, but has the product id for the new item. This line is
+					//   the replacement for the line with the old sku.
+					// Yeah, this is weird, but it's how WooCommerce API works.
+					$old_line_item = NULL;
+					$new_sub = array(
+						'line_items' => array_map(
+							function ($line_item) use ($current_sku, $new_sku, $new_product, &$old_line_item) {
+								$new_line_item = (array) clone $line_item;
+								if ($new_line_item['sku'] == $current_sku) {
+									$new_line_item['product_id'] = NULL;
+									$old_line_item = $new_line_item;
+								}
+								unset($new_line_item['meta']);
+								return (array) $new_line_item;
+							},
+							$sub->line_items
+						)
+					);
+					array_push($new_sub['line_items'], array(
+						'id' => NULL,
+						'product_id' => $new_product->id,
+						'quantity' => $old_line_item['quantity'],
+						'price' => $old_line_item['price'],
+						'subtotal' => $old_line_item['subtotal'],
+						'subtotal_tax' => $old_line_item['subtotal_tax'],
+						'total' => $old_line_item['total'],
+						'total_tax' => $old_line_item['total_tax'],
+					));
+					WP_CLI::debug(var_export($new_sub, true));
+
+					// Update the subscription
+					if (!$this->options->pretend) {
+						$result = $this->api->update_subscription($sub->id, array('subscription' => $new_sub));
+						if ($this->options->verbose)
+							WP_CLI::debug("\t\tResult: " . var_export($result, true));
+					}
+				} catch (Exception $e) {
+				}
+
+				$results[] = array(
+					'user_id' => $user_id,
+					'sub_id' => $sub_id,
+					'current_sku' => $current_sku,
+					'new_sku' => $new_sku,
+					'error' => $e
+				);
+			}
+		}
+
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );

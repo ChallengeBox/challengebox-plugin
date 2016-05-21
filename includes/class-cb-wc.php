@@ -232,7 +232,7 @@ class CBWoo {
 	 *
 	 * # OPTIONS
 	 *
-	 * <month>
+	 * <box_num>
 	 * : The month sequence number of the challenge box user. First month
 	 *   is 1, second month is 2, etc.
 	 *
@@ -243,7 +243,7 @@ class CBWoo {
 	 * : The customer's preferred t-shirt size.
 	 * 
 	 */
-	public static function format_sku($month, $clothing_gender, $tshirt_size, $version = 'v1') {
+	public static function format_sku($box_num, $clothing_gender, $tshirt_size, $version = 'v1') {
 		// Generate sku based on version
 		switch ($version) {
 			case 'v1':
@@ -255,7 +255,7 @@ class CBWoo {
 				}	
 				return implode('_', array(
 					'cb', 
-					'm' . $month,
+					'm' . $box_num,
 					strtolower($clothing_gender),
 					strtolower($tshirt_size),
 				));
@@ -267,7 +267,7 @@ class CBWoo {
 					default: break;
 				}	
 				return implode('_', array(
-					'm' . $month,
+					'm' . $box_num,
 					strtolower($clothing_gender),
 					strtolower($tshirt_size),
 				));
