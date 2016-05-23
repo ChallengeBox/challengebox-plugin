@@ -28,6 +28,7 @@ class CBCmd extends WP_CLI_Command {
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
+			'flatten' => !empty($assoc_args['flatten']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 		if ($this->options->all) {
@@ -847,11 +848,22 @@ class CBCmd extends WP_CLI_Command {
 	 * <subscription_id>
 	 * : The subscription id to check.
 	 *
+	 * [--flatten]
+	 * : Display result as array rather than object.
+	 *
 	 * ## EXAMPLES
 	 *     wp cb subscription 6691
 	 */
 	function subscription( $args, $assoc_args ) {
-		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_subscription($id), true));
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		list( $id ) = $args;
+		$sub = $this->api->get_subscription($id);
+		if ($this->options->flatten) {
+			$result = json_decode(json_encode($sub), true);
+		} else {
+			$result = $sub;
+		}
+		WP_CLI::line(var_export($result, true));
 	}
 
 	/**
