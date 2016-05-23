@@ -158,7 +158,7 @@ class CBCustomer {
 		$this->set_meta('box_month_of_latest_order', $this->estimate_box_month(), $local_only);
 
 		if ($this->has_active_subscription()) {
-			$sub = $this->get_active_subscriptions()[0];
+			$sub = array_values($this->get_active_subscriptions())[0];
 			$renewal_date = CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at);
 			$this->set_meta('active_subscriber', 1, $local_only);
 			$this->set_meta('subscription_status', $sub->status, $local_only);
@@ -172,6 +172,8 @@ class CBCustomer {
 		}
 
 		$this->set_meta('wc_points_balance', WC_Points_Rewards_Manager::get_users_points($this->user_id), $local_only);
+
+		$this->set_meta('fitbit_oauth_status', $this->get_fitbit_oauth_status());
 	}
 
 	/**
@@ -474,7 +476,7 @@ class CBCustomer {
 	 * subscription is found.
 	 */
 	public function get_subscription_type() {
-		$sub = $this->get_active_subscriptions()[0];
+		$sub = array_values($this->get_active_subscriptions())[0];
 		return CBWoo::extract_subscription_type($sub);
 	}
 
@@ -531,7 +533,7 @@ class CBCustomer {
 		if (!$date) {
 			$date = new DateTime();
 		}
-		$subscription = $this->get_active_subscriptions()[0];
+		$subscription = array_values($this->get_active_subscriptions())[0];
 		$sku = $this->get_next_box_sku($version='v1');
 		$product = $this->api->get_product_by_sku($sku);
 		$order = array(
@@ -564,6 +566,36 @@ class CBCustomer {
 		return array('order' => $order);
 	}
 
+	/**
+	 * Returns true if customer has connected their fitbit.
+	 */
+	public function has_connected_fitbit() {
+		return ((
+				$this->get_meta('fitpress_fitbit_token')
+					&& $this->get_meta('fitpress_fitbit_secret')
+			) || (
+				$this->get_meta('cb-fitbit-oauth2-v1_access-token')
+		));
+	}
+
+	/**
+	 * Returns which oauth version customer is using ('oauth1' or 'oauth2'),
+	 * 'none' if they are not connected or 'error' if there is a problem.
+	 */
+	public function get_fitbit_oauth_status() {
+		try {
+			if ($this->fitbit()->has_v2()) {
+				return 'oauth2';
+			} elseif ($this->fitbit()->has_v1()) {
+				return 'oauth1';
+			} else {
+				return 'none';
+			}
+		} catch (Exception $e) {
+			return 'error';
+		}
+	}
+
 
 	/**
 	 * Returns data to be added to segment identify() calls.
@@ -589,6 +621,8 @@ class CBCustomer {
 			'met_goal_2016_04' => $this->get_meta('cb-points-detail-v1_2016-04_personal-goals', 0) == 40,
 			'met_goal_2016_05' => $this->get_meta('cb-points-detail-v1_2016-05_personal-goals', 0) == 40,
 			'special_segment' => $this->get_meta('special_segment'),
+			'connected_fitbit' => $this->has_connected_fitbit(),
+			'fitbit_oauth_status' => $this->get_meta('fitbit_oauth_status'),
 		);
 	}
 
