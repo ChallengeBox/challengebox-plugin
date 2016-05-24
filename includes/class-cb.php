@@ -162,7 +162,10 @@ class CB {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
 		// add the WooCommerce core actions event descriptions
-		add_filter( 'wc_points_rewards_event_description', array( $this, 'add_points_event_descriptions' ), 10, 3 );
+		add_filter('wc_points_rewards_event_description', array($this, 'add_points_event_descriptions'), 10, 3);
+
+		// Skip order processing on subs
+		add_filter('woocommerce_order_item_needs_processing', array($this, 'subscriptions_need_no_processing'), 10, 3);
 
 	}
 
@@ -235,6 +238,19 @@ class CB {
 				break;
 		}
 		return $event_description;
+	}
+
+	/**
+	 * Filter to tell WooCommerce not to put subscription orders into the 'processing' state but
+	 * skip ahead to 'completed'.
+	 */
+	public function subscriptions_need_no_processing($need_processing, $_product, $order_id) {
+		// Return true if product exists and sku startswith 'subscription_'
+		var_dump(array(
+			'_product' => $_product,
+			'sku' => $_product->get_sku(),
+		));
+		return $_product && $_product->exists() && !empty($_product->get_sku()) && stripos('subscription_', $_product->get_sku()) === 0;
 	}
 
 
