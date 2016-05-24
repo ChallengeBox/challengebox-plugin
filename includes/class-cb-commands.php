@@ -433,7 +433,7 @@ class CBCmd extends WP_CLI_Command {
 			}
 
 			// Speed up checks next time by noticing if we checked it
-			if ($not_pretend) {
+			if (!$this->options->pretend) {
 				$customer->set_meta('_rush_order_checked', 1);
 			}
 			WP_CLI::debug("\t1 -> $id._rush_order_checked");
