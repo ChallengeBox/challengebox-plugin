@@ -246,10 +246,6 @@ class CB {
 	 */
 	public function subscriptions_need_no_processing($need_processing, $_product, $order_id) {
 		// Return true if product exists and sku startswith 'subscription_'
-		var_dump(array(
-			'_product' => $_product,
-			'sku' => $_product->get_sku(),
-		));
 		return $_product && $_product->exists() && !empty($_product->get_sku()) && stripos('subscription_', $_product->get_sku()) === 0;
 	}
 
