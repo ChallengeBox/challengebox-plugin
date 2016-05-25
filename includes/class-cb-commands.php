@@ -285,12 +285,6 @@ class CBCmd extends WP_CLI_Command {
 	function synchronize_renewal($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		/*
-		$1m = !empty($assoc_args['1m']);
-		$3m = !empty($assoc_args['3m']);
-		$12m = !empty($assoc_args['3m']);
-		*/
-
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
 			WP_CLI::debug("Synchronizing $user_id");
@@ -315,7 +309,7 @@ class CBCmd extends WP_CLI_Command {
 				// Get a date on the 26th that has the same H:M:S as renewal date
 				// to ensure the renewals are spaced out
 				$the_26th = new DateTime("first day of this month");
-				$the_26th->add(new DateInterval("P25D"));
+				$the_26th->add(new DateInterval("P26D"));
 				$new_date = clone $renewal_date;
 				$new_date->setDate($the_26th->format('Y'), $the_26th->format('m'), $the_26th->format('d'));
 
@@ -388,6 +382,8 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function generate_rush_orders($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		// NOTE: Be sure to include names here so shipbob can sync on them
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);

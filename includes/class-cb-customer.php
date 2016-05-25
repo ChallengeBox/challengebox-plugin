@@ -624,6 +624,7 @@ class CBCustomer {
 			'connected_fitbit' => $this->has_connected_fitbit(),
 			'fitbit_oauth_status' => $this->get_meta('fitbit_oauth_status'),
 			'fitness_goal' => $this->get_meta('fitness_goal1'),
+			'next_box' => $this->get_meta('next_box'),
 		);
 	}
 
