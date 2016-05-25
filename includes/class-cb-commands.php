@@ -497,30 +497,6 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Generates the next order for all subscribers.
-	 *
-	 * Outputs a log of what it did.
-	 *
-	 * ## OPTIONS
-	 *
-	 * [--pretend]
-	 * : Don't do anything, just print out what we would have done.
-	 *
-	 * [--force]
-	 * : Create the next order for the customer, even if they already have an order this month.
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     wp cb generate_orders
-	 */
-	function generate_orders( $args, $assoc_args ) {
-		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
-		foreach ($args as $user_id) {
-			$this->generate_order(array($user_id), $assoc_args);
-		}
-	}
-
-	/**
 	 * Generates the next order for a given subscriber.
 	 *
 	 * Only generates an order if the subscription is active (or pending cancel), and
