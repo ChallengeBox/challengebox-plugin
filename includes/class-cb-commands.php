@@ -196,7 +196,7 @@ class CBCmd extends WP_CLI_Command {
 
 			try {
 
-				$customer->update_metadata($this->options->overwrite, $this->options->pretend);
+				$errors = $customer->update_metadata($this->options->overwrite, $this->options->pretend);
 
 				$result = array_merge($result, array(
 					'clothing_after' => $customer->get_meta('clothing_gender'),
@@ -215,7 +215,7 @@ class CBCmd extends WP_CLI_Command {
 					'#shipped' => sizeof($customer->get_orders_shipped()),
 					'#box_shipped' => sizeof($customer->get_box_orders_shipped()),
 					'#subs' => sizeof($customer->get_subscriptions()),
-					'error' => NULL,
+					'error' => implode(', ', array_map(function ($e) { return $e->getMessage(); }, $errors)),
 				));
 
 			} catch (Exception $e) {

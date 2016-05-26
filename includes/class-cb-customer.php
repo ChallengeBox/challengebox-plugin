@@ -148,12 +148,21 @@ class CBCustomer {
 	 */
 	public function update_metadata($overwrite = false, $local_only = false) {
 		$clothing_gender = $this->get_meta('clothing_gender');
+		$exceptions = array();
 		if (!$clothing_gender || $overwrite) {
-			$this->set_meta('clothing_gender', $this->estimate_clothing_gender(), $local_only);
+			try {
+				$this->set_meta('clothing_gender', $this->estimate_clothing_gender(), $local_only);
+			} catch (Exception $e) {
+				$exceptions[] = $e;
+			}
 		}
 		$tshirt_size = $this->get_meta('tshirt_size');
 		if (!$tshirt_size || $overwrite) {
-			$this->set_meta('tshirt_size', $this->estimate_tshirt_size(), $local_only);
+			try {
+				$this->set_meta('tshirt_size', $this->estimate_tshirt_size(), $local_only);
+			} catch (Exception $e) {
+				$exceptions[] = $e;
+			}
 		}
 		$this->set_meta('box_month_of_latest_order', $this->estimate_box_month(), $local_only);
 
@@ -175,6 +184,8 @@ class CBCustomer {
 
 		$this->set_meta('fitbit_oauth_status', $this->get_fitbit_oauth_status());
 		$this->set_meta('has_rush_order', sizeof($this->get_rush_orders()) > 0);
+
+		return $exceptions;
 	}
 
 	/**
