@@ -23,6 +23,7 @@ class CBCmd extends WP_CLI_Command {
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
+			'day' => !empty($assoc_args['day']) ? new DateTime($assoc_args['day']) : new DateTime(),
 			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
@@ -280,6 +281,11 @@ class CBCmd extends WP_CLI_Command {
 	 * [<id>...]
 	 * : The user id (or ids) of which to adjust renewal date.
 	 *
+	 * [--day=<day>]
+	 * : Day on which to synchronize renewal (ignores time and uses the time
+	 *   of day of the original renewal date). Format like '2016-05-26'.
+	 *   Defaults to the 26th of this month.
+	 *
 	 * [--all]
 	 * : Adjust dates for all users. (Ignores <id>... if found).
 	 *
@@ -307,6 +313,15 @@ class CBCmd extends WP_CLI_Command {
 	function synchronize_renewal($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
+		if (empty($assoc_args['date'])) {
+			// Get a date on the 26th that has the same H:M:S as renewal date
+			// to ensure the renewals are spaced out
+			$renewal_day = new DateTime("first day of this month");
+			$renewal_day->add(new DateInterval("P26D"));
+		} else {
+			$renewal_day = $this->options->day;
+		}
+
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
 			WP_CLI::debug("Synchronizing $user_id");
@@ -328,12 +343,20 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				// Get a date on the 26th that has the same H:M:S as renewal date
-				// to ensure the renewals are spaced out
-				$the_26th = new DateTime("first day of this month");
-				$the_26th->add(new DateInterval("P26D"));
+				$renewal_y = $renewal_day->format('Y');
+				$renewal_m = $renewal_day->format('m');
+				$renewal_d = $renewal_day->format('d');
+
+				// XXX: Special case for next_box = '2016-07'
+				if ($renewal_day->format('Y-m') === '2016-05' && $customer->get_meta('next_box') === '2016-07') {
+					WP_CLI::debug("\tOrder will be postponed until Late June.");
+					$renewal_y = '2016';
+					$renewal_m = '06';
+				}
+
+				// Take the H:M:S from old $renewal_date, but the day from $renewal_day.
 				$new_date = clone $renewal_date;
-				$new_date->setDate($the_26th->format('Y'), $the_26th->format('m'), $the_26th->format('d'));
+				$new_date->setDate($renewal_y, $renewal_m, $renewal_d);
 
 				if ($this->options->verbose)
 					WP_CLI::debug(var_export(array('new'=>$new_date,'old'=>$renewal_date), true));
