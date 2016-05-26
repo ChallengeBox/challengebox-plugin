@@ -174,6 +174,7 @@ class CBCustomer {
 		$this->set_meta('wc_points_balance', WC_Points_Rewards_Manager::get_users_points($this->user_id), $local_only);
 
 		$this->set_meta('fitbit_oauth_status', $this->get_fitbit_oauth_status());
+		$this->set_meta('has_rush_order', sizeof($this->get_rush_orders()) > 0);
 	}
 
 	/**
@@ -297,6 +298,12 @@ class CBCustomer {
 			function ($order) { return $this->order_was_shipped($order); }
 		);
 	}
+	public function get_rush_orders() {
+		return array_filter(
+			$this->get_orders(),
+			function ($order) { return $this->order_is_rush($order); }
+		);
+	}
 
 	/**
 	 * Returns customer's orders that are valid boxes.
@@ -367,8 +374,8 @@ class CBCustomer {
 		));
 	}
 
-    /**
-     * Return order notes for the given order id.
+	/**
+	 * Return order notes for the given order id.
 	 * NOTE: This probably would be in the CBOrder class if we make one.
 	 */
 	public function get_order_notes($order_id) {
@@ -378,9 +385,9 @@ class CBCustomer {
 		return $this->order_notes[$order_id];
 	}
 
-    /**
-     * Returns true if the order has a note that contains the word 'shipped'
-     * or if the order status is 'completed'.
+	/**
+	 * Returns true if the order has a note that contains the word 'shipped'
+	 * or if the order status is 'completed'.
 	 * NOTE: This probably would be in the CBOrder class if we make one.
 	 */
 	public function order_was_shipped($order) {
@@ -392,6 +399,17 @@ class CBCustomer {
 				}
 			))
 			|| 'completed' == $order->status
+		);
+	}
+
+	/**
+	 * Returns true if the order is marked as rush.
+	 */
+	public function order_is_rush($order) {
+		return (bool) CB::any(
+			array_filter($order->fee_lines, function ($line) {
+				return 'Rush My Box' == $line->title;
+			})
 		);
 	}
 
@@ -625,6 +643,7 @@ class CBCustomer {
 			'fitbit_oauth_status' => $this->get_meta('fitbit_oauth_status'),
 			'fitness_goal' => $this->get_meta('fitness_goal1'),
 			'next_box' => $this->get_meta('next_box'),
+			'has_rush_order' => $this->get_meta('has_rush_order'),
 		);
 	}
 
