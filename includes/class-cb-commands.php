@@ -23,6 +23,7 @@ class CBCmd extends WP_CLI_Command {
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
+			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
@@ -31,15 +32,31 @@ class CBCmd extends WP_CLI_Command {
 			'flatten' => !empty($assoc_args['flatten']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
+
+		// Month option should be pegged to the first day
+		if (empty($assoc_args['month'])) {
+			$this->options->month->modify('first day of next month');
+		}
+		$this->options->month->setDate(
+			$this->options->month->format('Y'),
+			$this->options->month->format('m'),
+			1
+		);
+		$this->options->month->setTime(0, 0);
+
+		// All option triggers gathering user ids
 		if ($this->options->all) {
 			unset($assoc_args['all']);
 			WP_CLI::debug("Grabbing user ids...");
 			$args = array_map(function ($user) { return $user->ID; }, get_users());
 		}
 		sort($args);
+
+		// Limit option affects incoming args
 		if ($this->options->limit) {
 			$args = array_slice($args, 0, $this->options->limit);
 		}
+
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
 		return array($args, $assoc_args);
 	}
@@ -355,6 +372,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [<id>...]
 	 * : The user id (or ids) to check or order generation.
 	 *
+	 * --month=<month>
+	 * : Date on which to generate the order. Format like '2016-05'.
+	 *
 	 * [--all]
 	 * : Generate orders for all users. (Ignores <id>... if found).
 	 *
@@ -387,47 +407,38 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function generate_rush_orders($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
 
 		// NOTE: Be sure to include names here so shipbob can sync on them
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
-
 			WP_CLI::debug("Checking $user_id for rush orders...");
 
-			if ($this->options->skip && $customer->get_meta('_rush_order_checked')) {
-				WP_CLI::debug("\tSkipping (was marked as already checked)");	
-				continue;
-			}
-
-			$customer_has_rush_order = CBCmd::any(
-				// Return true if any order has a rush order set
-				array_filter($customer->get_orders(), function ($order) {
-					// Return true if any fee line indicates a rush order
-					return CBCmd::any(
-						array_filter($order->fee_lines, function ($line) {
-							return 'Rush My Box' == $line->title;
-						})
-					);
-				})
-			);
+			$customer_has_rush_order = (bool) sizeof($customer->get_rush_orders());
 			$customer_has_valid_box_order = (bool) sizeof($customer->get_box_orders());
 
 			// Did they select a rush order at all?
 			if ($customer_has_rush_order) {
 				if (!$this->options->pretend) {
-					$customer->set_meta('_rush_order', 1);
+					$customer->set_meta('has_rush_order', 1);
 				}
-				WP_CLI::debug("\t1 -> $id._rush_order");
+				WP_CLI::debug("\t1 -> $id.has_rush_order");
 
 				// If they selected rush order, did an order get generated?
 				if (!$customer_has_valid_box_order) {
 					// Need to generate an order
 					WP_CLI::debug("\tGenerating rush order");
-					if (!$this->options->pretend) {
-						//$customer->set_meta('_rush_order_generated', 1);
+					$rush_order = $customer->next_order_data($this->options->date, false, true);
+					if ($this->options->verbose) {
+						WP_CLI::debug("\tRush order: " . var_export($rush_order, true));
 					}
-					WP_CLI::debug("\t1 -> $id._rush_order_generated");
+					if (!$this->options->pretend) {
+						$response = $this->api->create_order($rush_order);
+						if ($this->options->verbose) {
+							WP_CLI::debug("\tResponse: " . var_export($response, true));
+						}
+					}
 				} else {
 					WP_CLI::debug("\tValid box order already found, no need to generate.");
 				}
@@ -498,7 +509,8 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Generates the next order for a given subscriber.
+	 * Generates the next order for a given subscriber. Requires you to list
+	 * the month the order is intended for.
 	 *
 	 * Only generates an order if the subscription is active (or pending cancel), and
 	 * if they have no other box order that month.
@@ -511,6 +523,16 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
+	 * [--month=<month>]
+	 * : Date on which to generate the order. Format like '2016-05'.
+	 *   Defaults to next month (because we usually generate orders ahead of the month).
+	 *
+	 * [--date=<date>]
+	 * : Date on which to generate the order. This will actually check to see if the
+	 *   user had an active subscription as of this date, which allows for back-generation
+	 *   of orders, even if sub has expired as of the current moment.
+	 *   Should be in iso 8601 format. Defaults to right now.
+	 *
 	 * [--pretend]
 	 * : Don't do anything, just print out what we would have done.
 	 *
@@ -519,9 +541,6 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * [--verbose]
 	 * : Print out extra information. (Use with --debug or you won't see anything)
-	 * [--date=<date>]
-	 * : Date on which to generate the order. Should be in iso 8601 format.
-	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb generate_order 167
@@ -529,25 +548,35 @@ class CBCmd extends WP_CLI_Command {
 	function generate_order( $args, $assoc_args ) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
+		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
+
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
 			WP_CLI::debug("User $user_id");
 
 			// Reasons to not generate an order
 			if (!$this->options->force && (
-				$customer->has_box_order_this_month($this->options->date)
-					||
-				$customer->has_box_order_this_month(new DateTime())
+				$customer->has_box_order_this_month($this->options->month)
 			)) {
 				WP_CLI::debug("\tCustomer already has a valid order this month.");
 				continue;
 			} 
-			if (!$customer->has_active_subscription()) {
-				WP_CLI::debug("\tCustomer doesn't have an active subscription.");
+			if (!$customer->has_active_subscription($this->options->date)) {
+				WP_CLI::debug("\tCustomer doesn't have an active subscription as of $date_string.");
+				continue;
+			}
+			// XXX: Special case for next_box = '2016-07'
+			if ($this->options->month->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-07') {
+				WP_CLI::debug("\tOrder should be postponed until July.");
 				continue;
 			}
 
-			$next_order = $customer->next_order_data($this->options->date);
+			WP_CLI::debug("\tWould use sku: " . $customer->get_next_box_sku(
+				$this->options->month, $version='v2')
+			);
+			$next_order = $customer->next_order_data(
+				$this->options->month, $this->options->date
+			);
 			WP_CLI::debug("\tGenerating order");
 			if ($this->options->verbose) {
 				WP_CLI::debug("\tNext order: " . var_export($next_order, true));
@@ -559,15 +588,6 @@ class CBCmd extends WP_CLI_Command {
 				if ($this->options->verbose) {
 					WP_CLI::debug("\tResponse: " . var_export($response, true));
 				}
-				/*
-				$response = $this->api->update_order($response->order->id, array(
-					'created_at' => $this->options->date->format("Y-m-d H:i:s")
-				));
-				WP_CLI::debug("\tTried to change date");
-				if ($this->options->verbose) {
-					WP_CLI::debug("\tResponse: " . var_export($response, true));
-				}
-				*/
 			}
 		}
 	}
@@ -663,6 +683,8 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function correct_sku( $args, $assoc_args ) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		WP_CLI::error("DEPRECATED NEEDS REWORKING");
 
 		$results = array();
 		foreach ($args as $user_id) {

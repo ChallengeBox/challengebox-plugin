@@ -340,14 +340,33 @@ class CBCustomer {
 	/**
 	 * Returns customer's WooCommerce subscriptions that are active
 	 * or active pending cancellation.
+	 * If $as_of is set, it returns the subscriptions active as of that date.
 	 */
-	public function get_active_subscriptions() {
-		return array_filter(
-			$this->get_subscriptions(),
-			function ($s) {
-				return 'active' == $s->status || 'pending-cancel' == $s->status;
-			}
-		);
+	public function get_active_subscriptions($as_of = false) {
+		if ($as_of) {
+			return array_filter(
+				$this->get_subscriptions(),
+				function ($s) use ($as_of) {
+					$start = CBWoo::parse_date_from_api($s->billing_schedule->start_at);
+					$end = CBWoo::parse_date_from_api($s->billing_schedule->end_at);
+					if ($start && $end) {
+						return $as_of >= $start && $as_of < $end;
+					}
+					// Default to subscription status if we don't have an end date
+					if ($as_of >= $start) {
+						return 'active' == $s->status || 'pending-cancel' == $s->status;
+					}
+				}
+			);
+		}
+		else {
+			return array_filter(
+				$this->get_subscriptions(),
+				function ($s) {
+					return 'active' == $s->status || 'pending-cancel' == $s->status;
+				}
+			);
+		}
 	}
 
 	/**
@@ -483,9 +502,11 @@ class CBCustomer {
 	/**
 	 * Returns true if the customer has an active subscription or one that is pending
 	 * cancellation and not cancelled yet.
+	 * Include $as_of parameter to determine if there was an active subscription as
+	 * of the given DateTime object.
 	 */
-	public function has_active_subscription() {
-		return (bool) sizeof($this->get_active_subscriptions());
+	public function has_active_subscription($as_of = false) {
+		return (bool) sizeof($this->get_active_subscriptions($as_of));
 	}
 
 	/**
@@ -493,7 +514,7 @@ class CBCustomer {
 	 * name from the first currently active subscription. Returns false if no
 	 * subscription is found.
 	 */
-	public function get_subscription_type() {
+	public function get_subscription_type($as_of = false) {
 		$sub = array_values($this->get_active_subscriptions())[0];
 		return CBWoo::extract_subscription_type($sub);
 	}
@@ -506,12 +527,14 @@ class CBCustomer {
 	 * Returns the sku of customer's last shipped box.
 	 * NOTE: Relies on up-to-date metadata.
 	 */
-	public function get_last_box_sku($version = 'v1') {
+	public function get_last_box_sku($ship_month, $version = 'v1') {
 		return CBWoo::format_sku(
+			$ship_month,
 			$this->get_meta('box_month_of_latest_order'),
 			$this->get_meta('clothing_gender'),
 			$this->get_meta('tshirt_size'),
-			$version
+			$version,
+			!empty($this->get_meta('fitness_diet'))
 		);
 	}
 
@@ -519,12 +542,14 @@ class CBCustomer {
 	 * Returns customer's next box in the series.
 	 * NOTE: Relies on up-to-date metadata.
 	 */
-	public function get_next_box_sku($version = 'v2') {
+	public function get_next_box_sku($ship_month, $version = 'v2') {
 		return CBWoo::format_sku(
+			$ship_month,
 			$this->get_meta('box_month_of_latest_order') + 1,
 			$this->get_meta('clothing_gender'),
 			$this->get_meta('tshirt_size'),
-			$version
+			$version,
+			!empty($this->get_meta('fitness_diet'))
 		);
 	}
 
@@ -532,31 +557,30 @@ class CBCustomer {
 	 * Returns customer's single box sku.
 	 * NOTE: Relies on up-to-date metadata.
 	 */
-	public function get_single_box_sku($version = 'single-v2') {
+	public function get_single_box_sku($ship_month, $version = 'single-v2') {
 		return CBWoo::format_sku(
+			$ship_month,
 			$this->get_meta('box_month_of_latest_order'),
 			$this->get_meta('clothing_gender'),
 			$this->get_meta('tshirt_size'),
-			$version
+			$version,
+			!empty($this->get_meta('fitness_diet'))
 		);
 	}
 
 	/**
 	 * Generates the request data for the next order in the customer's sequence.
 	 */
-	public function next_order_data($date = false) {
-		if (!$this->has_active_subscription()) {
-			throw new Exception("Can't generate a new order if customer has no subscriptions.");
-		}
+	public function next_order_data($ship_month, $date = false, $rush = false) {
 		if (!$date) {
 			$date = new DateTime();
 		}
-		$subscription = array_values($this->get_active_subscriptions())[0];
-		$sku = $this->get_next_box_sku($version='v1');
+		$subscription = array_values($this->get_active_subscriptions($date))[0];
+		$sku = $this->get_next_box_sku($ship_month, $version='v2');
 		$product = $this->api->get_product_by_sku($sku);
 		$order = array(
 			'status' => 'processing',
-			'created_at' => $date->format("Y-m-d H:i:s"),
+			'created_at' => CBWoo::format_DateTime_for_api($date),
 			'customer_id' => $this->user_id,
 			'billing_address' => (array) $subscription->billing_address,
 			'shipping_address' => (array) $subscription->shipping_address,
@@ -573,6 +597,10 @@ class CBCustomer {
 			),
 			'payment_details' => (array) $subscription->payment_details,
 		);
+		// Add Rush if specified
+		if ($rush) {
+			$order['fee_lines'] = array(array('id' => 15409));
+		}
 		// Default to credit card if subscription doesn't have payment info
 		if (empty($order['payment_details']['method_id'])) {
 			$order['payment_details']['method_id'] = 'stripe';
@@ -581,6 +609,11 @@ class CBCustomer {
 			$order['payment_details']['method_title'] = 'Credit Card';
 		}
 		$order['payment_details']['paid'] = true;
+
+		// Handle diet notes
+		if (!empty($this->get_meta('fitness_diet'))) {
+			$order['note'] = 'Dietary Restrictions: ' . $this->get_meta('fitness_diet');
+		}
 		return array('order' => $order);
 	}
 

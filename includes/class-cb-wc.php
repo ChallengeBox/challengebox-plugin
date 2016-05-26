@@ -232,6 +232,9 @@ class CBWoo {
 	 *
 	 * # OPTIONS
 	 *
+	 * <ship_month>
+	 * : Month in which the box will ship. 
+	 *
 	 * <box_num>
 	 * : The month sequence number of the challenge box user. First month
 	 *   is 1, second month is 2, etc.
@@ -243,7 +246,8 @@ class CBWoo {
 	 * : The customer's preferred t-shirt size.
 	 * 
 	 */
-	public static function format_sku($box_num, $clothing_gender, $tshirt_size, $version = 'v1') {
+	public static function format_sku($ship_month, $box_num, $clothing_gender, $tshirt_size, $version = 'v1', $diet = false) {
+		var_dump($diet);
 		// Generate sku based on version
 		switch ($version) {
 			case 'v1':
@@ -266,11 +270,16 @@ class CBWoo {
 					case 'xxxl': $tshirt_size = '3xl'; break;
 					default: break;
 				}	
-				return implode('_', array(
+				$sku = implode('_', array(
+					'b' . $ship_month->format('ym'),
 					'm' . $box_num,
 					strtolower($clothing_gender),
 					strtolower($tshirt_size),
 				));
+				if ($diet) {
+					$sku .= '_diet';
+				}
+				return $sku;
 			case 'single-v2':
 				// Translate tshirt sizes
 				switch ($tshirt_size) {
