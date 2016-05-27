@@ -306,6 +306,18 @@ class CBWoo {
 	public static function parse_box_sku($sku) {
 		$exploded = explode('_', $sku);
 
+		if ('#livefit' == $exploded[0]) {
+			return (object) array(
+				'sku_version' => 'v0',
+				'month' => NULL,
+				'gender' => NULL,
+				'size' => NULL,
+				'plan' => NULL,
+				'diet' => NULL,
+				'is_box' => true,
+			);
+		}
+
 		// Old version sku
 		if ('cb' == $exploded[0]) {
 			switch (sizeof($exploded)) {
@@ -326,6 +338,7 @@ class CBWoo {
 				'gender' => strtolower($gender),
 				'size' => strtolower($size),
 				'plan' => strtolower($plan),
+				'is_box' => true,
 			);
 		}
 
@@ -340,6 +353,7 @@ class CBWoo {
 						'size' => NULL,
 						'plan' => NULL,
 						'diet' => NULL,
+						'is_box' => true,
 					);
 				case 3: 
 					list($sbox, $gender, $size) = $exploded;
@@ -357,24 +371,45 @@ class CBWoo {
 				'size' => strtolower($size),
 				'plan' => NULL,
 				'diet' => strtolower($diet),
+				'is_box' => true,
 			);
 		}
 
 		// New version sku
-		switch (sizeof($exploded)) {
-			case 3: 
-				list($month_raw, $gender, $size) = $exploded; break;
-			default: 
-				throw new InvalidSku($sku . ': wrong number of components');
+		if ('b' === $exploded[0][0]) {
+			switch (sizeof($exploded)) {
+				case 4: 
+					list($ship_month, $box_raw, $gender, $size) = $exploded;
+					$diet = false;
+					break;
+				case 5: 
+					list($ship_month, $box_raw, $gender, $size, $diet) = $exploded;
+					$diet = true;
+					break;
+				default: 
+					throw new InvalidSku($sku . ': wrong number of components');
+			}
+			if ('m' !== $box_raw[0])
+					throw new InvalidSku($sku . ': month field incorrect');
+			return (object) array(
+				'sku_version' => 'v2',
+				'ship_raw' => $ship_month,
+				'box_number' => (int) substr($box_raw, 1),
+				'gender' => strtolower($gender),
+				'size' => strtolower($size),
+				'plan' => NULL,
+				'diet' => $diet,
+				'is_box' => true,
+			);
 		}
-		if ('m' !== $month_raw[0])
-				throw new InvalidSku($sku . ': month field incorrect');
+
 		return (object) array(
-			'sku_version' => 'v2',
-			'month' => (int) substr($month_raw, 1),
-			'gender' => strtolower($gender),
-			'size' => strtolower($size),
+			'sku_version' => NULL,
+			'month' => NULL,
+			'gender' => NULL,
+			'size' => NULL,
 			'plan' => NULL,
+			'is_box' => false,
 		);
 	}
 

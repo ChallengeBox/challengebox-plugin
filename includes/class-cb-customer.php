@@ -319,18 +319,25 @@ class CBCustomer {
 	/**
 	 * Returns customer's orders that are valid boxes.
 	 */
-	public function get_box_orders() {
+	public function get_box_orders($since = false) {
 		return array_filter(
 			$this->get_orders(),
-			function ($o) { return CBWoo::is_valid_box_order($o); }
+			function ($o) use ($since) { 
+				$valid =  CBWoo::is_valid_box_order($o); 
+				if ($since) {
+					return $valid && CBWoo::parse_date_from_api($o->created_at) >= $since;
+				} else {
+					return $valid;
+				}
+			}
 		);
 	}
-	public function get_box_orders_by_status() {
-		return $this->api->arrange_orders_by_status($this->get_box_orders());
+	public function get_box_orders_by_status($since = false) {
+		return $this->api->arrange_orders_by_status($this->get_box_orders($since));
 	}
-	public function get_box_orders_shipped() {
+	public function get_box_orders_shipped($since = false) {
 		return array_filter(
-			$this->get_box_orders(),
+			$this->get_box_orders($since),
 			function ($order) { return $this->order_was_shipped($order); }
 		);
 	}

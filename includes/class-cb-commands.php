@@ -31,6 +31,7 @@ class CBCmd extends WP_CLI_Command {
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
+			'auto' => !empty($assoc_args['auto']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 
@@ -289,6 +290,12 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Adjust dates for all users. (Ignores <id>... if found).
 	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--auto]
+	 * : Try and guess dates (EXPERIMENTAL)
+	 *
 	 * [--pretend]
 	 * : Don't actually adjust dates, just print out what we'd do.
 	 *
@@ -317,10 +324,13 @@ class CBCmd extends WP_CLI_Command {
 			// Get a date on the 26th that has the same H:M:S as renewal date
 			// to ensure the renewals are spaced out
 			$renewal_day = new DateTime("first day of this month");
-			$renewal_day->add(new DateInterval("P26D"));
+			$renewal_day->add(new DateInterval("P19D"));
 		} else {
 			$renewal_day = $this->options->day;
 		}
+
+		$results = array();
+		$columns = array('id', 'sub_id', 'type', 'earned', 'boxes', 'old_renewal', 'new_renewal', 'errors');
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
@@ -335,12 +345,80 @@ class CBCmd extends WP_CLI_Command {
 
 				$sub_id = $sub->id;
 				$renewal_date = CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at);
+				$start_date = CBWoo::parse_date_from_api($sub->billing_schedule->start_at);
 
 				WP_CLI::debug("\tSubscription $sub_id...");
 
 				if (!$renewal_date) {
 					WP_CLI::debug("\t\tSubscription doesn't have renewal date. Skipping.");
 					continue;
+				}
+
+				$original_renewal = clone $renewal_date;
+				$last_box_order = end($customer->get_box_orders());
+				$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
+
+				// Exploratory stuff
+				if ($this->options->auto) {
+
+					$the_12th = new DateTime('2016-06-12');
+					if ($renewal_date > $the_12th) {
+						WP_CLI::debug("\t\tToo far out. Skipping.");
+						continue;
+					}
+
+					// Find number of days sub was active
+					$mod = clone $start_date;
+
+					if ($customer->get_subscription_type() === 'Month to Month') {
+						if (($mod->format('d')+0) > 20) {
+							$mod->add('P12D');
+						}
+						$mod->setDate(
+							$mod->format('Y'),
+							$mod->format('m'),
+							20
+						);
+					}
+					$days = $mod->diff($this->options->date)->format('%r%a') + 0;
+
+					// Compare number of boxes "earned" vs actual
+					$earned = round($days/30);
+					$boxes = sizeof($customer->get_box_orders_shipped($start_date));
+					if (0 === $boxes) {
+						WP_CLI::debug("\t\tNo boxes shipped yet, skipping.");
+						continue;
+					}
+
+					if ($this->options->verbose) { 
+						WP_CLI::debug(var_export(array(
+							'start_date' => $start_date,
+							'renewal_date' => $renewal_date,
+							'days' => $days,
+							'earned' => $earned,
+							'orders' => $boxes,
+						), true));
+					}
+
+					if ($earned <= $boxes) {
+						// We need to renew now
+						$renewal_day = new DateTime();
+						$renewal_day->add(new DateInterval('PT1H'));
+						// Instead of keeping original hour/minute slot, use 1 hours from now,
+						// plus the original minutes (spacing), so we trigger the renewal today
+						$renewal_date->setTime($renewal_day->format('H'), $renewal_date->format('i'));
+					} else {
+						// We need to postpone
+						$renewal_day = new DateTime("first day of next month");
+						$renewal_day->add(new DateInterval("P19D"));
+					}
+
+					if ($this->options->verbose) { 
+						WP_CLI::debug(var_export(array(
+							'renewal_date' => $renewal_date,
+							'renewal_day' => $renewal_day,
+						), true));
+					}
 				}
 
 				$renewal_y = $renewal_day->format('Y');
@@ -352,6 +430,7 @@ class CBCmd extends WP_CLI_Command {
 					WP_CLI::debug("\tOrder will be postponed until Late June.");
 					$renewal_y = '2016';
 					$renewal_m = '06';
+					$renewal_d = '20';
 				}
 
 				// Take the H:M:S from old $renewal_date, but the day from $renewal_day.
@@ -361,11 +440,11 @@ class CBCmd extends WP_CLI_Command {
 				if ($this->options->verbose)
 					WP_CLI::debug(var_export(array('new'=>$new_date,'old'=>$renewal_date), true));
 
-				if ($renewal_date >= $new_date) {
+				if (!$this->options->auto && $renewal_date >= $new_date) {
 					WP_CLI::debug("\t\tRenewal too far out, doesn't need to be adjusted.");
 					continue;
 				} else {
-					WP_CLI::debug("\t\tExisting renewal is before the 26th, adjusting.");
+					WP_CLI::debug("\t\tExisting renewal is incorrect, adjusting.");
 					$new_sub = array(
 						'subscription' => array(
 							'next_payment_date' => CBWoo::format_DateTime_for_api($new_date)
@@ -378,10 +457,23 @@ class CBCmd extends WP_CLI_Command {
 						if ($this->options->verbose)
 							WP_CLI::debug("\t\tResult: " . var_export($result, true));
 					}
+					$results[] = array(
+						'id' => $user_id,
+						'sub_id' => $sub_id,
+						'type' => $customer->get_subscription_type(),
+						'earned' => $earned,
+						'boxes' => $boxes,
+						'old_renewal' => $original_renewal->format('Y-m-d H:i:s'),
+						'new_renewal' => $new_date->format('Y-m-d H:i:s'),
+						'errors' => NULL,
+					);
 				}
 			}
 
 		}
+
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
 	/**
@@ -1502,6 +1594,10 @@ class CBCmd extends WP_CLI_Command {
 	 * [--pretend]
 	 * : Don't actually migrate, just print out what we'd do.
 	 *
+	 * [--force]
+	 * : Even if skus already match, re-migrate sub. (One use case is correcting sub line
+	 *   item description.)
+	 *
 	 * [--verbose]
 	 * : Print out extra information. (Use with --debug or you won't see anything)
 	 *
@@ -1558,7 +1654,7 @@ class CBCmd extends WP_CLI_Command {
 						'Month to Month' => 'subscription_monthly',
 					)[$new_sub_type];
 
-					if ($new_sku === $current_sku) {
+					if (!$this->options->force && $new_sku === $current_sku) {
 						WP_CLI::debug("\t\tSkus already match, skipping.");
 						continue;
 					}
