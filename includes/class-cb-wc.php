@@ -395,6 +395,7 @@ class CBWoo {
 				'sku_version' => 'v2',
 				'ship_raw' => $ship_month,
 				'box_number' => (int) substr($box_raw, 1),
+				'month' => (int) substr($box_raw, 1),
 				'gender' => strtolower($gender),
 				'size' => strtolower($size),
 				'plan' => NULL,

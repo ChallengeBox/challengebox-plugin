@@ -173,11 +173,27 @@ class CBCustomer {
 			$this->set_meta('subscription_status', $sub->status, $local_only);
 			$this->set_meta('subscription_type', $this->get_subscription_type(), $local_only);
 			$this->set_meta('renewal_date', $renewal_date, $local_only);
+		} elseif ($this->has_subscription_on_hold()) {
+			$sub = array_values($this->get_subscriptions_on_hold())[0];
+			$this->set_meta('active_subscriber', 0, $local_only);
+			$this->set_meta('subscription_status', $sub->status, $local_only);
+			$this->set_meta('subscription_type', $this->get_subscription_type(), $local_only);
+			$this->set_meta('renewal_date', null, $local_only);
 		} else {
 			$this->set_meta('active_subscriber', 0, $local_only);
 			$this->set_meta('subscription_status', null, $local_only);
 			$this->set_meta('subscription_type', null, $local_only);
 			$this->set_meta('renewal_date', null, $local_only);
+		}
+
+		$failed_orders = $this->get_failed_orders();
+		if (sizeof($failed_orders)) {
+			$order = array_values($failed_orders)[0];
+			$this->set_meta('has_failed_order', true, $local_only);
+			$this->set_meta('failed_order_payment_url', wc_get_order($order->id)->get_checkout_payment_url(), $local_only);
+		} else {
+			$this->set_meta('has_failed_order', null, $local_only);
+			$this->set_meta('failed_order_payment_url', null, $local_only);
 		}
 
 		$this->set_meta('wc_points_balance', WC_Points_Rewards_Manager::get_users_points($this->user_id), $local_only);
@@ -315,6 +331,12 @@ class CBCustomer {
 			function ($order) { return $this->order_is_rush($order); }
 		);
 	}
+	public function get_failed_orders() {
+		return array_filter(
+			$this->get_orders(),
+			function ($order) { return 'failed' === $order->status; }
+		);
+	}
 
 	/**
 	 * Returns customer's orders that are valid boxes.
@@ -385,6 +407,16 @@ class CBCustomer {
 				}
 			);
 		}
+	}
+
+	/**
+	 * Returns customer's WooCommerce subscriptions that are on hold.
+	 */
+	public function get_subscriptions_on_hold($as_of = false) {
+		return array_filter(
+			$this->get_subscriptions(),
+			function ($s) { return 'on-hold' == $s->status; }
+		);
 	}
 
 	/**
@@ -526,6 +558,12 @@ class CBCustomer {
 	public function has_active_subscription($as_of = false) {
 		return (bool) sizeof($this->get_active_subscriptions($as_of));
 	}
+	/**
+	 * Returns true if the customer has a subscription on-hold.
+	 */
+	public function has_subscription_on_hold() {
+		return (bool) sizeof($this->get_subscriptions_on_hold());
+	}
 
 	/**
 	 * Returns 'Month to Month', '3 Month', or '12 Month', based on the line item
@@ -533,7 +571,7 @@ class CBCustomer {
 	 * subscription is found.
 	 */
 	public function get_subscription_type($as_of = false) {
-		$sub = array_values($this->get_active_subscriptions())[0];
+		$sub = array_values($this->get_subscriptions($as_of))[0];
 		return CBWoo::extract_subscription_type($sub);
 	}
 
@@ -671,7 +709,7 @@ class CBCustomer {
 	 * Let's keep this short for now and only use cached metadata.
 	 */
 	public function get_segment_data() {
-		return array(
+		$data = array(
 			'last_shipped_box' => $this->get_meta('box_month_of_latest_order'),
 			'clothing_gender' => $this->get_meta('clothing_gender'),
 			'tshirt_size' => $this->get_meta('tshirt_size'),
@@ -695,7 +733,10 @@ class CBCustomer {
 			'fitness_goal' => $this->get_meta('fitness_goal1'),
 			'next_box' => $this->get_meta('next_box'),
 			'has_rush_order' => $this->get_meta('has_rush_order'),
+			'has_failed_order' => $this->get_meta('has_failed_order'),
+			'failed_order_payment_url' => $this->get_meta('failed_order_payment_url'),
 		);
+		return $data;
 	}
 
 }
