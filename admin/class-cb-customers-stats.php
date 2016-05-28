@@ -22,7 +22,7 @@ class CBCustomersStats {
 	 **/
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'add_admin_pages' ) );
-		add_action( 'init', array( $this, 'generate_csv_new' ) );
+		add_action( 'init', array( $this, 'generate_csv_segment' ) );
 		add_filter( 'pp_eu_exclude_data', array( $this, 'exclude_data' ) );
 	}
 
@@ -33,6 +33,56 @@ class CBCustomersStats {
 	 **/
 	public function add_admin_pages() {
 		add_users_page( __( 'Export to CSV', 'export-users-to-csv' ), __( 'Export to CSV', 'export-users-to-csv' ), 'list_users', 'export-users-to-csv', array( $this, 'users_page' ) );
+	}
+
+	public function generate_csv_segment() {
+		if ( isset( $_POST['_wpnonce-pp-eu-export-users-users-page_export'] ) ) {
+			check_admin_referer( 'pp-eu-export-users-users-page_export', '_wpnonce-pp-eu-export-users-users-page_export' );
+
+			error_reporting(E_ALL);
+			ini_set('display_errors', true);
+			header('Content-Type: text/csv; utf-8');
+			header("Content-Disposition: attachment; filename=users.csv");
+			header("Pragma: no-cache");
+			header("Expires: 0");
+
+			$rows = array();
+			$keys = array();
+
+			foreach (get_users() as $user) {
+				$customer = new CBCustomer($user->ID);
+				$row = array_merge(
+					array(
+						'id' => $user->ID,
+						'email' => $user->user_email,
+						'registered' => $user->user_registered,
+						'first_name' => $user->user_firstname,
+						'last_name' => $user->user_lastname,
+					),
+					$customer->get_segment_data()
+				);
+				$keys = array_unique(array_merge($keys, array_keys($row)));
+				$rows[] = $row;
+			}
+
+			// Header row
+			$data = [];
+			foreach ($keys as $key) {
+				$data[] = '"' . str_replace( '"', '""', $key ) . '"';
+			}
+			echo implode( ',', $data ) . "\n";
+
+			// Data rows
+			foreach ($rows as $row) {
+				$data = [];
+				foreach ($keys as $key) {
+					$data[] = '"' . str_replace( '"', '""', $row[$key] ) . '"';
+				}
+				echo implode( ',', $data ) . "\n";
+			}
+
+			exit;
+		}
 	}
 
 	public function generate_csv_new() {
@@ -104,17 +154,10 @@ class CBCustomersStats {
 			    wp_users U
 			left join 
 			    wp_usermeta A on A.user_id = U.id
-			left join 
-			    wp_usermeta B on B.user_id = U.id
-			left join 
-			    wp_usermeta C on C.user_id = U.id
-			left join 
-			    wp_usermeta D on D.user_id = U.id
 			where
 			    A.meta_key = 'active_subscriber'
-			and B.meta_key = 'box_month_of_latest_order'
-			and C.meta_key = 'clothing_gender'
-			and D.meta_key = 'tshirt_size'
+				AND
+			    A.meta_value = 1
 		" );
 		return count($users);
 	}
