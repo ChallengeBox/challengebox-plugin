@@ -236,6 +236,9 @@ class CB {
 			case 'point-adjustment':
 				$event_description = sprintf('%s', $event->data);
 				break;
+			case 'double-points':
+				$event_description = sprintf('2x point bonus for %s challenge.', $event->data->format('F'));
+				break;
 		}
 		return $event_description;
 	}

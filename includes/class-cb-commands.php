@@ -32,6 +32,7 @@ class CBCmd extends WP_CLI_Command {
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
 			'auto' => !empty($assoc_args['auto']),
+			'bonus' => !empty($assoc_args['bonus']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 
@@ -1150,6 +1151,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
 	 *
+	 * [--bonus]
+	 * : Apply 2x bonus points for this month.
+	 *
 	 * [--pretend]
 	 * : Don't actually do any api calls.
 	 *
@@ -1206,6 +1210,9 @@ class CBCmd extends WP_CLI_Command {
 					WP_CLI::debug("\tAdding $difference points.");
 					if (! $this->options->pretend) {
 						WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'monthly-challenge', $month_start);
+						if ($this->options->bonus) {
+							WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'double-points', $month_start);
+						}
 						$customer->set_meta($points_applied_key, $points);
 					}
 				}
