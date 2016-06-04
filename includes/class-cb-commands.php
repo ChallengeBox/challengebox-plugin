@@ -1084,7 +1084,8 @@ class CBCmd extends WP_CLI_Command {
 		//$last_month_start = clone $month_start; $last_month_start->modify('first day of last month');
 		//$last_month_end = clone $month_start; $last_month_end->modify('last day of last month');
 		$mrr_key = 'mrr_' . $month;
-		$columns = array('id', 'cohort', 'first_sub', $mrr_key, 'error');
+		$revenue_key = 'revenue_' . $month;
+		$columns = array('id', 'cohort', 'first_sub', $mrr_key, $revenue_key, 'error');
 
 		foreach ($args as $user_id) {
 
@@ -1101,10 +1102,12 @@ class CBCmd extends WP_CLI_Command {
 				//$is_active_last = $customer->is_active_during_period($last_month_start, $last_month_end);
 				$cohort = $customer->earliest_subscription_date()->format('Y-m');
 				$mrr = $customer->mrr_during_period($month_start, $month_end);
+				$revenue = $customer->revenue_during_period($month_start, $month_end);
 
 				if (! $this->options->pretend) {
 					$customer->set_meta('cohort', $registered->format('Y-m'));
 					$customer->set_meta($mrr_key, $mrr);
+					$customer->set_meta($revenue_key, $revenue);
 				}
 
 				array_push($results, array(
@@ -1112,6 +1115,7 @@ class CBCmd extends WP_CLI_Command {
 					'cohort' => $registered->format('Y-m'),
 					'first_sub' => $cohort,
 					$mrr_key => $mrr,
+					$revenue_key => $revenue,
 					'error' => NULL,
 				));
 
@@ -1122,6 +1126,7 @@ class CBCmd extends WP_CLI_Command {
 					'cohort' => isset($registered) ? $registered->format('Y-m') : NULL,
 					'first_sub' => isset($cohort) ? $cohort : NULL,
 					$mrr_key => isset($mrr) ? $mrr : NULL,
+					$revenue_key => isset($revenue) ? $revenue : NULL,
 					'error' => $e->getMessage(),
 				));
 				if ($this->options->verbose)

@@ -228,6 +228,17 @@ class CBCustomer {
 	}
 
 	/**
+	 * Returns orders placed during a given period.
+	 */
+	public function get_orders_during_period($start, $end) {
+		return array_filter($this->get_orders(), function ($order) use ($start, $end) {
+			$created = CBWoo::parse_date_from_api($order->created_at);
+			return $created >= $start && $created < $end;
+		});
+	}
+
+
+	/**
 	 * Returns the start date of the earliest subscription. Can be used to determine cohort.
 	 */
 	public function earliest_subscription_date() {
@@ -267,6 +278,18 @@ class CBCustomer {
 						break;
 				}
 			}
+		}
+		return $revenue;
+	}
+
+	/**
+	 * Returns the amount of total revenue (in dollars, including non renewing) during
+	 * the given period.
+	 */
+	public function revenue_during_period($start, $end) {
+		$revenue = 0;
+		foreach ($this->get_orders_during_period($start, $end) as $order) {
+			$revenue += doubleval($order->total);
 		}
 		return $revenue;
 	}
