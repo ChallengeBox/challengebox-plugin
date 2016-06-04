@@ -732,6 +732,7 @@ class CBCustomer {
 	 * Let's keep this short for now and only use cached metadata.
 	 */
 	public function get_segment_data() {
+		$user = get_user_by('ID', $this->get_user_id());
 		$data = array(
 			'last_shipped_box' => $this->get_meta('box_month_of_latest_order'),
 			'clothing_gender' => $this->get_meta('clothing_gender'),
@@ -758,6 +759,7 @@ class CBCustomer {
 			'has_rush_order' => $this->get_meta('has_rush_order'),
 			'has_failed_order' => $this->get_meta('has_failed_order'),
 			'failed_order_payment_url' => $this->get_meta('failed_order_payment_url'),
+			'registered_after_june' => new DateTime($user->user_registered) > new DateTime('2016-06-01'),
 		);
 		return $data;
 	}
