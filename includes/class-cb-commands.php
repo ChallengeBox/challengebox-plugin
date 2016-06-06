@@ -360,6 +360,8 @@ class CBCmd extends WP_CLI_Command {
 				$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
 
 				// Exploratory stuff
+				$earned = NULL;
+				$boxes = NULL;
 				if ($this->options->auto) {
 
 					$the_12th = new DateTime('2016-06-12');
@@ -664,6 +666,10 @@ class CBCmd extends WP_CLI_Command {
 	function generate_order( $args, $assoc_args ) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
+		$results = array();
+		$columns = array(
+			'user_id', 'sub_id', 'sub_status', 'action', 'reason', 'new_sku', 'error'
+		);
 		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
 
 		foreach ($args as $user_id) {
@@ -671,40 +677,105 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug("User $user_id");
 
 			// Reasons to not generate an order
+			if (!$customer->has_active_subscription($this->options->date)) {
+				WP_CLI::debug("\tCustomer doesn't have an active subscription as of $date_string.");
+				$results[] = array(
+					'user_id' => $user_id, 
+					'sub_id' => NULL, 
+					'sub_status' => NULL,
+					'action' => 'skip',
+					'reason' => 'no active sub',
+					'new_sku' => NULL, 
+					'error' => NULL
+				);
+				continue;
+			}
+			$sub = array_values($customer->get_active_subscriptions($this->options->date))[0];
+
 			if (!$this->options->force && (
 				$customer->has_box_order_this_month($this->options->month)
 			)) {
 				WP_CLI::debug("\tCustomer already has a valid order this month.");
+				$results[] = array(
+					'user_id' => $user_id, 
+					'sub_id' => $sub->id,
+					'sub_status' => $sub->status,
+					'action' => 'skip',
+					'reason' => 'existing box order',
+					'new_sku' => NULL, 
+					'error' => NULL
+				);
 				continue;
 			} 
-			if (!$customer->has_active_subscription($this->options->date)) {
-				WP_CLI::debug("\tCustomer doesn't have an active subscription as of $date_string.");
-				continue;
-			}
 			// XXX: Special case for next_box = '2016-07'
 			if ($this->options->month->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-07') {
 				WP_CLI::debug("\tOrder should be postponed until July.");
+				$results[] = array(
+					'user_id' => $user_id, 
+					'sub_id' => $sub->id,
+					'sub_status' => $sub->status,
+					'action' => 'skip',
+					'reason' => 'user postponed',
+					'new_sku' => NULL, 
+					'error' => NULL
+				);
 				continue;
 			}
 
-			WP_CLI::debug("\tWould use sku: " . $customer->get_next_box_sku(
-				$this->options->month, $version='v2')
-			);
-			$next_order = $customer->next_order_data(
-				$this->options->month, $this->options->date
-			);
+			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
+			try {
+				$next_order = $customer->next_order_data(
+					$this->options->month, $this->options->date
+				);
+				WP_CLI::debug("\tWould use sku: " . $new_sku);
+			} catch (Exception $e) {
+				$results[] = array(
+					'user_id' => $user_id, 
+					'sub_id' => $sub->id,
+					'sub_status' => $sub->status,
+					'action' => 'skip',
+					'reason' => 'error',
+					'new_sku' => $new_sku, 
+					'error' => $e->getMessage()
+				);
+				continue;
+			}
 			WP_CLI::debug("\tGenerating order");
 			if ($this->options->verbose) {
 				WP_CLI::debug("\tNext order: " . var_export($next_order, true));
 			}
 
 			if (!$this->options->pretend) {
-				$response = $this->api->create_order($next_order);
-				WP_CLI::debug("\tCreated new order");
+				try {
+					$response = $this->api->create_order($next_order);
+					WP_CLI::debug("\tCreated new order");
+				} catch (Exception $e) {
+					$results[] = array(
+						'user_id' => $user_id, 
+						'sub_id' => $sub->id,
+						'sub_status' => $sub->status,
+						'action' => 'error',
+						'reason' => 'error',
+						'new_sku' => $new_sku, 
+						'error' => $e->getMessage()
+					);
+				}
 				if ($this->options->verbose) {
 					WP_CLI::debug("\tResponse: " . var_export($response, true));
 				}
 			}
+			$results[] = array(
+				'user_id' => $user_id, 
+				'sub_id' => $sub->id,
+				'sub_status' => $sub->status,
+				'action' => 'created order',
+				'reason' => NULL,
+				'new_sku' => $new_sku, 
+				'error' => NULL
+			);
+		}
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 		}
 	}
 

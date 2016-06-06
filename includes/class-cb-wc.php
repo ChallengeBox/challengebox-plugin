@@ -247,7 +247,6 @@ class CBWoo {
 	 * 
 	 */
 	public static function format_sku($ship_month, $box_num, $clothing_gender, $tshirt_size, $version = 'v1', $diet = false) {
-		var_dump($diet);
 		// Generate sku based on version
 		switch ($version) {
 			case 'v1':
