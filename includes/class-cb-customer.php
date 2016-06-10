@@ -360,6 +360,12 @@ class CBCustomer {
 			function ($order) { return 'failed' === $order->status; }
 		);
 	}
+	public function get_subscription_orders() {
+		return array_filter(
+			$this->get_orders(),
+			function ($order) { return CBWoo::is_subscription_order($order); }
+		);
+	}
 
 	/**
 	 * Returns customer's orders that are valid boxes.

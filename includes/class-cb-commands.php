@@ -641,6 +641,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
 	 * [--month=<month>]
 	 * : Date on which to generate the order. Format like '2016-05'.
 	 *   Defaults to next month (because we usually generate orders ahead of the month).
@@ -1803,6 +1806,65 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
+	/**
+	 * Marks every 'processing' subscription order as 'completed'.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to mark orders.
+	 *
+	 * [--all]
+	 * : Mark orders for all users. (Ignores <id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't actually mark, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb mark_subscription_orders_as_completed 167
+	 */
+	function mark_subscription_orders_as_completed($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		/*
+		$results = array();
+		$columns = array(
+			'user_id', 'sub_id', 'order_id', 'status_before', 'status_after'
+		);
+		*/
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("User $user_id");
+
+			foreach ($customer->get_subscription_orders() as $order) {
+				$oid = $order->id;
+				WP_CLI::debug("\tOrder $oid");
+				if ('completed' === $order->status) {
+					WP_CLI::debug("\t\t-> completed");
+					continue;
+				}
+				$new_order = array('order' => array('status' => 'completed'));
+				WP_CLI::debug("\t\t-> marking...");
+				if ($this->options->verbose) {
+					WP_CLI::debug("\tnew" . var_export($new_order, true));
+				}
+				if (! $this->options->pretend) {
+					$response = $this->api->update_order($order->id, $new_order);
+					if ($this->options->verbose) {
+						WP_CLI::debug("\tUpdate order response: " . var_export($response, true));
+					}
+				}
+			}
+		}
+	}
 
 }
 

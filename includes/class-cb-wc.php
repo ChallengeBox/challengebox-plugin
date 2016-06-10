@@ -469,8 +469,11 @@ class CBWoo {
 		return $parsed->sku_version === 'single-v2';
 	}
 	public static function is_subscription_order($order) {
-		$parsed = CBWoo::parse_order_options($order);
-		return 0 === strpos($parsed->sku, 'sub_');
+		foreach ($order->line_items as $line_item) {
+			if ($line_item->sku && 0 === strpos($line_item->sku, 'subscription_')) {
+				return true;
+			}
+		}
 	}
 
 	/**
