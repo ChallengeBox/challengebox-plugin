@@ -464,9 +464,8 @@ class CBWoo {
 		return !empty($parsed->gender) && !empty($parsed->size);
 	}
 	public static function is_valid_single_box_order($order) {
-		// Order is a box if it has available gender and size options.
 		$parsed = CBWoo::parse_order_options($order);
-		return $parsed->sku_version === 'single-v2';
+		return $parsed && $parsed->sku_version && $parsed->sku_version === 'single-v2';
 	}
 	public static function is_subscription_order($order) {
 		foreach ($order->line_items as $line_item) {
@@ -474,6 +473,13 @@ class CBWoo {
 				return true;
 			}
 		}
+	}
+	public static function is_mrr_subscription($sub) {
+		return (bool) in_array(
+			CBWoo::extract_subscription_type($sub),
+			array('3 Month', '12 Month', 'Month to Month')
+		);
+
 	}
 
 	/**

@@ -198,8 +198,10 @@ class CBCustomer {
 
 		$this->set_meta('wc_points_balance', WC_Points_Rewards_Manager::get_users_points($this->user_id), $local_only);
 
-		$this->set_meta('fitbit_oauth_status', $this->get_fitbit_oauth_status());
-		$this->set_meta('has_rush_order', sizeof($this->get_rush_orders()) > 0);
+		$this->set_meta('fitbit_oauth_status', $this->get_fitbit_oauth_status(), $local_only);
+		$this->set_meta('has_rush_order', sizeof($this->get_rush_orders()) > 0, $local_only);
+
+		$this->set_meta('mrr_cohort', $this->estimate_mrr_cohort(), $local_only);
 
 		return $exceptions;
 	}
@@ -209,6 +211,11 @@ class CBCustomer {
 	 */
 	public function get_mrr_subscriptions_during_period($start, $end) {
 		return array_filter($this->get_subscriptions(), function ($sub) use ($start, $end) {
+
+			if (!CBWoo::is_mrr_subscription($sub)) {
+				return false;
+			}
+
 			$sub_start = CBWoo::parse_date_from_api($sub->billing_schedule->start_at);
 
 			// Active subscriptions have an empty end_at parameter
@@ -274,7 +281,7 @@ class CBCustomer {
 						$revenue += doubleval($sub->total);
 						break;
 					default:
-						throw new Exception('Unknown subscription type');
+						//throw new Exception('Unknown subscription type');
 						break;
 				}
 			}
@@ -287,9 +294,30 @@ class CBCustomer {
 	 * the given period.
 	 */
 	public function revenue_during_period($start, $end) {
-		$revenue = 0;
+		$revenue = array(
+			'total' => 0,
+			'sub' => 0,
+			'single' => 0,
+			'shop' => 0,
+		);
 		foreach ($this->get_orders_during_period($start, $end) as $order) {
-			$revenue += doubleval($order->total);
+			$revenue['total'] += doubleval($order->total);
+			if (
+				(
+					CBWoo::is_valid_box_order($order)
+					&& !CBWoo::is_valid_single_box_order($order)
+				)
+					||
+				CBWoo::is_subscription_order($order)
+			) {
+				$revenue['sub'] += doubleval($order->total);
+			}
+			elseif (CBWoo::is_valid_single_box_order($order)) {
+				$revenue['single'] += doubleval($order->total);
+			}
+			else {
+				$revenue['shop'] += doubleval($order->total);
+			}
 		}
 		return $revenue;
 	}
@@ -447,6 +475,17 @@ class CBCustomer {
 			function ($s) { return 'on-hold' == $s->status; }
 		);
 	}
+	/**
+	 * Returns customer's WooCommerce subscriptions that generate monthly
+	 * recuring revenue.
+	 */
+	public function get_mrr_subscriptions() {
+		return array_filter(
+			$this->get_subscriptions(),
+			function ($s) { return CBWoo::is_mrr_subscription($s); }
+		);
+	}
+
 
 	/**
 	 * Returns true if customer has a valid box order in the given
@@ -576,6 +615,26 @@ class CBCustomer {
 				function ($order) { return $this->order_was_shipped($order); }
 			)
 		);
+	}
+	/**
+	 * Estimates when the user started becoming a recuring subscriber.
+	 */
+	public function estimate_mrr_cohort() {
+		$subs = $this->get_mrr_subscriptions();
+		if (sizeof($subs)) {
+			$earliest = new DateTime();
+			$found = false;
+			foreach ($subs as $sub) {
+				$sub_start = CBWoo::parse_date_from_api($sub->billing_schedule->start_at);
+				if ($sub_start < $earliest) {
+					$found = true;
+					$earliest = $sub_start;
+				}
+			}
+			if ($found) {
+				return $earliest->format('Y-m');
+			}
+		}
 	}
 
 	/**
@@ -737,7 +796,7 @@ class CBCustomer {
 	 * Returns data to be added to segment identify() calls.
 	 * Let's keep this short for now and only use cached metadata.
 	 */
-	public function get_segment_data() {
+	public function get_segment_data($revenue_fields = false) {
 		$user = get_user_by('ID', $this->get_user_id());
 		$data = array(
 			'last_shipped_box' => $this->get_meta('box_month_of_latest_order'),
@@ -767,6 +826,43 @@ class CBCustomer {
 			'failed_order_payment_url' => $this->get_meta('failed_order_payment_url'),
 			'registered_after_june' => new DateTime($user->user_registered) > new DateTime('2016-06-01'),
 		);
+
+		if ($revenue_fields) {
+			$data = array_merge($data, array(
+				'mrr_cohort' => $this->get_meta('mrr_cohort'),
+				'mrr_2016-01' => doubleval($this->get_meta('mrr_2016-01', 0)),
+				'mrr_2016-02' => doubleval($this->get_meta('mrr_2016-02', 0)),
+				'mrr_2016-03' => doubleval($this->get_meta('mrr_2016-03', 0)),
+				'mrr_2016-04' => doubleval($this->get_meta('mrr_2016-04', 0)),
+				'mrr_2016-05' => doubleval($this->get_meta('mrr_2016-05', 0)),
+				'mrr_2016-06' => doubleval($this->get_meta('mrr_2016-06', 0)),
+				'revenue_2016-01' => doubleval($this->get_meta('revenue_2016-01', 0)),
+				'revenue_2016-02' => doubleval($this->get_meta('revenue_2016-02', 0)),
+				'revenue_2016-03' => doubleval($this->get_meta('revenue_2016-03', 0)),
+				'revenue_2016-04' => doubleval($this->get_meta('revenue_2016-04', 0)),
+				'revenue_2016-05' => doubleval($this->get_meta('revenue_2016-05', 0)),
+				'revenue_2016-06' => doubleval($this->get_meta('revenue_2016-06', 0)),
+				'revenue_sub_2016-01' => doubleval($this->get_meta('revenue_sub_2016-01', 0)),
+				'revenue_sub_2016-02' => doubleval($this->get_meta('revenue_sub_2016-02', 0)),
+				'revenue_sub_2016-03' => doubleval($this->get_meta('revenue_sub_2016-03', 0)),
+				'revenue_sub_2016-04' => doubleval($this->get_meta('revenue_sub_2016-04', 0)),
+				'revenue_sub_2016-05' => doubleval($this->get_meta('revenue_sub_2016-05', 0)),
+				'revenue_sub_2016-06' => doubleval($this->get_meta('revenue_sub_2016-06', 0)),
+				'revenue_single_2016-01' => doubleval($this->get_meta('revenue_single_2016-01', 0)),
+				'revenue_single_2016-02' => doubleval($this->get_meta('revenue_single_2016-02', 0)),
+				'revenue_single_2016-03' => doubleval($this->get_meta('revenue_single_2016-03', 0)),
+				'revenue_single_2016-04' => doubleval($this->get_meta('revenue_single_2016-04', 0)),
+				'revenue_single_2016-05' => doubleval($this->get_meta('revenue_single_2016-05', 0)),
+				'revenue_single_2016-06' => doubleval($this->get_meta('revenue_single_2016-06', 0)),
+				'revenue_shop_2016-01' => doubleval($this->get_meta('revenue_shop_2016-01', 0)),
+				'revenue_shop_2016-02' => doubleval($this->get_meta('revenue_shop_2016-02', 0)),
+				'revenue_shop_2016-03' => doubleval($this->get_meta('revenue_shop_2016-03', 0)),
+				'revenue_shop_2016-04' => doubleval($this->get_meta('revenue_shop_2016-04', 0)),
+				'revenue_shop_2016-05' => doubleval($this->get_meta('revenue_shop_2016-05', 0)),
+				'revenue_shop_2016-06' => doubleval($this->get_meta('revenue_shop_2016-06', 0)),
+			));
+		}
+
 		return $data;
 	}
 

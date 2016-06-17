@@ -39,11 +39,11 @@ class CBSegment {
 	 * Class to control server-side Segment.com integration for ChallengeBox
 	 * Pass it a CBCustomer instance.
 	 */
-	public function identify($customer, $pretend = false) {
+	public function identify($customer, $pretend = false, $revenue = false) {
 
 		$user = get_user_by('ID', $customer->get_user_id());
 
-		$traits = array_merge($customer->get_segment_data(), array(
+		$traits = array_merge($customer->get_segment_data($revenue), array(
 			'username'   => $user->user_login,
 			'email'      => $user->user_email,
 			'firstName'  => $user->user_firstname,

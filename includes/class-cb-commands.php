@@ -32,6 +32,7 @@ class CBCmd extends WP_CLI_Command {
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
 			'auto' => !empty($assoc_args['auto']),
+			'revenue' => !empty($assoc_args['revenue']),
 			'bonus' => !empty($assoc_args['bonus']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
@@ -77,6 +78,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Iterate through all users. (Ignores <id>... if found).
 	 *
+	 * [--revenue]
+	 * : Include revenue data.
+	 *
 	 * [--pretend]
 	 * : Don't actually do any api calls.
 	 *
@@ -111,7 +115,7 @@ class CBCmd extends WP_CLI_Command {
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id");
 			$customer = new CBCustomer($user_id);
-			$data = $segment->identify($customer, $this->options->pretend);
+			$data = $segment->identify($customer, $this->options->pretend, $this->options->revenue);
 			$result = array_merge(array('id' => $user_id), $data['traits']);
 			array_push($results, $result);
 			$columns = array_unique(array_merge($columns, array_keys($result)));
@@ -194,6 +198,7 @@ class CBCmd extends WP_CLI_Command {
 				'points_before' => $customer->get_meta('wc_points_balance'),
 				'oauth_before' => $customer->get_meta('fitbit_oauth_status'),
 				'rush_before' => $customer->get_meta('has_rush_order'),
+				'cohort_before' => $customer->get_meta('mrr_cohort'),
 			);
 
 			try {
@@ -211,6 +216,7 @@ class CBCmd extends WP_CLI_Command {
 					'points_after' => $customer->get_meta('wc_points_balance'),
 					'oauth_after' => $customer->get_meta('fitbit_oauth_status'),
 					'rush_after' => $customer->get_meta('has_rush_order'),
+					'cohort_after' => $customer->get_meta('mrr_cohort'),
 					'has_order' => $customer->has_box_order_this_month(),
 					'#orders' => sizeof($customer->get_orders()),
 					'#box_orders' => sizeof($customer->get_box_orders()),
@@ -234,6 +240,7 @@ class CBCmd extends WP_CLI_Command {
 					'points_after' => NULL,
 					'oauth_after' => NULL,
 					'rush_after' => NULL,
+					'cohort_after' => NULL,
 					'has_order' => NULL,
 					'#orders' => NULL,
 					'#box_orders' => NULL,
@@ -263,6 +270,7 @@ class CBCmd extends WP_CLI_Command {
 			'points_before', 'points_after',
 			'oauth_before', 'oauth_after',
 			'rush_before', 'rush_after',
+			'cohort_before', 'cohort_after',
 			'has_order',
 			'#orders',
 			'#box_orders',
@@ -1181,7 +1189,10 @@ class CBCmd extends WP_CLI_Command {
 		//$last_month_end = clone $month_start; $last_month_end->modify('last day of last month');
 		$mrr_key = 'mrr_' . $month;
 		$revenue_key = 'revenue_' . $month;
-		$columns = array('id', 'cohort', 'first_sub', $mrr_key, $revenue_key, 'error');
+		$revenue_sub_key = 'revenue_sub_' . $month;
+		$revenue_single_key = 'revenue_single_' . $month;
+		$revenue_shop_key = 'revenue_shop_' . $month;
+		$columns = array('id', 'cohort', 'first_sub', $mrr_key, $revenue_key, $revenue_sub_key, $revenue_single_key, $revenue_shop_key, 'error');
 
 		foreach ($args as $user_id) {
 
@@ -1203,7 +1214,10 @@ class CBCmd extends WP_CLI_Command {
 				if (! $this->options->pretend) {
 					$customer->set_meta('cohort', $registered->format('Y-m'));
 					$customer->set_meta($mrr_key, $mrr);
-					$customer->set_meta($revenue_key, $revenue);
+					$customer->set_meta($revenue_key, $revenue['total']);
+					$customer->set_meta($revenue_sub_key, $revenue['sub']);
+					$customer->set_meta($revenue_single_key, $revenue['single']);
+					$customer->set_meta($revenue_shop_key, $revenue['shop']);
 				}
 
 				array_push($results, array(
@@ -1211,7 +1225,10 @@ class CBCmd extends WP_CLI_Command {
 					'cohort' => $registered->format('Y-m'),
 					'first_sub' => $cohort,
 					$mrr_key => $mrr,
-					$revenue_key => $revenue,
+					$revenue_key => $revenue['total'],
+					$revenue_sub_key => $revenue['sub'],
+					$revenue_single_key => $revenue['single'],
+					$revenue_shop_key => $revenue['shop'],
 					'error' => NULL,
 				));
 
@@ -1223,6 +1240,9 @@ class CBCmd extends WP_CLI_Command {
 					'first_sub' => isset($cohort) ? $cohort : NULL,
 					$mrr_key => isset($mrr) ? $mrr : NULL,
 					$revenue_key => isset($revenue) ? $revenue : NULL,
+					$revenue_sub_key => isset($revenue) ? $revenue['sub'] : NULL,
+					$revenue_single_key => isset($revenue) ? $revenue['single'] : NULL,
+					$revenue_shop_key => isset($revenue) ? $revenue['shop'] : NULL,
 					'error' => $e->getMessage(),
 				));
 				if ($this->options->verbose)
