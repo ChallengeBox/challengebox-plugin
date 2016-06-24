@@ -333,7 +333,7 @@ class CBCmd extends WP_CLI_Command {
 			// Get a date on the 26th that has the same H:M:S as renewal date
 			// to ensure the renewals are spaced out
 			$renewal_day = new DateTime("first day of this month");
-			$renewal_day->add(new DateInterval("P19D"));
+			$renewal_day->add(new DateInterval("P25D"));
 		} else {
 			$renewal_day = $this->options->day;
 		}
