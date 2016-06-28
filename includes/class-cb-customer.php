@@ -179,6 +179,11 @@ class CBCustomer {
 			$this->set_meta('subscription_status', $sub->status, $local_only);
 			$this->set_meta('subscription_type', $this->get_subscription_type(), $local_only);
 			$this->set_meta('renewal_date', null, $local_only);
+		} elseif ($this->had_mrr_subscription()) {
+			$this->set_meta('active_subscriber', 0, $local_only);
+			$this->set_meta('subscription_status', 'canceled', $local_only);
+			$this->set_meta('subscription_type', $this->get_subscription_type(), $local_only);
+			$this->set_meta('renewal_date', null, $local_only);
 		} else {
 			$this->set_meta('active_subscriber', 0, $local_only);
 			$this->set_meta('subscription_status', null, $local_only);
@@ -651,6 +656,15 @@ class CBCustomer {
 	 */
 	public function has_subscription_on_hold() {
 		return (bool) sizeof($this->get_subscriptions_on_hold());
+	}
+	/**
+	 * Returns true if the customer had any mrr subscription at any time.
+	 */
+	public function had_mrr_subscription() {
+		return (bool) sizeof(array_filter(
+			$this->get_subscriptions(), 
+			function($sub) { return CBWoo::is_mrr_subscription($sub); }
+		));
 	}
 
 	/**
