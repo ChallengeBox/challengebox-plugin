@@ -880,4 +880,72 @@ class CBCustomer {
 		return $data;
 	}
 
+	/**
+	 *
+	 */
+	public function calculate_box_credits($verbose = false) {
+		$totals = array(
+			'credits' => intval($this->get_meta('extra_box_credits', 0)) + intval($this->get_meta('box_credit_adjustment', 0)),
+			'revenue' => 0,
+		);
+		foreach ($this->get_orders() as $order) {
+			if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
+			foreach ($order->line_items as $line) {
+				if ($line->sku) {
+					$parsed = CBWoo::parse_box_sku($line->sku);
+					if ($parsed->credits > 0) {
+						if ($parsed->credit_only_with_total) {
+							if ($order->subtotal > 0) {
+								$totals['credits'] += $parsed->credits;
+								$totals['revenue'] += $order->total;
+								if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+							} else {
+								if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . 0 . ' amount ' . $order->total);
+							}
+						} else {
+							$totals['credits'] += $parsed->credits;
+							$totals['revenue'] += $order->total;
+							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+						}
+					} elseif (0 === $parsed->credits) {
+						if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+					} else {
+						// We need to calculate credits in another way
+						if ($order->total > 100) {
+							$totals['credits'] += 12;
+							$totals['revenue'] += $order->total;
+							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 12 amount ' . $order->total);
+						} elseif ($order->total > 50) {
+							$totals['credits'] += 3;
+							$totals['revenue'] += $order->total;
+							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 3 amount ' . $order->total);
+						} else {
+							$totals['credits'] += 1;
+							$totals['revenue'] += $order->total;
+							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 1 amount ' . $order->total);
+						}
+					}
+				}
+			}
+		}
+		return $totals;
+	}
+	public function calculate_box_debits($verbose = false) {
+		$total = 0;
+		foreach ($this->get_orders() as $order) {
+			// Only count order if it is in one of these allowed states
+			if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
+			foreach ($order->line_items as $line) {
+				if ($line->sku) {
+					$parsed = CBWoo::parse_box_sku($line->sku);
+					if ($parsed->debits > 0) {
+						$total += $parsed->debits;
+						if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' debit ' . $parsed->debits);
+					}
+				}
+			}
+		}
+		return $total;
+	}
+
 }

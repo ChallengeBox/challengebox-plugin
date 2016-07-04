@@ -314,6 +314,10 @@ class CBWoo {
 				'plan' => NULL,
 				'diet' => NULL,
 				'is_box' => true,
+				'is_sub' => true,
+				'credits' => NULL,
+				'debits' => 1,
+				'credit_only_with_total' => true,
 			);
 		}
 
@@ -331,6 +335,12 @@ class CBWoo {
 			}
 			if ('m' !== $month_raw[0])
 					throw new InvalidSku($sku . ': month field incorrect');
+			switch ($plan) {
+				case '1m': $plan = 'Month to Month'; $credits = 1; break;
+				case '3m': $plan = '3 Month'; $credits = 3;  break;
+				case '12m': $plan = '12 Month'; $credits = 12;  break;
+				default: throw new InvalidSku($sku . ': unknown plan');
+			};
 			return (object) array(
 				'sku_version' => 'v1',
 				'month' => (int) substr($month_raw, 1),
@@ -338,6 +348,10 @@ class CBWoo {
 				'size' => strtolower($size),
 				'plan' => strtolower($plan),
 				'is_box' => true,
+				'is_sub' => true,
+				'credits' => $credits,
+				'debits' => 1,
+				'credit_only_with_total' => true,
 			);
 		}
 
@@ -346,13 +360,16 @@ class CBWoo {
 			switch (sizeof($exploded)) {
 				case 1: 
 					return (object) array(
-						'sku_version' => 'single-v2',
-						'month' => NULL,
+						'sku_version' => 'single-v1',
 						'gender' => NULL,
 						'size' => NULL,
 						'plan' => NULL,
 						'diet' => NULL,
+						'credits' => 1,
+						'debits' => 1,
 						'is_box' => true,
+						'is_sub' => true,
+						'credit_only_with_total' => true,
 					);
 				case 3: 
 					list($sbox, $gender, $size) = $exploded;
@@ -371,6 +388,10 @@ class CBWoo {
 				'plan' => NULL,
 				'diet' => strtolower($diet),
 				'is_box' => true,
+				'is_sub' => true,
+				'credits' => 1,
+				'debits' => 1,
+				'credit_only_with_total' => true,
 			);
 		}
 
@@ -400,6 +421,39 @@ class CBWoo {
 				'plan' => NULL,
 				'diet' => $diet,
 				'is_box' => true,
+				'is_sub' => false,
+				'credits' => 0,
+				'debits' => 1,
+				'credit_only_with_total' => false,
+			);
+		}
+
+		// New version single box sku
+		if ('subscription' == $exploded[0]) {
+			switch (sizeof($exploded)) {
+				case 2: list($subscription, $plan) = $exploded; break;
+				case 3: list($subscription, $plan, $singlebox) = $exploded; break;
+				default: throw new InvalidSku($sku . ': wrong number of components');
+			}
+			switch ($plan) {
+				case 'single': $plan = 'Single Box'; $credits = 1; break;
+				case 'monthly': $plan = 'Month to Month'; $credits = 1; break;
+				case '3month': $plan = '3 Month'; $credits = 3; break;
+				case '12month': $plan = '12 Month'; $credits = 12; break;
+				default: throw new InvalidSku($sku . ': unexpected plan type');
+			}
+			return (object) array(
+				'sku_version' => 'subscription-v2',
+				'month' => NULL,
+				'gender' => NULL,
+				'size' => NULL,
+				'plan' => $plan,
+				'diet' => NULL,
+				'is_box' => false,
+				'is_sub' => true,
+				'credits' => $credits,
+				'debits' => 0,
+				'credit_only_with_total' => true,
 			);
 		}
 
@@ -410,6 +464,10 @@ class CBWoo {
 			'size' => NULL,
 			'plan' => NULL,
 			'is_box' => false,
+			'is_sub' => false,
+			'credits' => 0,
+			'debits' => 0,
+			'credit_only_with_total' => false,
 		);
 	}
 
@@ -465,7 +523,7 @@ class CBWoo {
 	}
 	public static function is_valid_single_box_order($order) {
 		$parsed = CBWoo::parse_order_options($order);
-		return $parsed && $parsed->sku_version && $parsed->sku_version === 'single-v2';
+		return $parsed && $parsed->sku_version && ($parsed->sku_version === 'single-v2' || $parsed->sku_version === 'single-v1');
 	}
 	public static function is_subscription_order($order) {
 		foreach ($order->line_items as $line_item) {
@@ -479,7 +537,25 @@ class CBWoo {
 			CBWoo::extract_subscription_type($sub),
 			array('3 Month', '12 Month', 'Month to Month')
 		);
+	}
 
+	public static function order_counts_as_box_credit($order) {
+		foreach ($order->line_items as $line_item) {
+			if (!empty($line_item->sku)) {
+				if (CBWoo::parse_box_sku($line_item->sku)->is_sub) {
+					return true;
+				}
+			}
+		}
+	}
+	public static function order_counts_as_box_debit($order) {
+		foreach ($order->line_items as $line_item) {
+			if (!empty($line_item->sku)) {
+				if (CBWoo::parse_box_sku($line_item->sku)->is_box) {
+					return true;
+				}
+			}
+		}
 	}
 
 	/**
