@@ -407,7 +407,8 @@ class CBCustomer {
 		return array_filter(
 			$this->get_orders(),
 			function ($o) use ($since) { 
-				$valid =  CBWoo::is_valid_box_order($o); 
+				//$valid =  CBWoo::is_valid_box_order($o); 
+				$valid =  CBWoo::order_counts_as_box_debit($o); 
 				if ($since) {
 					return $valid && CBWoo::parse_date_from_api($o->created_at) >= $since;
 				} else {
