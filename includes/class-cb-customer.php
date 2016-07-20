@@ -735,6 +735,9 @@ class CBCustomer {
 			$date = new DateTime();
 		}
 		$subscription = array_values($this->get_active_subscriptions($date))[0];
+		if (!$subscription) {
+			$subscription = array_values($this->get_subscriptions($date))[0];
+		}
 		$sku = $this->get_next_box_sku($ship_month, $version='v2');
 		$product = $this->api->get_product_by_sku($sku);
 		$order = array(
