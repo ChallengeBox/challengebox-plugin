@@ -336,7 +336,7 @@ class CBCmd extends WP_CLI_Command {
 	function synchronize_renewal($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		if (empty($assoc_args['date'])) {
+		if (empty($assoc_args['day'])) {
 			// Get a date on the 20th that has the same H:M:S as renewal date
 			// to ensure the renewals are spaced out
 			$renewal_day = new DateTime("first day of this month");
@@ -372,7 +372,7 @@ class CBCmd extends WP_CLI_Command {
 
 				$original_renewal = clone $renewal_date;
 				$last_box_order = end($customer->get_box_orders());
-				$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
+				//$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
 
 				// Exploratory stuff
 				$earned = NULL;
