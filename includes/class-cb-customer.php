@@ -396,7 +396,7 @@ class CBCustomer {
 	public function get_subscription_orders() {
 		return array_filter(
 			$this->get_orders(),
-			function ($order) { return CBWoo::is_subscription_order($order); }
+			function ($order) { return CBWoo::order_counts_as_box_credit($order); }
 		);
 	}
 
