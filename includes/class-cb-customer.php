@@ -511,7 +511,7 @@ class CBCustomer {
 		$this_month = $date->format('Y-m');
 		return CB::any(array_map(
 			function($order) use ($this_month) {
-				return (new DateTime($order->created_at))->format('Y-m') == $this_month;
+				return (new DateTime($order->created_at))->format('Y-m') == $this_month && 'cancelled' !== $order->status;
 			},
 			$this->get_box_orders()
 		));
