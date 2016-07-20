@@ -2198,6 +2198,166 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
+	/**
+	 * Cancels bad orders
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to cancel orders.
+	 *
+	 * --date=<date>
+	 * : Cutoff date after which an order should be canceled.
+	 *
+	 * [--all]
+	 * : Work on all users. (Ignores <id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--pretend]
+	 * : Don't actually work, just print out what we'd do.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb cancel_bad_orders 167
+	 */
+	function cancel_bad_orders($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'user_id', 'order_id', 'skus', 'renewal_date', 'order_date', 'action', 'reason', 'error'
+		);
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("User $user_id");
+
+			$latest_renewal = end($customer->get_subscription_orders());
+			$latest_renewal_date = CBWoo::parse_date_from_api($latest_renewal->created_at);
+
+			foreach ($customer->get_orders() as $order) {
+
+				$order_id = $order->id;
+				$reason = null;
+				$action = null;
+				$skus = array();
+				foreach ($order->line_items as $line) {
+					if ($line->sku) {
+						$skus[] = $line->sku;
+					}
+				}
+				$order_date = CBWoo::parse_date_from_api($order->created_at);
+
+				WP_CLI::debug("\tOrder $order_id");
+
+				if (!CBWoo::order_counts_as_box_debit($order)) {
+					WP_CLI::debug("\t\tskipping, not a box.");
+					$action = 'skip';
+					continue;
+				}
+				if ('cancelled' === $order->status) {
+					WP_CLI::debug("\t\talready canceled");
+					$action = 'skip';
+					continue;
+				}
+				if ('processing' !== $order->status) {
+					WP_CLI::debug("\t\tnot processing");
+					$action = 'skip';
+					continue;
+				}
+
+				if (!$order->shipping_address || !$order->shipping_address->address_1) {
+					$action = 'cancel';
+					$reason = 'no shipping address';
+				}
+				else {
+					if ($order_date > $this->options->date) {
+						if ($latest_renewal_date <= $this->options->date) {
+							$action = 'skip';
+							$reason = 'renewal before cutoff';
+						} else {
+							$action = 'cancel';
+							$reason = 'renewal after cutoff';
+						}
+					} else {
+						$action = 'skip';
+						$reason = 'order not after renewal';
+						continue;
+					}
+				}
+
+				if ('cancel' == $action) {
+					WP_CLI::debug("\t\t$reason");
+					try { 
+						$new_order = array('order' => array('status' => 'cancelled'));
+						WP_CLI::debug("\t\tcancelling...");
+						if (! $this->options->pretend) {
+							$response = $this->api->update_order($order->id, $new_order);
+							if ($this->options->verbose) {
+								WP_CLI::debug("\tUpdate order response: " . var_export($response, true));
+							}
+						}
+						$results[] = array(
+							'user_id' => $user_id,
+							'order_id' => $order_id,
+							'skus' => implode(" ", $skus),
+							'renewal_date' => $latest_renewal_date->format('Y-m-d H:i:s'),
+							'order_date' => $order_date->format('Y-m-d H:i:s'),
+							'action' => $action,
+							'reason' => $reason,
+							'error' => null,
+						);
+					} catch (Exception $e) {
+						$results[] = array(
+							'user_id' => $user_id,
+							'order_id' => $order_id,
+							'skus' => implode(" ", $skus),
+							'renewal_date' => $latest_renewal_date->format('Y-m-d H:i:s'),
+							'order_date' => $order_date->format('Y-m-d H:i:s'),
+							'action' => $action,
+							'reason' => $reason,
+							'error' => $e->getMessage(),
+						);
+					}
+
+				} else {
+					$results[] = array(
+						'user_id' => $user_id,
+						'order_id' => $order_id,
+						'skus' => implode(" ", $skus),
+						'renewal_date' => $latest_renewal_date->format('Y-m-d H:i:s'),
+						'order_date' => $order_date->format('Y-m-d H:i:s'),
+						'action' => $action,
+						'reason' => $reason,
+						'error' => null,
+					);
+				}
+
+			}
+		}
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );
