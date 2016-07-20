@@ -436,10 +436,18 @@ class CBWoo {
 				default: throw new InvalidSku($sku . ': wrong number of components');
 			}
 			switch ($plan) {
-				case 'single': $plan = 'Single Box'; $credits = 1; break;
-				case 'monthly': $plan = 'Month to Month'; $credits = 1; break;
-				case '3month': $plan = '3 Month'; $credits = 3; break;
-				case '12month': $plan = '12 Month'; $credits = 12; break;
+				case 'single': 
+				case 'single-v2': 
+					$plan = 'Single Box'; $credits = 1; break;
+				case 'monthly':
+				case 'monthly-v2':
+					$plan = 'Month to Month'; $credits = 1; break;
+				case '3month':
+				case '3month-v2':
+					$plan = '3 Month'; $credits = 3; break;
+				case '12month':
+				case '12month-v2':
+					$plan = '12 Month'; $credits = 12; break;
 				default: throw new InvalidSku($sku . ': unexpected plan type');
 			}
 			return (object) array(
