@@ -25,6 +25,7 @@ class CBCmd extends WP_CLI_Command {
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
 			'day' => !empty($assoc_args['day']) ? new DateTime($assoc_args['day']) : new DateTime(),
+			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new DateTime($assoc_args['renewal-cutoff']) : new DateTime(),
 			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
@@ -51,6 +52,12 @@ class CBCmd extends WP_CLI_Command {
 			1
 		);
 		$this->options->month->setTime(0, 0);
+
+		if (empty($assoc_args['renewal-cutoff'])) {
+			$this->options->renewal_cutoff = clone $this->options->month;
+			$this->options->renewal_cutoff->sub(new DateInterval("P1M"));
+			$this->options->renewal_cutoff->add(new DateInterval("P19D"));
+		}
 
 		// All option triggers gathering user ids
 		if ($this->options->all) {
@@ -667,6 +674,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
 	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
 	 * [--month=<month>]
 	 * : Date on which to generate the order. Format like '2016-05'.
 	 *   Defaults to next month (because we usually generate orders ahead of the month).
@@ -676,6 +686,10 @@ class CBCmd extends WP_CLI_Command {
 	 *   user had an active subscription as of this date, which allows for back-generation
 	 *   of orders, even if sub has expired as of the current moment.
 	 *   Should be in iso 8601 format. Defaults to right now.
+	 *
+	 * [--renewal-cutoff=<renewal-cutoff>]
+	 * : Last date on which a renewal can be and still have an order generated. Defaults to
+	 *   the 20th of the previous month to the month option.  
 	 *
 	 * [--pretend]
 	 * : Don't do anything, just print out what we would have done.
@@ -731,7 +745,28 @@ class CBCmd extends WP_CLI_Command {
 			$revenue = $r['revenue'];
 			$debits = $customer->calculate_box_debits($this->options->verbose);
 
+			$latest_renewal = end($customer->get_subscription_orders());
+			$latest_renewal_date = CBWoo::parse_date_from_api($latest_renewal->created_at);
+
 			// Reasons to not generate an order
+
+			WP_CLI::debug(var_export(array('latest_renewal_date'=>$latest_renewal_date,'renewal_cutoff'=>$this->options->renewal_cutoff), true));
+			if ($latest_renewal_date > $this->options->renewal_cutoff) {
+				WP_CLI::debug("\tRenewal was too late.");
+				$results[] = array(
+					'user_id' => $user_id, 
+					'orders' => implode(" ", $orders),
+					'skus' => implode(" ", $skus),
+					'credits' => $credits, 
+					'debits' => $debits, 
+					'action' => 'skip',
+					'reason' => 'renewal too late',
+					'new_sku' => NULL, 
+					'error' => NULL
+				);
+				continue;
+			}
+
 			if ($debits >= $credits) {
 				WP_CLI::debug("\tCustomer does not have any box credits.");
 				$results[] = array(
