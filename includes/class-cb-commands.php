@@ -356,8 +356,14 @@ class CBCmd extends WP_CLI_Command {
 		$columns = array('id', 'sub_id', 'type', 'earned', 'boxes', 'old_renewal', 'new_renewal', 'errors');
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			try {
+				$customer = new CBCustomer($user_id);
+			} catch (Exception $e) {
+				$customer = new CBCustomer($user_id);
+			}
 			WP_CLI::debug("Synchronizing $user_id");
+
+			try { $customer->get_active_subscriptions(); } catch (Exception $e) {}
 
 			if (sizeof($customer->get_active_subscriptions()) == 0) {
 				WP_CLI::debug("\tNo active subscriptions. Skipping.");
@@ -378,6 +384,9 @@ class CBCmd extends WP_CLI_Command {
 				}
 
 				$original_renewal = clone $renewal_date;
+
+				try { $customer->get_box_orders(); } catch (Exception $e) {}
+
 				$last_box_order = end($customer->get_box_orders());
 				//$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
 
