@@ -475,6 +475,14 @@ class CBCmd extends WP_CLI_Command {
 					$renewal_d = '20';
 				}
 
+				// XXX: Special case for next_box = '2016-09'
+				if ($renewal_day->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-09') {
+					WP_CLI::debug("\tOrder will be postponed until Late August.");
+					$renewal_y = '2016';
+					$renewal_m = '08';
+					$renewal_d = '20';
+				}
+
 				// Take the H:M:S from old $renewal_date, but the day from $renewal_day.
 				$new_date = clone $renewal_date;
 				$new_date->setDate($renewal_y, $renewal_m, $renewal_d);
@@ -841,6 +849,22 @@ class CBCmd extends WP_CLI_Command {
 				);
 				continue;
 			}
+			// XXX: Special case for next_box = '2016-09'
+			if ($this->options->month->format('Y-m') === '2016-08' && $customer->get_meta('next_box') === '2016-09') {
+				WP_CLI::debug("\tOrder should be postponed until September.");
+				$results[] = array(
+					'user_id' => $user_id,
+					'orders' => implode(" ", $orders),
+					'skus' => implode(" ", $skus),
+					'credits' => $credits, 
+					'debits' => $debits, 
+					'action' => 'skip',
+					'reason' => 'user postponed',
+					'new_sku' => NULL,
+					'error' => NULL
+				);
+				continue;
+			}
 
 			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
 			try {
@@ -1006,6 +1030,20 @@ class CBCmd extends WP_CLI_Command {
 			// XXX: Special case for next_box = '2016-08'
 			if ($this->options->month->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-08') {
 				WP_CLI::debug("\tOrder should be postponed until August.");
+				$results[] = array(
+					'user_id' => $user_id,
+					'sub_id' => $sub->id,
+					'sub_status' => $sub->status,
+					'action' => 'skip',
+					'reason' => 'user postponed',
+					'new_sku' => NULL,
+					'error' => NULL
+				);
+				continue;
+			}
+			// XXX: Special case for next_box = '2016-09'
+			if ($this->options->month->format('Y-m') === '2016-08' && $customer->get_meta('next_box') === '2016-09') {
+				WP_CLI::debug("\tOrder should be postponed until September.");
 				$results[] = array(
 					'user_id' => $user_id,
 					'sub_id' => $sub->id,
