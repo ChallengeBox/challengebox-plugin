@@ -547,6 +547,17 @@ class CBWoo {
 		);
 	}
 
+	/**
+	 * Returns true if the order is marked as rush.
+	 */
+	public static function order_is_rush($order) {
+		return (bool) CB::any(
+			array_filter($order->fee_lines, function ($line) {
+				return 'Rush My Box' == $line->title;
+			})
+		);
+	}
+
 	public static function order_counts_as_box_credit($order) {
 		foreach ($order->line_items as $line_item) {
 			if (!empty($line_item->sku)) {

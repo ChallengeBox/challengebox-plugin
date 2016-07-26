@@ -384,7 +384,7 @@ class CBCustomer {
 	public function get_rush_orders() {
 		return array_filter(
 			$this->get_orders(),
-			function ($order) { return $this->order_is_rush($order); }
+			function ($order) { return CBWoo::order_is_rush($order); }
 		);
 	}
 	public function get_failed_orders() {
@@ -425,6 +425,23 @@ class CBCustomer {
 			$this->get_box_orders($since),
 			function ($order) { return $this->order_was_shipped($order); }
 		);
+	}
+	/**
+	 * Returns true if one of the orders that counts as a box credit is marked as a rush order,
+	 * and no subsequent order marked as a box debit is found.
+	 */
+	public function has_outstanding_rush_order() {
+		$found_rush = false;
+		$has_outstanding = true;
+		foreach ($this->get_orders() as $order) {
+			if (!$found_rush && CBWoo::order_counts_as_box_credit($order) && CBWoo::order_is_rush($order)) {
+				$found_rush = true;
+			}
+			if ($found_rush && CBWoo::order_counts_as_box_debit($order)) {
+				$has_outstanding = false;
+			}
+		}
+		return $found_rush && $has_outstanding;
 	}
 
 	/**
@@ -542,17 +559,6 @@ class CBCustomer {
 				}
 			))
 			|| 'completed' == $order->status
-		);
-	}
-
-	/**
-	 * Returns true if the order is marked as rush.
-	 */
-	public function order_is_rush($order) {
-		return (bool) CB::any(
-			array_filter($order->fee_lines, function ($line) {
-				return 'Rush My Box' == $line->title;
-			})
 		);
 	}
 
@@ -885,15 +891,17 @@ class CBCustomer {
 	}
 
 	/**
-	 *
+	 * Counts up box credits in all orders, taking into account adjustments.
 	 */
-	public function calculate_box_credits($verbose = false) {
+	public function calculate_box_credits($verbose = false, $rush = false) {
 		$totals = array(
 			'credits' => intval($this->get_meta('extra_box_credits', 0)) + intval($this->get_meta('box_credit_adjustment', 0)),
 			'revenue' => 0,
 		);
 		foreach ($this->get_orders() as $order) {
 			if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
+			// Skip non-rush orders in rush mode
+			if ($rush && !CBWoo::order_is_rush($order)) continue;
 			foreach ($order->line_items as $line) {
 				if ($line->sku) {
 					$parsed = CBWoo::parse_box_sku($line->sku);
@@ -934,11 +942,13 @@ class CBCustomer {
 		}
 		return $totals;
 	}
-	public function calculate_box_debits($verbose = false) {
+	public function calculate_box_debits($verbose = false, $rush = false) {
 		$total = 0;
 		foreach ($this->get_orders() as $order) {
 			// Only count order if it is in one of these allowed states
 			if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
+			// Skip non-rush orders in rush mode
+			if ($rush && !CBWoo::order_is_rush($order)) continue;
 			foreach ($order->line_items as $line) {
 				if ($line->sku) {
 					$parsed = CBWoo::parse_box_sku($line->sku);

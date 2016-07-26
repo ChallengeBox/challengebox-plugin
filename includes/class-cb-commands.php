@@ -36,6 +36,7 @@ class CBCmd extends WP_CLI_Command {
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
+			'rush' => !empty($assoc_args['rush']),
 			'auto' => !empty($assoc_args['auto']),
 			'revenue' => !empty($assoc_args['revenue']),
 			'bonus' => !empty($assoc_args['bonus']),
@@ -527,98 +528,6 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Generates rush orders for users who have chosen this option with their subscription
-	 * but do not yet have a rush order.
-	 *
-	 * Writes a list of what it did to stdout.
-	 *
-	 * ## OPTIONS
-	 *
-	 * [<id>...]
-	 * : The user id (or ids) to check or order generation.
-	 *
-	 * --month=<month>
-	 * : Date on which to generate the order. Format like '2016-05'.
-	 *
-	 * [--all]
-	 * : Generate orders for all users. (Ignores <id>... if found).
-	 *
-	 * [--pretend]
-	 * : Don't actually generate any orders, just print out what we'd do.
-	 *
-	 * [--verbose]
-	 * : Print out extra information. (Use with --debug or you won't see anything)
-	 *
-	 * [--continue]
-	 * : Continue, even if errors are encountered on a given user.
-	 *
-	 * [--skip]
-	 * : Skip users that have a value for clothing_gender in their metadata.
-	 *
-	 * [--format=<format>]
-	 * : Output format.
-	 *  ---
-	 *  default: table
-	 *  options:
-	 *    - table
-	 *    - yaml
-	 *    - csv
-	 *    - json
-	 *  ---
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     wp cb generate_rush_orders 167
-	 */
-	function generate_rush_orders($args, $assoc_args) {
-		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
-		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
-
-		// NOTE: Be sure to include names here so shipbob can sync on them
-
-		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
-			WP_CLI::debug("Checking $user_id for rush orders...");
-
-			$customer_has_rush_order = (bool) sizeof($customer->get_rush_orders());
-			$customer_has_valid_box_order = (bool) sizeof($customer->get_box_orders());
-
-			// Did they select a rush order at all?
-			if ($customer_has_rush_order) {
-				if (!$this->options->pretend) {
-					$customer->set_meta('has_rush_order', 1);
-				}
-				WP_CLI::debug("\t1 -> $id.has_rush_order");
-
-				// If they selected rush order, did an order get generated?
-				if (!$customer_has_valid_box_order) {
-					// Need to generate an order
-					WP_CLI::debug("\tGenerating rush order");
-					$rush_order = $customer->next_order_data($this->options->date, false, true);
-					if ($this->options->verbose) {
-						WP_CLI::debug("\tRush order: " . var_export($rush_order, true));
-					}
-					if (!$this->options->pretend) {
-						$response = $this->api->create_order($rush_order);
-						if ($this->options->verbose) {
-							WP_CLI::debug("\tResponse: " . var_export($response, true));
-						}
-					}
-				} else {
-					WP_CLI::debug("\tValid box order already found, no need to generate.");
-				}
-			}
-
-			// Speed up checks next time by noticing if we checked it
-			if (!$this->options->pretend) {
-				$customer->set_meta('_rush_order_checked', 1);
-			}
-			WP_CLI::debug("\t1 -> $id._rush_order_checked");
-		}
-	}
-
-
-	/**
 	 * Prints out an estimate of what orders will need to be shipped.
 	 *
 	 * ## OPTIONS
@@ -694,8 +603,11 @@ class CBCmd extends WP_CLI_Command {
 	 * [--reverse]
 	 * : Iterate users in reverse order.
 	 *
+	 * [--rush]
+	 * : Only generate rush orders. Skip regular orders. Renewal cutoff does not apply for rush orders.
+	 *
 	 * [--month=<month>]
-	 * : Date on which to generate the order. Format like '2016-05'.
+	 * : Month for which to generate the order. Format like '2016-05'.
 	 *   Defaults to next month (because we usually generate orders ahead of the month).
 	 *
 	 * [--date=<date>]
@@ -730,9 +642,9 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb generate_order_new 167
+	 *     wp cb generate_order 167
 	 */
-	function generate_order_new( $args, $assoc_args ) {
+	function generate_order( $args, $assoc_args ) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		$results = array();
@@ -767,8 +679,24 @@ class CBCmd extends WP_CLI_Command {
 
 			// Reasons to not generate an order
 
+			if ($this->options->rush && !$customer->has_outstanding_rush_order()) {
+				WP_CLI::debug("\tNo outstanding rush order.");
+				$results[] = array(
+					'user_id' => $user_id, 
+					'orders' => implode(" ", $orders),
+					'skus' => implode(" ", $skus),
+					'credits' => $credits, 
+					'debits' => $debits, 
+					'action' => 'skip',
+					'reason' => 'not rush order',
+					'new_sku' => NULL, 
+					'error' => NULL
+				);
+				continue;
+			}
+
 			WP_CLI::debug(var_export(array('latest_renewal_date'=>$latest_renewal_date,'renewal_cutoff'=>$this->options->renewal_cutoff), true));
-			if ($latest_renewal_date > $this->options->renewal_cutoff) {
+			if (!$this->options->rush && $latest_renewal_date > $this->options->renewal_cutoff) {
 				WP_CLI::debug("\tRenewal was too late.");
 				$results[] = array(
 					'user_id' => $user_id, 
@@ -818,7 +746,7 @@ class CBCmd extends WP_CLI_Command {
 				continue;
 			} 
 			// XXX: Special case for next_box = '2016-07'
-			if ($this->options->month->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-07') {
+			if (!$this->options->rush && $this->options->month->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-07') {
 				WP_CLI::debug("\tOrder should be postponed until July.");
 				$results[] = array(
 					'user_id' => $user_id, 
@@ -834,7 +762,7 @@ class CBCmd extends WP_CLI_Command {
 				continue;
 			}
 			// XXX: Special case for next_box = '2016-08'
-			if ($this->options->month->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-08') {
+			if (!$this->options->rush && $this->options->month->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-08') {
 				WP_CLI::debug("\tOrder should be postponed until August.");
 				$results[] = array(
 					'user_id' => $user_id,
@@ -850,7 +778,7 @@ class CBCmd extends WP_CLI_Command {
 				continue;
 			}
 			// XXX: Special case for next_box = '2016-09'
-			if ($this->options->month->format('Y-m') === '2016-08' && $customer->get_meta('next_box') === '2016-09') {
+			if (!$this->options->rush && $this->options->month->format('Y-m') === '2016-08' && $customer->get_meta('next_box') === '2016-09') {
 				WP_CLI::debug("\tOrder should be postponed until September.");
 				$results[] = array(
 					'user_id' => $user_id,
@@ -869,7 +797,7 @@ class CBCmd extends WP_CLI_Command {
 			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
 			try {
 				$next_order = $customer->next_order_data(
-					$this->options->month, $this->options->date
+					$this->options->month, $this->options->date, $this->options->rush
 				);
 				WP_CLI::debug("\tWould use sku: " . $new_sku);
 			} catch (Exception $e) {
@@ -918,190 +846,6 @@ class CBCmd extends WP_CLI_Command {
 				'skus' => implode(" ", $skus),
 				'credits' => $credits, 
 				'debits' => $debits, 
-				'action' => 'created order',
-				'reason' => NULL,
-				'new_sku' => $new_sku, 
-				'error' => NULL
-			);
-		}
-		if (sizeof($results)) {
-			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
-		}
-	}
-
-	/**
-	 * Generates the next order for a given subscriber. Requires you to list
-	 * the month the order is intended for.
-	 *
-	 * Only generates an order if the subscription is active (or pending cancel), and
-	 * if they have no other box order that month.
-	 *
-	 * ## OPTIONS
-	 *
-	 * [<user_id>...]
-	 * : The user id(s) to check.
-	 *
-	 * [--all]
-	 * : Iterate through all users. (Ignores <user_id>... if found).
-	 *
-	 * [--limit=<limit>]
-	 * : Only process <limit> users out of the list given.
-	 *
-	 * [--month=<month>]
-	 * : Date on which to generate the order. Format like '2016-05'.
-	 *   Defaults to next month (because we usually generate orders ahead of the month).
-	 *
-	 * [--date=<date>]
-	 * : Date on which to generate the order. This will actually check to see if the
-	 *   user had an active subscription as of this date, which allows for back-generation
-	 *   of orders, even if sub has expired as of the current moment.
-	 *   Should be in iso 8601 format. Defaults to right now.
-	 *
-	 * [--pretend]
-	 * : Don't do anything, just print out what we would have done.
-	 *
-	 * [--force]
-	 * : Create the next order for the customer, even if they already have an order this month.
-	 *
-	 * [--verbose]
-	 * : Print out extra information. (Use with --debug or you won't see anything)
-	 * ## EXAMPLES
-	 *
-	 *     wp cb generate_order 167
-	 */
-	function generate_order( $args, $assoc_args ) {
-		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
-
-		$results = array();
-		$columns = array(
-			'user_id', 'sub_id', 'sub_status', 'action', 'reason', 'new_sku', 'error'
-		);
-		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
-
-		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
-			WP_CLI::debug("User $user_id");
-
-			// Reasons to not generate an order
-			if (!$customer->has_active_subscription($this->options->date)) {
-				WP_CLI::debug("\tCustomer doesn't have an active subscription as of $date_string.");
-				$results[] = array(
-					'user_id' => $user_id, 
-					'sub_id' => NULL, 
-					'sub_status' => NULL,
-					'action' => 'skip',
-					'reason' => 'no active sub',
-					'new_sku' => NULL, 
-					'error' => NULL
-				);
-				continue;
-			}
-			$sub = array_values($customer->get_active_subscriptions($this->options->date))[0];
-
-			if (!$this->options->force && (
-				$customer->has_box_order_this_month($this->options->month)
-			)) {
-				WP_CLI::debug("\tCustomer already has a valid order this month.");
-				$results[] = array(
-					'user_id' => $user_id, 
-					'sub_id' => $sub->id,
-					'sub_status' => $sub->status,
-					'action' => 'skip',
-					'reason' => 'existing box order',
-					'new_sku' => NULL, 
-					'error' => NULL
-				);
-				continue;
-			} 
-			// XXX: Special case for next_box = '2016-07'
-			if ($this->options->month->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-07') {
-				WP_CLI::debug("\tOrder should be postponed until July.");
-				$results[] = array(
-					'user_id' => $user_id, 
-					'sub_id' => $sub->id,
-					'sub_status' => $sub->status,
-					'action' => 'skip',
-					'reason' => 'user postponed',
-					'new_sku' => NULL, 
-					'error' => NULL
-				);
-				continue;
-			}
-			// XXX: Special case for next_box = '2016-08'
-			if ($this->options->month->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-08') {
-				WP_CLI::debug("\tOrder should be postponed until August.");
-				$results[] = array(
-					'user_id' => $user_id,
-					'sub_id' => $sub->id,
-					'sub_status' => $sub->status,
-					'action' => 'skip',
-					'reason' => 'user postponed',
-					'new_sku' => NULL,
-					'error' => NULL
-				);
-				continue;
-			}
-			// XXX: Special case for next_box = '2016-09'
-			if ($this->options->month->format('Y-m') === '2016-08' && $customer->get_meta('next_box') === '2016-09') {
-				WP_CLI::debug("\tOrder should be postponed until September.");
-				$results[] = array(
-					'user_id' => $user_id,
-					'sub_id' => $sub->id,
-					'sub_status' => $sub->status,
-					'action' => 'skip',
-					'reason' => 'user postponed',
-					'new_sku' => NULL,
-					'error' => NULL
-				);
-				continue;
-			}
-
-			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
-			try {
-				$next_order = $customer->next_order_data(
-					$this->options->month, $this->options->date
-				);
-				WP_CLI::debug("\tWould use sku: " . $new_sku);
-			} catch (Exception $e) {
-				$results[] = array(
-					'user_id' => $user_id, 
-					'sub_id' => $sub->id,
-					'sub_status' => $sub->status,
-					'action' => 'skip',
-					'reason' => 'error',
-					'new_sku' => $new_sku, 
-					'error' => $e->getMessage()
-				);
-				continue;
-			}
-			WP_CLI::debug("\tGenerating order");
-			if ($this->options->verbose) {
-				WP_CLI::debug("\tNext order: " . var_export($next_order, true));
-			}
-
-			if (!$this->options->pretend) {
-				try {
-					$response = $this->api->create_order($next_order);
-					WP_CLI::debug("\tCreated new order");
-				} catch (Exception $e) {
-					$results[] = array(
-						'user_id' => $user_id, 
-						'sub_id' => $sub->id,
-						'sub_status' => $sub->status,
-						'action' => 'error',
-						'reason' => 'error',
-						'new_sku' => $new_sku, 
-						'error' => $e->getMessage()
-					);
-				}
-				if ($this->options->verbose) {
-					WP_CLI::debug("\tResponse: " . var_export($response, true));
-				}
-			}
-			$results[] = array(
-				'user_id' => $user_id, 
-				'sub_id' => $sub->id,
-				'sub_status' => $sub->status,
 				'action' => 'created order',
 				'reason' => NULL,
 				'new_sku' => $new_sku, 
