@@ -677,6 +677,11 @@ class CBCmd extends WP_CLI_Command {
 			$latest_renewal = end($customer->get_subscription_orders());
 			$latest_renewal_date = CBWoo::parse_date_from_api($latest_renewal->created_at);
 
+			$sub_id = $latest_renewal->id;
+			$udata = get_userdata($customer->get_user_id())->data;
+			$name = $udata->display_name;
+			$email = $udata->user_email;
+
 			// Reasons to not generate an order
 
 			if ($this->options->rush && !$customer->has_outstanding_rush_order()) {
@@ -695,7 +700,10 @@ class CBCmd extends WP_CLI_Command {
 				continue;
 			}
 
-			WP_CLI::debug(var_export(array('latest_renewal_date'=>$latest_renewal_date,'renewal_cutoff'=>$this->options->renewal_cutoff), true));
+			if ($this->options->verbose) {
+				WP_CLI::debug(var_export(array('latest_renewal_date'=>$latest_renewal_date,'renewal_cutoff'=>$this->options->renewal_cutoff), true));
+			}
+
 			if (!$this->options->rush && $latest_renewal_date > $this->options->renewal_cutoff) {
 				WP_CLI::debug("\tRenewal was too late.");
 				$results[] = array(
@@ -797,7 +805,7 @@ class CBCmd extends WP_CLI_Command {
 			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
 			try {
 				$next_order = $customer->next_order_data(
-					$this->options->month, $this->options->date, $this->options->rush
+					$this->options->month, $this->options->date
 				);
 				WP_CLI::debug("\tWould use sku: " . $new_sku);
 			} catch (Exception $e) {
@@ -812,6 +820,11 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => $new_sku, 
 					'error' => $e->getMessage()
 				);
+
+				if ($this->options->rush) {
+					CB::post_to_slack("Missing data: <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> from *$name* &lt;$email&gt;. Partial sku: $new_sku", 'rush-orders');
+				}
+
 				continue;
 			}
 			WP_CLI::debug("\tGenerating order");
@@ -823,6 +836,11 @@ class CBCmd extends WP_CLI_Command {
 				try {
 					$response = $this->api->create_order($next_order);
 					WP_CLI::debug("\tCreated new order");
+					if ($this->options->rush) {
+						$oid = $response->order->id;
+						CB::post_to_slack("Rush order <https://www.getchallengebox.com/wp-admin/post.php?post=$oid&action=edit|#$oid> from *$name* &lt;$email&gt; (renewal <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> sku $new_sku)", 'rush-orders');
+					}
+
 				} catch (Exception $e) {
 					$results[] = array(
 						'user_id' => $user_id, 
@@ -2183,7 +2201,6 @@ class CBCmd extends WP_CLI_Command {
 		if (sizeof($results))
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
-
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );

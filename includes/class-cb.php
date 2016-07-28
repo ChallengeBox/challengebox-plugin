@@ -258,5 +258,43 @@ class CB {
 		return $need_processing;
 	}
 
+	/**
+	 * Post a message to Slack from WordPress
+	 *
+	 * @param string $message the message to be sent to Slack
+	 * @param string $channel the #channel to send the message to (or @user for a DM)
+	 * @param string $username the username for this bot eg : WordPress bot
+	 * @param string $icon_emoji the icon emoji name for this bot eg :monkey: 
+	 * 
+	 * @link slack incoming webhook docs https://api.slack.com/incoming-webhooks
+	 * @example ar_post_to_slack('message','#channel','bot-name',':monkey:');
+	 */
+	function post_to_slack($message, $channel) {
 
+		// Slack webhook endpoint from Slack settings
+		$slack_endpoint = 'https://hooks.slack.com/services/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';
+
+		// Prepare the data / payload to be posted to Slack
+		$data = array(
+			'payload'   => json_encode( array(
+					'channel'   =>  $channel,
+					'text'      =>  $message,
+				)
+			)
+		);
+		// Post our data via the slack webhook endpoint using wp_remote_post
+		$posting_to_slack = wp_remote_post( 
+			$slack_endpoint,
+			array(
+				'method' => 'POST',
+				'timeout' => 30,
+				'redirection' => 5,
+				'httpversion' => '1.0',
+				'blocking' => true,
+				'headers' => array(),
+				'body' => $data,
+				'cookies' => array()
+			)
+		);
+	}
 }
