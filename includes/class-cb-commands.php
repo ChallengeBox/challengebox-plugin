@@ -822,7 +822,7 @@ class CBCmd extends WP_CLI_Command {
 				);
 
 				if ($this->options->rush) {
-					CB::post_to_slack("Missing data: <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> from *$name* &lt;$email&gt;. Partial sku: $new_sku", 'rush-orders');
+					CB::post_to_slack("- Missing data: <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> from *$name* &lt;$email&gt;. Partial sku: $new_sku", 'rush-orders');
 				}
 
 				continue;
