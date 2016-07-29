@@ -636,6 +636,48 @@ class CBWoo {
 	public static function format_DateTime_for_api($dateTime) {
 		return $dateTime->format('Y-m-d H:i:s');
 	}
+
+	/**
+	 * Grab churn data from the database and returns an object with two properties:
+	 *
+	 *	'data' => an array of rows of churn data keyed by user id.
+	 *	'colums' => an array of column names, in order that they first appeared. 
+	 *
+	 * These data need to be regularly  updated by the console command `calculate_churn`.
+	 */
+	public static function get_churn_data() {
+		global $wpdb;
+		$data = $wpdb->get_results("
+			select 
+				id, meta_key, meta_value
+			from wp_users U 
+			join wp_usermeta A 
+				on A.user_id = U.id
+			where
+				   meta_key LIKE 'mrr_%' 
+				or meta_key LIKE 'revenue_%'
+				or meta_key = 'cohort'
+			order by
+				user_registered
+			;
+		");
+
+		// Pivot the data so it is organized in rows keyed by the user id
+		$user_data = array();
+		$columns = array("id" => true);
+		foreach ($data as $row) {
+			if (!isset($columns[$row->meta_key])) $columns[$row->meta_key] = true;
+			if (!isset($user_data[$row->id])) $user_data[$row->id] = array();
+			$user_data[$row->id][$row->meta_key] = $row->meta_value;
+		}
+
+		return (object) array(
+			'data' => $user_data,
+			'columns' => array_keys($columns),
+		);		
+
+	}
+
 }
 
 class InvalidSku extends Exception {};

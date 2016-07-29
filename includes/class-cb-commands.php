@@ -2213,37 +2213,15 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function export_churn_data( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
-		global $wpdb;
-		$data = $wpdb->get_results("
-			select 
-				id, meta_key, meta_value
-			from wp_users U 
-			join wp_usermeta A 
-				on A.user_id = U.id
-			where
-				   meta_key LIKE 'mrr_%' 
-				or meta_key LIKE 'revenue_%'
-				or meta_key = 'cohort'
-			order by
-				user_registered
-			;
-		");
 
-		// Pivot the data so it is organized in rows keyed by the user id
-		$user_data = array();
-		$columns = array("id" => true);
-		foreach ($data as $row) {
-			if (!isset($columns[$row->meta_key])) $columns[$row->meta_key] = true;
-			if (!isset($user_data[$row->id])) $user_data[$row->id] = array();
-			$user_data[$row->id][$row->meta_key] = $row->meta_value;
-		}
+		$churn_data = CBWoo::get_churn_data();
 
 		// Render data as sorted rows
 		$csv_rows = array();
-		foreach ($user_data as $user_id => $user_row) {
+		foreach ($churn_data->data as $user_id => $user_row) {
 			$user_row["id"] = $user_id;
 			$row = array();
-			foreach ($columns as $column => $true) {
+			foreach ($churn_data->columns as $column) {
 				if (isset($user_row[$column])) {
 					$row[] = $user_row[$column];
 				} else {
@@ -2254,7 +2232,7 @@ class CBCmd extends WP_CLI_Command {
 		}
 
 		// Print it out
-		fputcsv(STDOUT, array_keys($columns));
+		fputcsv(STDOUT, $churn_data->columns);
 		foreach ($csv_rows as $row) {
 			fputcsv(STDOUT, $row);
 		}

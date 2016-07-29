@@ -1,7 +1,8 @@
-0 0 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb update_user_metadata --all --format=csv)
-0 4 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb identify --all --format=csv)
+0 1 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb update_user_metadata --all --format=csv)
+0 6 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb identify --all --format=csv)
 * * * * * (curl -qOL https://www.getchallengebox.com/wp-cron.php?doing_wp_cron)
 0 7 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh /var/www/box/wp-content/plugins/challengebox/bin/backup.sh)
 */15 * * * * /usr/bin/php /var/www/dripscript/move-emails.php
 30 2 * * * /usr/bin/php /var/www/dripscript/delete-email.php
 0 10,20 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb generate_order --all --reverse --rush --month=2016-07 --format=csv)
+59 23 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb calculate_churn --all --format=csv)
