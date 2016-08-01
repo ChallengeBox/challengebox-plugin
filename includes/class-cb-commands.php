@@ -2214,7 +2214,27 @@ class CBCmd extends WP_CLI_Command {
 	function export_churn_data( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 
+		WP_CLI::debug("Getting churn data...");
 		$churn_data = CBWoo::get_churn_data();
+		WP_CLI::debug("Generating rollups...");
+		$rollups = CBWoo::get_churn_rollups($churn_data);
+		WP_CLI::debug("...done");
+
+		/*
+		var_dump($churn_data->columns);
+		var_dump($churn_data->cohorts);
+		var_dump($churn_data->mrr_cohorts);
+		var_dump($churn_data->months);
+		var_dump($churn_data->rollups);
+		*/
+
+		$columns = array_merge(array('cohort'), $churn_data->months);
+		foreach ($rollups as $name => $rollup) {
+			WP_CLI::debug($name);
+			WP_CLI\Utils\format_items($this->options->format, $rollup, $columns);
+		}
+		WP_CLI::error("done");
+		/**/
 
 		// Render data as sorted rows
 		$csv_rows = array();
@@ -2236,6 +2256,7 @@ class CBCmd extends WP_CLI_Command {
 		foreach ($csv_rows as $row) {
 			fputcsv(STDOUT, $row);
 		}
+
 	}
 
 }

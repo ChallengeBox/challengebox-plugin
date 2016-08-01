@@ -640,8 +640,15 @@ class CBWoo {
 	/**
 	 * Grab churn data from the database and returns an object with two properties:
 	 *
-	 *	'data' => an array of rows of churn data keyed by user id.
-	 *	'colums' => an array of column names, in order that they first appeared. 
+	 *	'colums'             => an array of column names, in order that they first appeared. 
+	 *	'data'               => an array of rows of churn data keyed by user id.
+	 *	'monthly_data_types' => an array of column prefixes for columns that contain data
+	 *                          pertaining to a given month
+	 *	'months'             => an array of sorted month strings ('2016-12') for each month encountered
+	 *	'cohorts'            => an array of cohort strings ('2016-12') for all cohorts encountered
+	 *	'mrr_cohorts'        => an array of cohort strings ('2016-12') for all cohorts encountered where
+	 *                          cohort is counted from first appearence of monthly recurring revenue
+	 *                          rather than signup
 	 *
 	 * These data need to be regularly  updated by the console command `calculate_churn`.
 	 */
@@ -662,22 +669,154 @@ class CBWoo {
 			;
 		");
 
+		// Column prefixes that can be followed by a month
+		$monthly_data_types = array(
+			'mrr',
+			'revenue',
+			'revenue_sub',
+			'revenue_shop',
+			'revenue_single',
+		);
+
 		// Pivot the data so it is organized in rows keyed by the user id
 		$user_data = array();
-		$columns = array("id" => true);
+		$columns = array('id' => true);
+		$cohorts = array();
+		$mrr_cohorts = array();
 		foreach ($data as $row) {
-			if (!isset($columns[$row->meta_key])) $columns[$row->meta_key] = true;
+			// Add datum to user row, creating row if needed
 			if (!isset($user_data[$row->id])) $user_data[$row->id] = array();
 			$user_data[$row->id][$row->meta_key] = $row->meta_value;
+
+			// Count unique columns
+			if (!isset($columns[$row->meta_key])) $columns[$row->meta_key] = true;
+
+			// Count unique cohorts
+			if ($row->meta_key == 'cohort') {
+				if (!isset($cohorts[$row->meta_value])) $cohorts[$row->meta_value] = true;
+			}
+			if ($row->meta_key == 'mrr_cohort') {
+				if (!isset($mrr_cohorts[$row->meta_value])) $mrr_cohorts[$row->meta_value] = true;
+			}
+		}
+
+		// Count unique months
+		$months = array();
+		foreach (array_keys($columns) as $column) {
+			$maybe_month = end(explode('_', $column));
+			if (preg_match('/^\d{4}-\d{2}$/', $maybe_month)) {
+				if (!isset($months[$maybe_month])) $months[$maybe_month] = true;
+			}
+		}
+
+		// Make sure dates are nice and sorted
+		ksort($months);
+		ksort($cohorts);
+		ksort($mrr_cohorts);
+
+		//
+		// Add in churn data
+		//
+		$monthly_data_types = array_merge(
+			$monthly_data_types, array(
+				'activated',
+				'active',
+				'churned',
+		));
+		foreach ($user_data as $user_id => $row) {
+			// Walk through months and create entry with a 1 for the month where user activated
+			// i.e. went from 0 mrr to some mrr.
+
+			$previous_month = null;
+			$old_cohort = $row['cohort'];
+			if (isset($user_data[$user_id]['cohort'])) $user_data[$user_id]['cohort'] = null;
+
+			foreach ($months as $month => $true) {
+
+				$activated_key = 'activated_' . $month;
+				$active_key = 'active_' . $month;
+				$churned_key = 'churned_' . $month;
+
+				$mrr_this = 'mrr_' . $month;
+				$mrr_last = 'mrr_' . $previous_month;
+
+				// Active if any mrr this month
+				if (isset($row[$mrr_this]) && $row[$mrr_this]) {
+					$user_data[$user_id][$active_key] = 1;
+					if (!isset($columns[$active_key])) $columns[$active_key] = true;
+
+					// Activated if previous month had no mrr
+					if (
+							!$previous_month                                 // is very first month
+							|| (isset($row[$mrr_last]) && !$row[$mrr_last])  // last month was zero
+							|| !isset($row[$mrr_last])                       // last month not set
+					) {
+						$user_data[$user_id][$activated_key] = 1;
+						if (!isset($columns[$activated_key])) $columns[$activated_key] = true;
+
+						// Also reset cohort to month they activated
+						if (!isset($user_data[$user_id]['cohort'])) $user_data[$user_id]['cohort'] = $month;
+					}
+				}
+
+				// Churned if no mrr this month but yes mrr last month
+				if (
+					$previous_month 
+					&&
+					(
+						(isset($row[$mrr_this]) && !$row[$mrr_this])      // this month entry zero
+						|| !isset($row[$mrr_this])                        // no entry this month
+					)                                                   // no mrr this month
+					&&
+					(isset($row[$mrr_last]) && $row[$mrr_last])         // mrr last month
+				) {
+					$user_data[$user_id][$churned_key] = 1;
+					if (!isset($columns[$churned_key])) $columns[$churned_key] = true;
+				}
+
+				$previous_month = $month;
+				// Also reset cohort if we didn't set it
+				if (!isset($user_data[$user_id]['cohort'])) $user_data[$user_id]['cohort'] = $old_cohort;
+			}
 		}
 
 		return (object) array(
-			'data' => $user_data,
 			'columns' => array_keys($columns),
+			'data' => $user_data,
+			'monthly_data_types' => $monthly_data_types,
+			'months' => array_keys($months),
+			'cohorts' => array_keys($cohorts),
+			'mrr_cohorts' => array_keys($mrr_cohorts),
 		);		
 
 	}
 
+	//
+	// Rollups of churn
+	//
+	public static function get_churn_rollups($churn_data) {
+		$rollups = array();
+		foreach ($churn_data->monthly_data_types as $dt) {
+			$rollups[$dt] = array();
+			foreach ($churn_data->cohorts as $cohort) {
+				$rollups[$dt][$cohort] = array();
+				foreach ($churn_data->months as $month) {
+					$column = $dt . '_' . $month;
+					$rollups[$dt][$cohort]['cohort'] = $cohort;
+					foreach ($churn_data->data as $user_id => $row) {
+						// Only count data if user is in the cohort we're looking at
+						if (isset($row['cohort']) && $cohort == $row['cohort']) {
+							// Create value if missing
+							if (!isset($rollups[$dt][$cohort][$month])) $rollups[$dt][$cohort][$month] = 0;
+							// Sum if not
+							$rollups[$dt][$cohort][$month] += isset($row[$column]) ? $row[$column] : 0;
+						}
+					}
+				}
+			}
+		}
+		return $rollups;
+	}
 }
 
 class InvalidSku extends Exception {};
