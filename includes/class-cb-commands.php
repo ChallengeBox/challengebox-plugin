@@ -1176,7 +1176,7 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
-	 * [--month]
+	 * [--date]
 	 * : The year and month to check. (i.e. 2016-04). Defaults to current month.
 	 *
 	 * [--limit=<limit>]
@@ -1205,7 +1205,7 @@ class CBCmd extends WP_CLI_Command {
 
 		$results = array();
 
-		$month_start = clone $this->options->month;
+		$month_start = clone $this->options->date;
 		$month_start->setTime(0,0);
 		$month_end = clone $month_start; $month_end->modify('last day of');
 		$month = $month_start->format('Y-m');
