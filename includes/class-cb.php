@@ -105,6 +105,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-customers-stats.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-fitbit-api.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge-shortcode.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-churn-shortcode.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'public/class-cb-public.php';
  		if (defined( 'WP_CLI' ) && WP_CLI) {
 			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-commands.php';

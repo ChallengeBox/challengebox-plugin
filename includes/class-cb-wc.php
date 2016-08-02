@@ -703,7 +703,8 @@ class CBWoo {
 		// Count unique months
 		$months = array();
 		foreach (array_keys($columns) as $column) {
-			$maybe_month = end(explode('_', $column));
+			$exploded = explode('_', $column);
+			$maybe_month = end($exploded);
 			if (preg_match('/^\d{4}-\d{2}$/', $maybe_month)) {
 				if (!isset($months[$maybe_month])) $months[$maybe_month] = true;
 			}
@@ -798,14 +799,14 @@ class CBWoo {
 		$rollups = array();
 		foreach ($churn_data->monthly_data_types as $dt) {
 			$rollups[$dt] = array();
-			foreach ($churn_data->cohorts as $cohort) {
+			foreach (array_merge($churn_data->cohorts, array('total')) as $cohort) {
 				$rollups[$dt][$cohort] = array();
 				foreach ($churn_data->months as $month) {
 					$column = $dt . '_' . $month;
 					$rollups[$dt][$cohort]['cohort'] = $cohort;
 					foreach ($churn_data->data as $user_id => $row) {
 						// Only count data if user is in the cohort we're looking at
-						if (isset($row['cohort']) && $cohort == $row['cohort']) {
+						if ('total' == $cohort || (isset($row['cohort']) && $cohort == $row['cohort'])) {
 							// Create value if missing
 							if (!isset($rollups[$dt][$cohort][$month])) $rollups[$dt][$cohort][$month] = 0;
 							// Sum if not
