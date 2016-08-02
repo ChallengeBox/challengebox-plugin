@@ -25,7 +25,7 @@ class CBChurnShortcode {
 
 		$return = "";
 
-		if (!current_user_can('administrator')) {
+		if (!current_user_can('shop_manager') && !current_user_can('administrator')) {
 			$return = 'You don\'t have permisison to view this page.';
 			return $return;
 		} 
@@ -62,7 +62,7 @@ class CBChurnShortcode {
 
 		$columns = array_merge(array('cohort'), $churn_data->months);
 		foreach ($rollups as $name => $rollup) {
-			$return .= "<h2>$name</h2>";
+			$return .= "<h2>$name <a id=\"$name\" href=\"#$name\">&para;</a></h2>";
 			$return .= '<table class="table-striped">';
 
 			$return .= "<tr>";
