@@ -744,7 +744,7 @@ class CBWoo {
 				// Active if any mrr this month
 				if (isset($row[$mrr_this]) && $row[$mrr_this]) {
 					$user_data[$user_id][$active_key] = 1;
-					if (!isset($columns[$active_key])) $columns[$active_key] = true;
+					if (!isset($columns[$active_key])) $columns[$active_key] = true; // add column if dne
 
 					// Activated if previous month had no mrr
 					if (
@@ -753,7 +753,7 @@ class CBWoo {
 							|| !isset($row[$mrr_last])                       // last month not set
 					) {
 						$user_data[$user_id][$activated_key] = 1;
-						if (!isset($columns[$activated_key])) $columns[$activated_key] = true;
+						if (!isset($columns[$activated_key])) $columns[$activated_key] = true; // add column if dne
 
 						// Also reset cohort to month they activated
 						if (!isset($user_data[$user_id]['cohort'])) $user_data[$user_id]['cohort'] = $month;
@@ -776,10 +776,15 @@ class CBWoo {
 				}
 
 				$previous_month = $month;
-				// Also reset cohort if we didn't set it
-				if (!isset($user_data[$user_id]['cohort'])) $user_data[$user_id]['cohort'] = $old_cohort;
+			}
+			// Also reset cohort if we didn't set it
+			if (!isset($user_data[$user_id]['cohort'])) {
+				$user_data[$user_id]['cohort'] = $old_cohort;
 			}
 		}
+
+		// Make sure columns are sorted too
+		ksort($columns);
 
 		return (object) array(
 			'columns' => array_keys($columns),
