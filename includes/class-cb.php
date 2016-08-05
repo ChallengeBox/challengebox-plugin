@@ -101,6 +101,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-wc.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-customer.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-segment.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-admin.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-customers-stats.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-fitbit-api.php';
@@ -223,6 +224,31 @@ class CB {
 	 */
 	public static function any($a) {
 		return (bool) sizeof(array_filter($a));
+	}
+
+	/**
+	 * Given two months, returns the number of months apart they are.
+	 * For example:
+	 *  number_of_months_apart(new Date("2016-06-30"), new Date("2016-07-01"))
+	 *  evaluates to 1.
+	 */
+	public static function number_of_months_apart($date1, $date2) {
+		$date_one = min($date1, $date2);
+		$date_two = max($date1, $date2);
+		$year_one = $date_one->format('Y') + 0;
+		$year_two = $date_two->format('Y') + 0;
+		$month_one = $date_one->format('n') + 0;
+		$month_two = $date_two->format('n') + 0;
+		return (($year_two - $year_one) * 12) + ($month_two - $month_one);
+	}
+
+	/**
+	 * Returns a new DateTime object with the specified number of days added.
+	 */
+	public static function date_plus_days($date, $days) {
+		$new_date = clone $date;
+		$new_date->add(DateInterval::createFromDateString(sprintf('%d days', $days)));
+		return $new_date;
 	}
 
 	/**

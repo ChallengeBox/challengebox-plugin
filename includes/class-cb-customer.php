@@ -15,6 +15,8 @@ class CBCustomer {
 	private $subscriptions;
 	private $metadata;
 	private $order_notes;
+	
+	public $challenges;
 
 	/**
 	 * Simply pass in the user id to construct.
@@ -41,6 +43,7 @@ class CBCustomer {
 	public function __construct($user_id) {
 		$this->user_id = 0 + $user_id;
 		$this->api = new CBWoo();
+		$this->challenges = new CBChallenges($this);
 	}
 
 	public function fitbit() {
@@ -52,83 +55,6 @@ class CBCustomer {
 
 	public function get_user_id() {
 		return $this->user_id;
-	}
-
-	/**
-	 * Returns the cache key for fitbit API calls.
-	 */
-	private function fitbit_cache_key($activity, $month_start, $month_end) {
-		return implode(
-			'_', array(
-				'fitbit-cache-v1',
-				$activity,
-				$this->user_id,
-				$month_start->format('Y-m-d'),
-				$month_end->format('Y-m-d')
-			)
-		);
-	}
-
-	/**
-	 * Clears cache for a specific month.
-	 */
-	public function clear_fitbit_cache($month_start, $month_end) {
-		// Cached Fitbit API calls
-		foreach (
-			array(
-				'minutesVeryActive',
-				'minutesFairlyActive',
-				'minutesLightlyActive',
-				'water',
-				'caloriesIn',
-				'distance',
-				'steps',
-			) as $activity
-		) {
-			delete_transient($this->fitbit_cache_key($activity, $month_start, $month_end));
-		}
-
-		// Cached analysis result
-		$this_month_key = implode(
-			'_', array(
-				'fitbit-data-v3',
-				$this->user_id,
-				$month_start->format('Y-m-d'),
-				$month_end->format('Y-m-d')
-			)
-		);
-		delete_transient($this_month_key);
-	}
-
-	public function inspect_fitbit_cache($month_start, $month_end) {
-		// Cached Fitbit API calls
-		$data = array();
-		foreach (
-			array(
-				'minutesVeryActive',
-				'minutesFairlyActive',
-				'minutesLightlyActive',
-				'water',
-				'caloriesIn',
-				'distance',
-				'steps',
-			) as $activity
-		) {
-			$key = $this->fitbit_cache_key($activity, $month_start, $month_end);
-			$data[$key] = get_transient($key);
-		}
-
-		// Cached analysis result
-		$this_month_key = implode(
-			'_', array(
-				'fitbit-data-v3',
-				$this->user_id,
-				$month_start->format('Y-m-d'),
-				$month_end->format('Y-m-d')
-			)
-		);
-		$data[$this_month_key] = get_transient($this_month_key);
-		return $data;
 	}
 
 	/**

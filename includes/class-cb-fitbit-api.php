@@ -101,6 +101,178 @@ class CBFitbitAPI {
 
 	}
 
+	//
+	//  High-level API
+	// 
+
+	public function get_cached_activity_data($start, $end) {
+		$key = $this->_activity_cache_key($start, $end);
+		if (false === ($data = get_transient($key))) {
+			$data = $this->get_activity_data($start, $end);
+			set_transient($key, $data, 60*60);
+		}
+		return $data;
+	}
+
+	public function get_activity_data($start, $end) {
+
+		$very_active = $this->get_cached_time_series('minutesVeryActive', $start, $end);
+		$fairly_active = $this->get_cached_time_series('minutesFairlyActive', $start, $end);
+		$lightly_active = $this->get_cached_time_series('minutesLightlyActive', $start, $end);
+		$water = $this->get_cached_time_series('water', $start, $end);
+		$food = $this->get_cached_time_series('caloriesIn', $start, $end);
+		$distance = $this->get_cached_time_series('distance', $start, $end);
+		$steps = $this->get_cached_time_series('steps', $start, $end);
+
+		// Activity digests
+		$any_activity = $very_active;
+		$medium_activity = $very_active;
+		$heavy_activity = $very_active;
+		foreach ($very_active as $key => $item) {
+			$any_activity[$key] = 0 + $very_active[$key] + $fairly_active[$key] + $lightly_active[$key];
+			$medium_activity[$key] = 0 + $very_active[$key] + $fairly_active[$key];
+			$heavy_activity[$key] = 0 + $very_active[$key];
+		}
+
+		// Use this to measure the time fitbit has actually been measuring data
+		$wearing_fitbit = array_sum(array_map(function ($v) { return $v >= 1; }, $any_activity));
+
+		return array(
+			'time_series' => array(
+				'any_activity' => $any_activity,
+				'medium_activity' => $medium_activity,
+				'heavy_activity' => $heavy_activity,
+				'water' => $water,
+				'food' => $food,
+				'distance' => $distance,
+				'steps' => $steps,
+
+				// raw data
+				'very_active' => $very_active,
+				'fairly_active' => $fairly_active,
+				'lightly_active' => $lightly_active,
+			),
+			'metrics' => array(
+				'activity_max' => max($medium_activity),
+				'activity_max_index' => array_keys($medium_activity, max($medium_activity))[0],
+				'light_30' => array_sum(array_map(function ($v) { return $v >= 30; }, $any_activity)),
+				'light_60' => array_sum(array_map(function ($v) { return $v >= 60; }, $any_activity)),
+				'light_90' => array_sum(array_map(function ($v) { return $v >= 90; }, $any_activity)),
+				'moderate_10' => array_sum(array_map(function ($v) { return $v >= 10; }, $medium_activity)),
+				'moderate_30' => array_sum(array_map(function ($v) { return $v >= 30; }, $medium_activity)),
+				'moderate_45' => array_sum(array_map(function ($v) { return $v >= 45; }, $medium_activity)),
+				'moderate_60' => array_sum(array_map(function ($v) { return $v >= 60; }, $medium_activity)),
+				'moderate_90' => array_sum(array_map(function ($v) { return $v >= 90; }, $medium_activity)),
+				'heavy_10' => array_sum(array_map(function ($v) { return $v >= 10; }, $heavy_activity)),
+				'heavy_30' => array_sum(array_map(function ($v) { return $v >= 30; }, $heavy_activity)),
+				'heavy_45' => array_sum(array_map(function ($v) { return $v >= 45; }, $heavy_activity)),
+				'heavy_60' => array_sum(array_map(function ($v) { return $v >= 60; }, $heavy_activity)),
+				'heavy_90' => array_sum(array_map(function ($v) { return $v >= 90; }, $heavy_activity)),
+				'water_days' => array_sum(array_map(function ($v) { return $v > 0; }, $water)),
+				'food_days' => array_sum(array_map(function ($v) { return $v > 0; }, $food)),
+				'food_or_water_days' => array_sum(array_map(function ($f, $w) { return $f > 0 || $w > 0; }, $food, $water)),
+				'distance_1' => array_sum(array_map(function ($v) { return $v >= 1; }, $distance)),
+				'distance_2' => array_sum(array_map(function ($v) { return $v >= 2; }, $distance)),
+				'distance_3' => array_sum(array_map(function ($v) { return $v >= 3; }, $distance)),
+				'distance_4' => array_sum(array_map(function ($v) { return $v >= 4; }, $distance)),
+				'distance_5' => array_sum(array_map(function ($v) { return $v >= 5; }, $distance)),
+				'distance_6' => array_sum(array_map(function ($v) { return $v >= 6; }, $distance)),
+				'distance_8' => array_sum(array_map(function ($v) { return $v >= 8; }, $distance)),
+				'distance_10' => array_sum(array_map(function ($v) { return $v >= 10; }, $distance)),
+				'distance_15' => array_sum(array_map(function ($v) { return $v >= 15; }, $distance)),
+				'distance_15' => array_sum(array_map(function ($v) { return $v >= 15; }, $distance)),
+				'distance_max' => max($distance),
+				'distance_max_index' => array_keys($distance, max($distance))[0],
+				'steps_8k' => array_sum(array_map(function ($v) { return $v >= 8000; }, $steps)),
+				'steps_10k' => array_sum(array_map(function ($v) { return $v >= 10000; }, $steps)),
+				'steps_12k' => array_sum(array_map(function ($v) { return $v >= 12000; }, $steps)),
+				'steps_15k' => array_sum(array_map(function ($v) { return $v >= 15000; }, $steps)),
+				'steps_max' => max($steps),
+				'steps_max_index' => array_keys($steps, max($steps))[0],
+				'wearing_fitbit' => $wearing_fitbit,
+			),
+		);
+	}
+
+	//
+	//  Caching API
+	// 
+
+	public function get_cached_time_series($activity, $start, $end) {
+		$key = $this->_time_series_cache_key($activity, $start, $end);
+		if (false === ($raw = get_transient($key))) {
+			$raw = $this->oldGetTimeSeries($activity, $start, $end);
+			set_transient($key, $raw, 60*60*24);
+		}
+		return array_map(function ($v) { return 0 + $v->value; }, $raw);
+	}
+
+	public function clear_fitbit_cache($start, $end) {
+		foreach (
+			array(
+				'minutesVeryActive',
+				'minutesFairlyActive',
+				'minutesLightlyActive',
+				'water',
+				'caloriesIn',
+				'distance',
+				'steps',
+			) as $activity
+		) {
+			delete_transient($this->_time_series_cache_key($activity, $start, $end));
+		}
+		delete_transient($this->_activity_cache_key($start, $end));
+	}
+
+	public function inspect_fitbit_cache($start, $end) {
+		$data = array();
+		foreach (
+			array(
+				'minutesVeryActive',
+				'minutesFairlyActive',
+				'minutesLightlyActive',
+				'water',
+				'caloriesIn',
+				'distance',
+				'steps',
+			) as $activity
+		) {
+			$key = $this->_time_series_cache_key($activity, $start, $end);
+			$data[$key] = get_transient($key);
+		}
+		$activity_key = $this->_activity_cache_key($start, $end);
+		$data[$activity_key] = get_transient($activity_key);
+		return $data;
+	}
+
+	// Cache keys
+
+	private function _time_series_cache_key($activity, $start, $end) {
+		return implode(
+			'_', array(
+				'fitbit-cache-v1',
+				$activity,
+				$this->user_id,
+				$start->format('Y-m-d'),
+				$end->format('Y-m-d')
+			)
+		);
+	}
+	private function _activity_cache_key($start, $end) {
+		return implode(
+			'_', array(
+				'fitbit-activity-v1',
+				$this->user_id,
+				$start->format('Y-m-d'),
+				$end->format('Y-m-d')
+			)
+		);
+	}
+
+	//
+	// Selection machinery for new / old api
+	//
+
 	public function has_v1() {
 		return (bool) (!empty($this->api1));
 	}
@@ -373,7 +545,6 @@ class CBFitbitAPI {
 			$this->maybe_reauthorize_user();
 		}
 	}
-
 
 	//
 	// Shortcodes

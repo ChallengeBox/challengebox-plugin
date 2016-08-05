@@ -1153,13 +1153,13 @@ class CBCmd extends WP_CLI_Command {
 		$month_start->setTime(0,0);
 		$month_end = clone $month_start; $month_end->modify('last day of');
 		WP_CLI::debug('BEFORE: ' . var_export(
-				$customer->inspect_fitbit_cache($month_start, $month_end), true)
+				$customer->fitbit()->inspect_fitbit_cache($month_start, $month_end), true)
 		);
 		if (! $this->options->pretend) {
-			$customer->clear_fitbit_cache($month_start, $month_end);
+			$customer->fitbit()->clear_fitbit_cache($month_start, $month_end);
 		}
 		WP_CLI::debug('AFTER: ' . var_export(
-				$customer->inspect_fitbit_cache($month_start, $month_end), true)
+				$customer->fitbit()->inspect_fitbit_cache($month_start, $month_end), true)
 		);
 	}
 
@@ -1634,6 +1634,193 @@ class CBCmd extends WP_CLI_Command {
 			$columns = array_unique(array_merge($columns, array_keys($data)));
 		}
 		WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Calculate fitbit activity data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--date=<date>]
+	 * : The month to check (can be any day in month). Defaults to current month.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb activity_data 167 --date=2016-04
+	 */
+	function activity_data( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			$data = $customer->challenges->get_month_activity($this->options->date);
+
+			$results = array();
+			$columns = array();
+
+			foreach ($data['time_series'] as $name => $series) {
+				$series = array_merge(
+					array('series' => $name, 'd0' => null),
+					array_combine(
+						array_map(function ($s) { return 'd' . $s; }, array_keys($series)), 
+						array_map(function ($d) { return round($d, 2); }, $series)
+					)
+				);
+				$results[] = $series;
+				$columns = array_keys($series);
+			}
+
+			$blank_row = array(); foreach ($columns as $column) $blank_row[$column] = null;
+			foreach ($data['metrics'] as $key => $value) {
+				$results[] = array_merge($blank_row, array('series' => $key, 'd0' => round($value,2)));
+			}
+
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Calculate fitness challenges.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--date=<date>]
+	 * : The month to check (can be any day in month). Defaults to current month.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb calculate_challenges 167 --date=2016-04
+	 */
+	function calculate_challenges( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			//var_dump($customer->challenges->get_raw_challenges_for_month($this->options->date));
+			var_dump($customer->challenges->get_ordered_challenges_for_month($this->options->date));
+		}
+	}
+
+	/**
+	 * Calculate personal bests.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--date=<date>]
+	 * : The month to check (can be any day in month). Defaults to current month.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb calculate_personal_bests 167 --date=2016-04
+	 */
+	function calculate_personal_bests( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			var_dump($customer->challenges->calculate_personal_bests($this->options->date));
+		}
+	}
+
+	/**
+	 * Calculate challenge points for a given day.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to calculate.
+	 *
+	 * [--date=<date>]
+	 * : The date to check (can be any day in month). Defaults to current day.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb calculate_month_points 167 --date=2016-04-01
+	 */
+	function calculate_month_points( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id.");
+			$customer = new CBCustomer($user_id);
+			var_dump($customer->challenges->calculate_month_points($this->options->date));
+		}
 	}
 
 	/**
