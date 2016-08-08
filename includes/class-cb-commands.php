@@ -15,6 +15,7 @@ class CBCmd extends WP_CLI_Command {
 	private function parse_args($args, $assoc_args) {
 		$this->options = (object) array(
 			'all' => !empty($assoc_args['all']),
+			'orientation' => !empty($assoc_args['orientation']) ? $assoc_args['orientation'] : 'user',
 			'reverse' => !empty($assoc_args['reverse']),
 			'pretend' => !empty($assoc_args['pretend']),
 			'verbose' => !empty($assoc_args['verbose']),
@@ -40,6 +41,7 @@ class CBCmd extends WP_CLI_Command {
 			'auto' => !empty($assoc_args['auto']),
 			'revenue' => !empty($assoc_args['revenue']),
 			'bonus' => !empty($assoc_args['bonus']),
+			'save' => !empty($assoc_args['save']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 		);
 
@@ -63,8 +65,16 @@ class CBCmd extends WP_CLI_Command {
 		// All option triggers gathering user ids
 		if ($this->options->all) {
 			unset($assoc_args['all']);
-			WP_CLI::debug("Grabbing user ids...");
-			$args = array_map(function ($user) { return $user->ID; }, get_users());
+
+			if ('user' == $this->options->orientation) {
+				WP_CLI::debug("Grabbing user ids...");
+				$args = array_map(function ($user) { return $user->ID; }, get_users());
+			} elseif ('order' == $this->options->orientation) {
+				WP_CLI::debug("Grabbing user ids...");
+				global $wpdb;
+				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_order';");
+				$args = array_map(function ($p) { return $p->ID; }, $rows);
+			}
 		}
 		sort($args);
 		if ($this->options->reverse) {
@@ -571,15 +581,26 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * <order_id>
-	 * : The order id to check.
+	 * [<order_id>...]
+	 * : The order id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all orders. (Ignores <order_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> orders out of the list given.
 	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb order 1039
+	 *     wp cb order --all
 	 */
 	function order( $args, $assoc_args ) {
-		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_order($id), true));
+		$assoc_args['orientation'] = 'order';
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $order_id) {
+			WP_CLI::line(var_export($this->api->get_order($order_id), true));
+		}
 	}
 
 	/**
@@ -2257,6 +2278,91 @@ class CBCmd extends WP_CLI_Command {
 			fputcsv(STDOUT, $row);
 		}
 
+	}
+
+	/**
+	 * Exports order data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<order_id>...]
+	 * : The order id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all orders. (Ignores <order_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> orders out of the list given.
+	 *
+	 * [--save]
+	 * : Save the data to cache.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_order_data --all
+	 */
+	function export_order_data( $args, $assoc_args ) {
+		$assoc_args['orientation'] = 'order';
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$subs = array();
+		$boxes = array();
+		$shops = array();
+
+		foreach ($args as $order_id) {
+			$order = $this->api->get_order($order_id);
+			WP_CLI::debug("Order $order_id...");
+			if ($this->options->verbose) WP_CLI::debug(var_export($order, true));
+
+			$is_credit = CBWoo::order_counts_as_box_credit($order);
+			$is_debit = CBWoo::order_counts_as_box_debit($order);
+			$sku = CBWoo::extract_order_sku($order);
+			$opts = CBWoo::parse_order_options($order);
+			$created_at = CBWoo::parse_date_from_api($order->created_at);
+			$completed_at = CBWoo::parse_date_from_api($order->completed_at);
+
+			if ($is_credit) {
+				$subs[] = array(
+					'id' => $order->id,
+					'created_cohort' => $created_at->format('Y-m'),
+					'status' => $order->status,
+					'customer' => $order->customer_id,
+					'total' => $order->total,
+					'sku' => $sku,
+					'type' => CBWoo::extract_subscription_type($order),
+					'rush' => CBWoo::order_is_rush($order),
+				);
+			}
+			if ($is_debit) {
+				$boxes[] = array(
+					'id' => $order->id,
+					'created_cohort' => $created_at->format('Y-m'),
+					'shipped_cohort' => $completed_at->format('Y-m'),
+					'status' => $order->status,
+					'customer' => $order->customer_id,
+					'sku' => $sku,
+					'month' => $opts->month ? $opts->month : 'm1',
+					'gender' => $opts->gender,
+					't-shirt' => $opts->size,
+					'sku_version' => $opts->sku_version,
+				);
+			}
+			if (!$is_credit && !$is_debit) {
+				// shop
+			}
+		}
+
+		if ($this->options->save) {
+			set_transient('cb_export_subscriptions_raw', $subs);
+			set_transient('cb_export_boxes_raw', $boxes);
+		} else {
+			WP_CLI::debug("Renewals");
+			$columns = array('id', 'created_cohort', 'status', 'customer', 'total', 'sku', 'type', 'rush');
+			WP_CLI\Utils\format_items($this->options->format, $subs, $columns);
+			WP_CLI::debug("Boxes");
+			$columns = array('id', 'created_cohort', 'shipped_cohort', 'status', 'customer', 'sku', 'month', 'gender', 't-shirt', 'sku_version');
+			WP_CLI\Utils\format_items($this->options->format, $boxes, $columns);
+		}
 	}
 
 }
