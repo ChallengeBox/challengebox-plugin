@@ -89,13 +89,32 @@ class ChallengeBot {
 			$max_results = 5;
 			$attachments = array();
 			foreach (array_slice($guesses, 0, $max_results) as $guess) {
-				$edit = "<https://www.getchallengebox.com/wp-admin/user-edit.php?user_id=$guess->id|Edit>";
+				$edit = "user <https://www.getchallengebox.com/wp-admin/user-edit.php?user_id=$guess->id|#$guess->id>";
 				$subs = "<https://www.getchallengebox.com/wp-admin/edit.php?post_status=all&post_type=shop_subscription&_customer_user=$guess->id|Subscriptions>";
 				$ords = "<https://www.getchallengebox.com/wp-admin/edit.php?post_status=all&post_type=shop_order&_customer_user=$guess->id|Orders>";
+				$title = "$guess->first_name $guess->last_name";
+				// Add on billing name if it differs
+				if (($guess->billing_first_name || $guess->billing_last_name)
+						&& ($guess->billing_first_name !== $guess->first_name || $guess->billing_last_name !== $guess->last_name)) {
+								$title .= " (Bill to: $guess->billing_first_name $guess->billing_last_name)";
+				}
+				// Add on shipping name if it differs
+				if (($guess->shipping_first_name || $guess->shipping_last_name)
+						&& ($guess->shipping_first_name !== $guess->first_name || $guess->shipping_last_name !== $guess->last_name)) {
+						if ($guess->shipping_first_name == $guess->billing_first_name && $guess->shipping_last_name == $guess->billing_last_name) {
+							$title = preg_replace('/Bill to/', 'Bill+ship to', $title);
+						} else {
+							$title .= " (Ship to: $guess->shipping_first_name $guess->shipping_last_name)";
+						}
+				}
+				$email = "$guess->email";
+				if ($guess->billing_email && $guess->billing_email !== $guess->email) {
+					$email .= " (Bill to: $guess->billing_email)";
+				}
 				$attachments[] = array(
 					'fallback' => "$guess->first_name $guess->last_name <$guess->email>",
-					'title' => "$guess->first_name $guess->last_name",
-					'text' => "$guess->email | $edit | $subs | $ords",
+					'title' => $title,
+					'text' => "$email | $edit | $subs | $ords",
 					//'mrkdwn' => true,
 				);
 			}

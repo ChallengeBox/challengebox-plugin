@@ -108,9 +108,17 @@ class UserGuesser {
 		if ($this->first_name_guess) {
 			$where_clauses[] = "(meta_key = 'first_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
 			$where_variables[] = "%" . $wpdb->esc_like($this->first_name_guess) . "%";
+			$where_clauses[] = "(meta_key = 'billing_first_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
+			$where_variables[] = "%" . $wpdb->esc_like($this->first_name_guess) . "%";
+			$where_clauses[] = "(meta_key = 'shipping_first_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
+			$where_variables[] = "%" . $wpdb->esc_like($this->first_name_guess) . "%";
 		}
 		if ($this->last_name_guess) {
 			$where_clauses[] = "(meta_key = 'last_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
+			$where_variables[] = "%" . $wpdb->esc_like($this->last_name_guess) . "%";
+			$where_clauses[] = "(meta_key = 'billing_last_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
+			$where_variables[] = "%" . $wpdb->esc_like($this->last_name_guess) . "%";
+			$where_clauses[] = "(meta_key = 'shipping_last_name' AND meta_value COLLATE UTF8MB4_GENERAL_CI LIKE %s)";
 			$where_variables[] = "%" . $wpdb->esc_like($this->last_name_guess) . "%";
 		}
 		if (sizeof($where_clauses)) {
@@ -162,7 +170,7 @@ class UserGuesser {
 		$where_clauses = array();
 		if (sizeof($id_map)) {
 			$where_clauses[] = "user_id IN (" . implode(', ', array_keys($id_map)) . ")";
-			$where_clauses[] = "(meta_key = 'billing_email' OR meta_key = 'first_name' OR meta_key = 'last_name')";
+			$where_clauses[] = "meta_key IN ('billing_email', 'first_name', 'last_name', 'billing_first_name', 'billing_last_name', 'shipping_first_name', 'shipping_last_name')";
 			$sql = "SELECT\n\tuser_id, meta_key, meta_value\nFROM\n\t$wpdb->usermeta\nWHERE\n\t" . implode("\n\tAND ", $where_clauses) . ';';
 			//var_dump($sql);
 			$meta_matches = $wpdb->get_results($sql);
@@ -179,8 +187,13 @@ class UserGuesser {
 			$candidates[$m->ID] = (object) array(
 				'id' => intval($m->ID),
 				'email' => $m->user_email,
+				'billing_email' => null,
 				'first_name' => $m->display_name,
 				'last_name' => null,
+				'billing_first_name' => null,
+				'billing_last_name' => null,
+				'shipping_first_name' => null,
+				'shipping_last_name' => null,
 				'rank' => null,
 			//	'rank_string' => null,
 			);
@@ -192,22 +205,34 @@ class UserGuesser {
 				$candidates[$m->user_id] = (object) array(
 					'id' => intval($m->user_id),
 					'email' => null,
+					'billing_email' => null,
 					'first_name' => null,
 					'last_name' => null,
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 					'rank' => null,
 			//		'rank_string' => null,
 				);
 			}
-			if ('billing_email' == $m->meta_key) $candidates[$m->user_id]->email = $m->meta_value;
+			if ('billing_email' == $m->meta_key) $candidates[$m->user_id]->billing_email = $m->meta_value;
 			if ('first_name' == $m->meta_key) $candidates[$m->user_id]->first_name = $m->meta_value;
 			if ('last_name' == $m->meta_key) $candidates[$m->user_id]->last_name = $m->meta_value;
+			if ('billing_first_name' == $m->meta_key) $candidates[$m->user_id]->billing_first_name = $m->meta_value;
+			if ('billing_last_name' == $m->meta_key) $candidates[$m->user_id]->billing_last_name = $m->meta_value;
+			if ('shipping_first_name' == $m->meta_key) $candidates[$m->user_id]->shipping_first_name = $m->meta_value;
+			if ('shipping_last_name' == $m->meta_key) $candidates[$m->user_id]->shipping_last_name = $m->meta_value;
 		}
 		//var_dump((object) get_object_vars($this));
 
 		// Rank the list
 		foreach ($candidates as $c) {
-			$rank_string = implode(' ', array($c->first_name, $c->last_name, $c->email)); 
-			$c->rank = $this->rank($rank_string);
+			$c->rank = max(array(
+				$this->rank(implode(' ', array($c->first_name, $c->last_name, $c->email))),
+				$this->rank(implode(' ', array($c->billing_first_name, $c->billing_last_name, $c->billing_email))),
+				$this->rank(implode(' ', array($c->shipping_first_name, $c->shipping_last_name, $c->billing_email))),
+			));
 		}
 		//var_dump($candidates);
 		usort($candidates, function ($a, $b) { return $b->rank - $a->rank; });
