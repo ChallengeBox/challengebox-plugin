@@ -61,12 +61,25 @@ class ChallengeBot {
 				} catch (Exception $e) {
 					var_dump($e);
 				}
+			} else {
+				$response = $this->slack->execute('chat.postMessage', array(
+					'channel'   => $channel,
+					'text'      => ($command ? "I don't know how to `$command`." : "Hi!") . " Basically you can just ask me to `find PERSON`.",
+					'mrkdwn'    => true,
+				    'as_user'   => true,
+				    'token'     => $this->token,
+				));
+				if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
+					var_dump("posted response");
+				} else {
+					var_dump($response);
+				}	
 			}
 		}
 	}
 
 	public function command_find($args, $text, $channel, $user, $ts, $team) {
-		$query = implode(' ', $args);
+		$query = implode(' ', array_slice($args, 0, 3));
 		var_dump($args);
 		$guesser = new UserGuesser($query);
 		$guesses = array_filter($guesser->guess(), function($guess) { return $guess->rank; });
@@ -87,18 +100,29 @@ class ChallengeBot {
 			}
 
 			$response = $this->slack->execute('chat.postMessage', array(
-			    'channel'   => $channel,
-			    //'text'      => "*$guess->first_name $guess->last_name* <$guess->email>",
-			    //'mrkdwn'    => true,
-			    'attachments' => json_encode($attachments),
-			    'as_user'   => true,
-			    'token'     => $this->token,
+				'channel'   => $channel,
+				'attachments' => json_encode($attachments),
+				'as_user'   => true,
+				'token'     => $this->token,
 			));
 
 			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
 				var_dump("posted response");
 			} else {
 			    var_dump($response);
+			}	
+		} else {
+			$response = $this->slack->execute('chat.postMessage', array(
+				'channel'   => $channel,
+				'text'      => "I couldn't find anybody. Maybe try alternate spellings or include an email?",
+				'mrkdwn'    => true,
+			    'as_user'   => true,
+			    'token'     => $this->token,
+			));
+			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
+				var_dump("posted response");
+			} else {
+				var_dump($response);
 			}	
 		}
 	}

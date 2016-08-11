@@ -104,6 +104,7 @@ class Test_UserGuesser extends WP_UnitTestCase {
 		$this->assertEquals(5, $term->rank("ryan@getchallengebox.com"));
 		$this->assertEquals(3, $term->rank("RyAN Gosling"));
 		$this->assertEquals(3, $term->rank("Witt"));
+		$this->assertEquals(3, $term->rank("Ryan for me"));
 		$this->assertEquals(2, $term->rank("RyanTest"));
 		$this->assertEquals(1, $term->rank("Witty"));
 	}

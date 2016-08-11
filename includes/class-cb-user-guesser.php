@@ -24,7 +24,7 @@ class UserGuesser {
 		$this->non_email_tokens = array_values(
 			array_filter($this->tokens, function ($t) { return false === strpos($t, '@'); })
 		);
-		if (2 == sizeof($this->non_email_tokens)) {
+		if (sizeof($this->non_email_tokens) >= 2) {
 			$this->first_name_guess = $this->non_email_tokens[0];
 			$this->last_name_guess = $this->non_email_tokens[1];
 		}
