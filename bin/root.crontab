@@ -6,3 +6,4 @@
 30 2 * * * /usr/bin/php /var/www/dripscript/delete-email.php
 0 10,20 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb generate_order --all --reverse --rush --month=2016-08 --format=csv)
 59 23 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb calculate_churn --all --format=csv)
+59 22 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_order_data --all --save)
