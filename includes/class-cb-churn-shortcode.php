@@ -86,6 +86,66 @@ class CBChurnShortcode {
 			$return .= "</table>";
 		}
 
+		// Box numbers
+		//$subscriptions = get_transient('cb_export_subscriptions_raw');
+		$boxes = get_transient('cb_export_boxes_raw');
+
+		$box_rollup = array();
+		foreach (array('created', 'shipped') as $cohort_type) {
+			$box_rollup[$cohort_type] = array(
+				'm1' => array('cohort' => 'm1'),
+				'm2' => array('cohort' => 'm2'),
+				'm3' => array('cohort' => 'm3'),
+				'm4' => array('cohort' => 'm4'),
+				'm5' => array('cohort' => 'm5'),
+				'm6' => array('cohort' => 'm6'),
+				'm7' => array('cohort' => 'm7'),
+				'm8' => array('cohort' => 'm8'),
+				'total' => array('cohort' => 'total'),
+			);
+			foreach ($boxes as $box) {
+				$month = $box['month'];
+				if ('m1' != $month) {
+					$month = 'm' . $month;
+				}
+				$column = $cohort_type . '_cohort';
+				$cohort = $box[$column];
+				if (!isset($box_rollup[$cohort_type][$month][$cohort])) {
+					$box_rollup[$cohort_type][$month][$cohort] = 0;
+				}
+				if (!isset($box_rollup[$cohort_type]['total'][$cohort])) {
+					$box_rollup[$cohort_type]['total'][$cohort] = 0;
+				}
+				$box_rollup[$cohort_type][$month][$cohort] += 1;
+				$box_rollup[$cohort_type]['total'][$cohort] += 1;
+			}
+		}
+		foreach ($box_rollup as $name => $rollup) {
+			$return .= "<h2>boxes $name <a id=\"$name\" href=\"#$name\">&para;</a></h2>";
+			$return .= '<table class="table-striped">';
+
+			$return .= "<tr>";
+			foreach ($columns as $column) {
+				$return .= "<th>$column</th>";
+			}
+			$return .= "</tr>";
+
+			foreach ($rollup as $row) {
+				$return .= "<tr>";
+				foreach ($columns as $column) {
+					if (!isset($row[$column])) $row[$column] = 0;
+					if ('cohort' == $column) {
+						$return .= "<th>" . $row[$column] . "</th>";
+					} else {
+						$return .= "<td>" . number_format($row[$column]) . "</td>";
+					}
+				}
+				$return .= "</tr>";
+			}
+
+			$return .= "</table>";
+		}
+
 		return $return;
 
 	} // end fitgoal_auth_func_dev
