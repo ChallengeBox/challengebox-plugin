@@ -336,9 +336,10 @@ class CBCustomer {
 	public function get_meta($key = false, $default = NULL) {
 		if (empty($this->metadata)) {
 			// All non-empty data, dereferenced
+			$got = get_user_meta($this->user_id); 
 			$this->metadata = array_filter(array_map(
 				function( $a ) { return maybe_unserialize($a[0]); },
-				get_user_meta($this->user_id)
+				$got ? $got : array()
 			));
 		}
 		if ($key) {

@@ -2259,6 +2259,20 @@ class CBCmd extends WP_CLI_Command {
 
 	}
 
+	/**
+	 * Starts challenge bot.
+	 *
+	 * ## OPTIONS
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb challenge_bot
+	 */
+	function challenge_bot( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		$bot = new ChallengeBot();
+		$bot->run();
+	}
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );

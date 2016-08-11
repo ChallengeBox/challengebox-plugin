@@ -4,6 +4,8 @@
         , "djchen/oauth2-fitbit": "~0.2.0"
         , "woothemes/woocommerce-api": "dev-master"
         , "segmentio/analytics-php": "^1.3"
+        , "coderstephen/slack-client": "^0.2.4"
+	, "frlnc/php-slack": "dev-master"
     },
     "require-dev": {
           "phpunit/phpunit": "~4.8"
@@ -13,5 +15,7 @@
               "type": "vcs"
             , "url": "https://github.com/ryanwitt/WooCommerce-REST-API-Client-Library"
         }
-    ]
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }

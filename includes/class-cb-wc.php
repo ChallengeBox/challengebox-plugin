@@ -657,8 +657,8 @@ class CBWoo {
 		$data = $wpdb->get_results("
 			select 
 				id, meta_key, meta_value
-			from wp_users U 
-			join wp_usermeta A 
+			from $wpdb->users U 
+			join $wpdb->usermeta A 
 				on A.user_id = U.id
 			where
 				   meta_key LIKE 'mrr_%' 
