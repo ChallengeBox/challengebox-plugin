@@ -86,8 +86,9 @@ class ChallengeBot {
 		var_dump($guesses);
 		if (sizeof($guesses)) {
 
+			$max_results = 5;
 			$attachments = array();
-			foreach ($guesses as $guess) {
+			foreach (array_slice($guesses, 0, $max_results) as $guess) {
 				$edit = "<https://www.getchallengebox.com/wp-admin/user-edit.php?user_id=$guess->id|Edit>";
 				$subs = "<https://www.getchallengebox.com/wp-admin/edit.php?post_status=all&post_type=shop_subscription&_customer_user=$guess->id|Subscriptions>";
 				$ords = "<https://www.getchallengebox.com/wp-admin/edit.php?post_status=all&post_type=shop_order&_customer_user=$guess->id|Orders>";
@@ -106,18 +107,33 @@ class ChallengeBot {
 				'token'     => $this->token,
 			));
 
-			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
-				var_dump("posted response");
-			} else {
-			    var_dump($response);
-			}	
+			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) { var_dump("posted response"); } else { var_dump($response); }	
+
+			if (sizeof($guesses) > $max_results && $guesser->first_name_guess == $guesser->last_name_guess) {
+				$number_left = sizeof($guesses) - $max_results;
+				$message = "Hey, there are $number_left more people that sound like they could be who you're looking for. I tried to put the most relevent ones here. Can you be more specific? Maybe use a last name or email?";
+				/*
+				$attachments[] = array(
+					'fallback' => $message,
+					'text' => $message,
+					//'mrkdwn' => true,
+				);
+				*/
+				$response = $this->slack->execute('chat.postMessage', array(
+					'channel'   => $channel,
+					'text'      => $message,
+					'as_user'   => true,
+					'token'     => $this->token,
+				));
+				if ($response->getStatusCode() == 200 && $response->getBody()['ok']) { var_dump("posted response"); } else { var_dump($response); }	
+			}
 		} else {
 			$response = $this->slack->execute('chat.postMessage', array(
 				'channel'   => $channel,
 				'text'      => "I couldn't find anybody. Maybe try alternate spellings or include an email?",
 				'mrkdwn'    => true,
-			    'as_user'   => true,
-			    'token'     => $this->token,
+				'as_user'   => true,
+				'token'     => $this->token,
 			));
 			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
 				var_dump("posted response");
