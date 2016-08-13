@@ -19,6 +19,8 @@ class Test_UserGuesser extends WP_UnitTestCase {
 				'first_name_guess' => 'ryan',
 				'last_name_guess' => 'witt',
 				'email_guess' => false,
+				'number_tokens' => array(),
+				'id_guess' => false,
 			), 
 			(object) get_object_vars(new UserGuesser('Ryan Witt'))
 		);
@@ -30,6 +32,8 @@ class Test_UserGuesser extends WP_UnitTestCase {
 				'first_name_guess' => 'ryan',
 				'last_name_guess' => 'witt',
 				'email_guess' => 'ryan@getchallengebox.com',
+				'number_tokens' => array(),
+				'id_guess' => false,
 			), 
 			(object) get_object_vars(new UserGuesser('Ryan Witt ryan@getchallengebox.com'))
 		);
@@ -41,6 +45,8 @@ class Test_UserGuesser extends WP_UnitTestCase {
 				'first_name_guess' => 'ryan',
 				'last_name_guess' => 'witt',
 				'email_guess' => 'ryan@getchallengebox.com',
+				'number_tokens' => array(),
+				'id_guess' => false,
 			), 
 			(object) get_object_vars(new UserGuesser('RYAN WITT <RYAN@GETCHALLENGEBOX.COM>'))
 		);
@@ -52,6 +58,8 @@ class Test_UserGuesser extends WP_UnitTestCase {
 				'first_name_guess' => 'ryan',
 				'last_name_guess' => 'ryan',
 				'email_guess' => 'ryan@getchallengebox.com',
+				'number_tokens' => array(),
+				'id_guess' => false,
 			), 
 			(object) get_object_vars(new UserGuesser('ryAN ryan@getchallengebox.com'))
 		);
@@ -63,8 +71,36 @@ class Test_UserGuesser extends WP_UnitTestCase {
 				'first_name_guess' => 'alisa',
 				'last_name_guess' => 'alisa',
 				'email_guess' => false,
+				'number_tokens' => array(),
+				'id_guess' => false,
 			), 
 			(object) get_object_vars(new UserGuesser('Alisa'))
+		);
+		$this->assertEquals(
+			(object) array(
+				'tokens' => array('alisa', '#1225'),
+				'email_tokens' => array(),
+				'non_email_tokens' => array('alisa', '#1225'),
+				'first_name_guess' => 'alisa',
+				'last_name_guess' => '#1225',
+				'email_guess' => false,
+				'number_tokens' => array('1225'),
+				'id_guess' => 1225,
+			), 
+			(object) get_object_vars(new UserGuesser('Alisa #1225'))
+		);
+		$this->assertEquals(
+			(object) array(
+				'tokens' => array('1', '#2', '3', '#4'),
+				'email_tokens' => array(),
+				'non_email_tokens' => array('1', '#2', '3', '#4'),
+				'first_name_guess' => '1',
+				'last_name_guess' => '#2',
+				'email_guess' => false,
+				'number_tokens' => array(1, 2, 3, 4),
+				'id_guess' => 1,
+			), 
+			(object) get_object_vars(new UserGuesser('1 #2 3 #4'))
 		);
 	}
 
@@ -145,6 +181,11 @@ class Test_UserGuesser extends WP_UnitTestCase {
 					'first_name' => 'ryan',
 					'last_name' => 'witt',
 					'email' => 'ryan@getchallengebox.com',
+					'billing_email' => 'ryan@getchallengebox.com',
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 				),
 				(object) array(
 					'rank' => 6,
@@ -152,6 +193,11 @@ class Test_UserGuesser extends WP_UnitTestCase {
 					'first_name' => 'RYAN',
 					'last_name' => 'WITT',
 					'email' => 'Ryan+sneaky@getchallengebox.com',
+					'billing_email' => 'Ryan+sneaky@getchallengebox.com',
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 				),
 				(object) array(
 					'rank' => 6,
@@ -159,13 +205,23 @@ class Test_UserGuesser extends WP_UnitTestCase {
 					'first_name' => 'Ryan',
 					'last_name' => 'Witt',
 					'email' => 'admin@getchallengebox.com',
+					'billing_email' => 'admin@getchallengebox.com',
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 				),
 				(object) array(
 					'rank' => 5,
 					'id' => $id3,
 					'first_name' => 'Steve',
 					'last_name' => 'Jobs',
-					'email' => 'ryan@getchallengebox.com',
+					'email' => '1ryan@getchallengebox.com',
+					'billing_email' => 'ryan@getchallengebox.com',
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 				),
 				(object) array(
 					'rank' => 3,
@@ -173,6 +229,11 @@ class Test_UserGuesser extends WP_UnitTestCase {
 					'first_name' => 'Ryan',
 					'last_name' => 'Gosling',
 					'email' => 'heygirl@getchallengebox.com',
+					'billing_email' => 'heygirl@getchallengebox.com',
+					'billing_first_name' => null,
+					'billing_last_name' => null,
+					'shipping_first_name' => null,
+					'shipping_last_name' => null,
 				),
 			),
 			(new UserGuesser("Ryan Witt <ryan@getchallengebox.com>"))->guess()
