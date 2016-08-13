@@ -416,7 +416,7 @@ class CBCmd extends WP_CLI_Command {
 			foreach ($customer->get_active_subscriptions() as $sub) {
 
 				// Skip if we don't have a renewal date to work from
-				if (!isset($sub->billing_schedule->next_payment_at)) {
+				if ($sub->billing_schedule->next_payment_at) {
 					WP_CLI::debug("\t\tSubscription doesn't have renewal date. Skipping.");
 					$results[] = array(
 						'id' => $user_id,
@@ -485,13 +485,6 @@ class CBCmd extends WP_CLI_Command {
 				// See if the box credit model thinks we should bill on a different date
 				//
 				$months_before_renewal = $credits - $debits + ($box_this_month ? 0 : -1);
-				var_dump(array(
-					'credits' => $credits,
-					'debits' => $credits,
-					'owed' => $credits - $debits,
-					'box_this_month' => $box_this_month,
-					'months_before_renewal' => $months_before_renewal,
-				));
 				$now = new Carbon();
 				$box_credit_renewal = $new_renewal->copy()->year($now->year)->month($now->month)->addMonths($months_before_renewal);
 
