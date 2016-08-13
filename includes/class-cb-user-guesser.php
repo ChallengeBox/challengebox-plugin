@@ -8,10 +8,12 @@ class UserGuesser {
 	public $tokens;
 	public $email_tokens;
 	public $non_email_tokens;
+	public $number_tokens;
 
 	public $first_name_guess;
 	public $last_name_guess;
 	public $email_guess;
+	public $id_guess;
 
 	public function __construct($string) {
 
@@ -39,6 +41,11 @@ class UserGuesser {
 		);
 		$this->email_guess = current($this->email_tokens);
 		if ($this->email_guess) $this->email_guess = trim($this->email_guess, '<>');
+
+		// Number guess
+		$stripped_hashes = array_map(function ($t) { return trim($t, '#'); }, $this->tokens);
+		$this->number_tokens = array_values(array_map('intval', array_filter($stripped_hashes, 'is_numeric')));
+		$this->id_guess = current($this->number_tokens);
 	}
 
 	/**
@@ -48,6 +55,9 @@ class UserGuesser {
 	public function rank($string) {
 		$other = new UserGuesser($string);
 		$points = 0;
+		if ($other->id_guess && $other->id_guess == $this->id_guess) {
+			$points += 7;
+		}
 		if ($other->email_guess && $other->email_guess == $this->email_guess) {
 			$points += 5;
 		}
@@ -98,6 +108,8 @@ class UserGuesser {
 
 		global $wpdb;
 
+		//var_dump($this);
+
 		// Get user ids of matches
 		$where_clauses = array();
 		$where_variables = array();
@@ -134,6 +146,7 @@ class UserGuesser {
 		}
 
 		//var_dump($ids);
+		if ($this->id_guess) $id_map[$this->id_guess] = true;
 
 		// Get matches from user table, augmenting any ids we find
 		$where_clauses = array();
@@ -229,9 +242,9 @@ class UserGuesser {
 		// Rank the list
 		foreach ($candidates as $c) {
 			$c->rank = max(array(
-				$this->rank(implode(' ', array($c->first_name, $c->last_name, $c->email))),
-				$this->rank(implode(' ', array($c->billing_first_name, $c->billing_last_name, $c->billing_email))),
-				$this->rank(implode(' ', array($c->shipping_first_name, $c->shipping_last_name, $c->billing_email))),
+				$this->rank(implode(' ', array($c->first_name, $c->last_name, $c->email, $c->id))),
+				$this->rank(implode(' ', array($c->billing_first_name, $c->billing_last_name, $c->billing_email, $c->id))),
+				$this->rank(implode(' ', array($c->shipping_first_name, $c->shipping_last_name, $c->billing_email, $c->id))),
 			));
 		}
 		//var_dump($candidates);
