@@ -5,7 +5,8 @@
         , "woothemes/woocommerce-api": "dev-master"
         , "segmentio/analytics-php": "^1.3"
         , "coderstephen/slack-client": "^0.2.4"
-	, "frlnc/php-slack": "dev-master"
+	, "frlnc/php-slack": "dev-master",
+        "nesbot/carbon": "^1.21"
     },
     "require-dev": {
           "phpunit/phpunit": "~4.8"

@@ -1,5 +1,7 @@
 <?php
 
+use Carbon\Carbon;
+
 /**
  * Commands for managing ChallengeBox.
  */
@@ -25,7 +27,7 @@ class CBCmd extends WP_CLI_Command {
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
 			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
-			'day' => !empty($assoc_args['day']) ? new DateTime($assoc_args['day']) : new DateTime(),
+			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : (new DateTime())->format('d')),
 			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new DateTime($assoc_args['renewal-cutoff']) : new DateTime(),
 			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
@@ -308,8 +310,7 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Synchronizes renewal dates. Ok, actually just pushes them out to the 26th of
-	 * the month if they are going to renew before.
+	 * Synchronizes renewal dates for active subscriptions.
 	 *
 	 * ## OPTIONS
 	 *
@@ -317,18 +318,15 @@ class CBCmd extends WP_CLI_Command {
 	 * : The user id (or ids) of which to adjust renewal date.
 	 *
 	 * [--day=<day>]
-	 * : Day on which to synchronize renewal (ignores time and uses the time
-	 *   of day of the original renewal date). Format like '2016-05-26'.
-	 *   Defaults to the 20th of this month.
+	 * : Day of the month on which to synchronize renewal. Defaults to the 21st
+	 *   for users who joined on orafter July 1st 2016 and the 25th for users
+	 *   who joined before that.
 	 *
 	 * [--all]
 	 * : Adjust dates for all users. (Ignores <id>... if found).
 	 *
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
-	 *
-	 * [--auto]
-	 * : Try and guess dates (EXPERIMENTAL)
 	 *
 	 * [--pretend]
 	 * : Don't actually adjust dates, just print out what we'd do.
@@ -353,182 +351,227 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function synchronize_renewal($args, $assoc_args) {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
-
-		if (empty($assoc_args['day'])) {
-			// Get a date on the 20th that has the same H:M:S as renewal date
-			// to ensure the renewals are spaced out
-			$renewal_day = new DateTime("first day of this month");
-			$renewal_day->add(new DateInterval("P19D"));
-		} else {
-			$renewal_day = $this->options->day;
-		}
+		$user_day_override = isset($assoc_args['day']);
 
 		$results = array();
-		$columns = array('id', 'sub_id', 'type', 'earned', 'boxes', 'old_renewal', 'new_renewal', 'errors');
+		$columns = array('id', 'sub_id', 'type', 'action', 'reason', 'old_renewal', 'new_renewal', 'box_credit_renewal', 'renewal_day', 'credits', 'debits', 'box_this_month', 'next_box', 'errors');
 
 		foreach ($args as $user_id) {
-			try {
-				$customer = new CBCustomer($user_id);
-			} catch (Exception $e) {
-				$customer = new CBCustomer($user_id);
-			}
+			$customer = new CBCustomer($user_id);
+			$next_box = $customer->get_meta('next_box');
+
 			WP_CLI::debug("Synchronizing $user_id");
 
-			try { $customer->get_active_subscriptions(); } catch (Exception $e) {}
+			//
+			// Setup renewal day (depends on user join date unless overridden)
+			//
+			if ($user_day_override) {
+				$renewal_day = $this->options->day;
+			} else {
+				// Spec: If the customer joined before July 1, the renewal day should
+				// be the 25th of the month.
+				if ($customer->earliest_subscription_date() < new DateTime("2016-07-01")) {
+					$renewal_day = 25;
+				} else {
+					// Spec: If the customer joined on or after July 1, the renewal day
+					// should be the 21st of the month.
+					$renewal_day = 21;
+				}
+			}
+
+			//
+			// Setup box credits / debits
+			//
+			$r = $customer->calculate_box_credits($this->options->verbose);
+			$credits = $r['credits'];
+			$revenue = $r['revenue'];
+			$debits = $customer->calculate_box_debits($this->options->verbose);
+			$box_this_month = $customer->has_box_order_this_month();
+
 
 			if (sizeof($customer->get_active_subscriptions()) == 0) {
 				WP_CLI::debug("\tNo active subscriptions. Skipping.");
+				$results[] = array(
+					'id' => $user_id,
+					'sub_id' => $sub->id,
+					'type' => $customer->get_subscription_type(),
+					'action' => 'skip',
+					'reason' => 'no active subs',
+					'old_renewal' => NULL,
+					'new_renewal' => NULL,
+					'box_credit_renewal' => NULL,
+					'renewal_day' => $renewal_day,
+					'credits' => $credits,
+					'debits' => $debits,
+					'box_this_month' => $box_this_month,
+					'next_box' => $next_box,
+					'errors' => NULL,
+				);
 				continue;
 			}
 
+			//
+			// Modify renewal date for each sub
+			//
 			foreach ($customer->get_active_subscriptions() as $sub) {
 
-				$sub_id = $sub->id;
-				$renewal_date = CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at);
-				$start_date = CBWoo::parse_date_from_api($sub->billing_schedule->start_at);
-
-				WP_CLI::debug("\tSubscription $sub_id...");
-
-				if (!$renewal_date) {
+				// Skip if we don't have a renewal date to work from
+				if (!isset($sub->billing_schedule->next_payment_at)) {
 					WP_CLI::debug("\t\tSubscription doesn't have renewal date. Skipping.");
-					continue;
-				}
-
-				$original_renewal = clone $renewal_date;
-
-				try { $customer->get_box_orders(); } catch (Exception $e) {}
-
-				$last_box_order = end($customer->get_box_orders());
-				//$last_order = CBWoo::parse_date_from_api($last_box_order->created_at);
-
-				// Exploratory stuff
-				$earned = NULL;
-				$boxes = NULL;
-				if ($this->options->auto) {
-
-					$the_12th = new DateTime('2016-06-12');
-					if ($renewal_date > $the_12th) {
-						WP_CLI::debug("\t\tToo far out. Skipping.");
-						continue;
-					}
-
-					// Find number of days sub was active
-					$mod = clone $start_date;
-
-					if ($customer->get_subscription_type() === 'Month to Month') {
-						if (($mod->format('d')+0) > 20) {
-							$mod->add('P12D');
-						}
-						$mod->setDate(
-							$mod->format('Y'),
-							$mod->format('m'),
-							20
-						);
-					}
-					$days = $mod->diff($this->options->date)->format('%r%a') + 0;
-
-					// Compare number of boxes "earned" vs actual
-					$earned = round($days/30);
-					$boxes = sizeof($customer->get_box_orders_shipped($start_date));
-					if (0 === $boxes) {
-						WP_CLI::debug("\t\tNo boxes shipped yet, skipping.");
-						continue;
-					}
-
-					if ($this->options->verbose) { 
-						WP_CLI::debug(var_export(array(
-							'start_date' => $start_date,
-							'renewal_date' => $renewal_date,
-							'days' => $days,
-							'earned' => $earned,
-							'orders' => $boxes,
-						), true));
-					}
-
-					if ($earned <= $boxes) {
-						// We need to renew now
-						$renewal_day = new DateTime();
-						$renewal_day->add(new DateInterval('PT1H'));
-						// Instead of keeping original hour/minute slot, use 1 hours from now,
-						// plus the original minutes (spacing), so we trigger the renewal today
-						$renewal_date->setTime($renewal_day->format('H'), $renewal_date->format('i'));
-					} else {
-						// We need to postpone
-						$renewal_day = new DateTime("first day of next month");
-						$renewal_day->add(new DateInterval("P19D"));
-					}
-
-					if ($this->options->verbose) { 
-						WP_CLI::debug(var_export(array(
-							'renewal_date' => $renewal_date,
-							'renewal_day' => $renewal_day,
-						), true));
-					}
-				}
-
-				$renewal_y = $renewal_day->format('Y');
-				$renewal_m = $renewal_day->format('m');
-				$renewal_d = $renewal_day->format('d');
-
-				// XXX: Special case for next_box = '2016-07'
-				if ($renewal_day->format('Y-m') === '2016-05' && $customer->get_meta('next_box') === '2016-07') {
-					WP_CLI::debug("\tOrder will be postponed until Late June.");
-					$renewal_y = '2016';
-					$renewal_m = '06';
-					$renewal_d = '20';
-				}
-
-				// XXX: Special case for next_box = '2016-08'
-				if ($renewal_day->format('Y-m') === '2016-06' && $customer->get_meta('next_box') === '2016-08') {
-					WP_CLI::debug("\tOrder will be postponed until Late July.");
-					$renewal_y = '2016';
-					$renewal_m = '07';
-					$renewal_d = '20';
-				}
-
-				// XXX: Special case for next_box = '2016-09'
-				if ($renewal_day->format('Y-m') === '2016-07' && $customer->get_meta('next_box') === '2016-09') {
-					WP_CLI::debug("\tOrder will be postponed until Late August.");
-					$renewal_y = '2016';
-					$renewal_m = '08';
-					$renewal_d = '20';
-				}
-
-				// Take the H:M:S from old $renewal_date, but the day from $renewal_day.
-				$new_date = clone $renewal_date;
-				$new_date->setDate($renewal_y, $renewal_m, $renewal_d);
-
-				if ($this->options->verbose)
-					WP_CLI::debug(var_export(array('new'=>$new_date,'old'=>$renewal_date), true));
-
-				if (!$this->options->auto && $renewal_date >= $new_date) {
-					WP_CLI::debug("\t\tRenewal too far out, doesn't need to be adjusted.");
-					continue;
-				} else {
-					WP_CLI::debug("\t\tExisting renewal is incorrect, adjusting.");
-					$new_sub = array(
-						'subscription' => array(
-							'next_payment_date' => CBWoo::format_DateTime_for_api($new_date)
-						)
-					);
-					if ($this->options->verbose)
-						WP_CLI::debug("\t\tModifying date: " . var_export($new_sub, true));
-					if (!$this->options->pretend) {
-						$result = $this->api->update_subscription($sub->id, $new_sub);
-						if ($this->options->verbose)
-							WP_CLI::debug("\t\tResult: " . var_export($result, true));
-					}
 					$results[] = array(
 						'id' => $user_id,
-						'sub_id' => $sub_id,
+						'sub_id' => $sub->id,
 						'type' => $customer->get_subscription_type(),
-						'earned' => $earned,
-						'boxes' => $boxes,
-						'old_renewal' => $original_renewal->format('Y-m-d H:i:s'),
-						'new_renewal' => $new_date->format('Y-m-d H:i:s'),
+						'action' => 'skip',
+						'reason' => 'no renewal date',
+						'old_renewal' => NULL,
+						'new_renewal' => NULL,
+						'box_credit_renewal' => NULL,
+						'renewal_day' => $renewal_day,
+						'credits' => $credits,
+						'debits' => $debits,
+						'box_this_month' => $box_this_month,
+						'next_box' => $next_box,
 						'errors' => NULL,
 					);
+					continue;
 				}
+
+				$old_renewal = Carbon::instance(CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at));
+
+				WP_CLI::debug("\tSubscription $sub->id...");
+
+				//
+				// Calculate correct renewal date from the renewal day
+				//
+
+				// Potential renewal date in the same month as original renewal
+				$d_this = $old_renewal->copy()->day($renewal_day);
+
+				// Potential renewal date in the month after original renewal
+				$d_next = $old_renewal->copy()->day(1)->addMonths(1)->day($renewal_day);
+				
+				if ($this->options->verbose)
+					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day), true));
+
+				// Spec: If the customer's renewal date falls before the renewal day,
+				// the renewal should be pushed forward to the renewal day.
+				if ($old_renewal < $d_this) {
+					$new_renewal = $d_this;
+					$reason = 'old renewal before renewal day';
+				} else {
+					// Spec: If the customer's renewal date falls after the renewal day,
+					// the renewal should be pushed forward to the renewal day next
+					// month.
+					$new_renewal = $d_this;
+					$reason = 'old renewal after renewal day';
+				}
+
+				//
+				// Modify renewal date if user has chosen to postpone box, and if
+				// the postponement month is after the renewal we already chose
+				//
+				if ($next_box) {
+					$next_box_date = new Carbon($next_box);
+					if ($next_box_date >= $new_renewal) {
+						$new_renewal->year = $next_box_date->year;
+						$new_renewal->month = $next_box_date->month;
+						WP_CLI::debug("\tOrder will be postponed until " . $new_renewal->format('Y-m-d'));
+						$reason = 'user postponed box';
+					}
+				}
+
+				//
+				// See if the box credit model thinks we should bill on a different date
+				//
+				$months_before_renewal = $credits - $debits + ($box_this_month ? 0 : -1);
+				var_dump(array(
+					'credits' => $credits,
+					'debits' => $credits,
+					'owed' => $credits - $debits,
+					'box_this_month' => $box_this_month,
+					'months_before_renewal' => $months_before_renewal,
+				));
+				$now = new Carbon();
+				$box_credit_renewal = $new_renewal->copy()->year($now->year)->month($now->month)->addMonths($months_before_renewal);
+
+				// Skip if old renewal happened already
+				if ($old_renewal < new Carbon()) {
+					WP_CLI::debug("\t\tOld renewal in the past. Skipping.");
+					$results[] = array(
+						'id' => $user_id,
+						'sub_id' => $sub->id,
+						'type' => $customer->get_subscription_type(),
+						'action' => 'skip',
+						'reason' => 'old renewal in past',
+						'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
+						'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
+						'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+						'renewal_day' => $renewal_day,
+						'credits' => $credits,
+						'debits' => $debits,
+						'box_this_month' => $box_this_month,
+						'next_box' => $next_box,
+						'errors' => NULL,
+					);
+					continue;
+				}
+
+				// Skip if new renewal is in the past
+				if ($new_renewal < new DateTime()) {
+					WP_CLI::debug("\t\tNew renewal in the past. Skipping.");
+					$results[] = array(
+						'id' => $user_id,
+						'sub_id' => $sub->id,
+						'type' => $customer->get_subscription_type(),
+						'action' => 'skip',
+						'reason' => 'new renewal in past',
+						'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
+						'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
+						'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+						'renewal_day' => $renewal_day,
+						'credits' => $credits,
+						'debits' => $debits,
+						'box_this_month' => $box_this_month,
+						'next_box' => $next_box,
+						'errors' => NULL,
+					);
+					continue;
+				}
+
+				if ($this->options->verbose)
+					WP_CLI::debug(var_export(array('new' => $new_renewal, 'old' => $old_renewal), true));
+
+
+				WP_CLI::debug("\t\tExisting renewal is incorrect, adjusting.");
+				$new_sub = array(
+					'subscription' => array(
+						'next_payment_date' => CBWoo::format_DateTime_for_api($new_renewal)
+					)
+				);
+				if ($this->options->verbose)
+					WP_CLI::debug("\t\tModifying date: " . var_export($new_sub, true));
+				if (!$this->options->pretend) {
+					$result = $this->api->update_subscription($sub->id, $new_sub);
+					if ($this->options->verbose) WP_CLI::debug("\t\tResult: " . var_export($result, true));
+				}
+				$results[] = array(
+					'id' => $user_id,
+					'sub_id' => $sub->id,
+					'type' => $customer->get_subscription_type(),
+					'action' => 'changed renewal',
+					'reason' => $reason,
+					'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
+					'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
+					'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+					'renewal_day' => $renewal_day,
+					'credits' => $credits,
+					'debits' => $debits,
+					'box_this_month' => $box_this_month,
+					'next_box' => $next_box,
+					'errors' => NULL,
+				);
+
 			}
 
 		}
@@ -628,8 +671,7 @@ class CBCmd extends WP_CLI_Command {
 	 * : Only generate rush orders. Skip regular orders. Renewal cutoff does not apply for rush orders.
 	 *
 	 * [--month=<month>]
-	 * : Month for which to generate the order. Format like '2016-05'.
-	 *   Defaults to next month (because we usually generate orders ahead of the month).
+	 * : Month for which to generate the order. Format like '2016-05'. Defaults to current month.
 	 *
 	 * [--date=<date>]
 	 * : Date on which to generate the order. This will actually check to see if the
