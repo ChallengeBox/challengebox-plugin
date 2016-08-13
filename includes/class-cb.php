@@ -326,4 +326,29 @@ class CB {
 			)
 		);
 	}
+
+	/**
+	 * A warning that can be put at the top of pages if user's preferences have not been fully filled out.
+	 */
+	public function pref_warning_shortcode($atts, $content = "") {
+		$a = shortcode_atts(array('debug' => false) , $atts);
+		if ($a['debug']) { error_reporting(E_ALL); ini_set('display_errors', true); }
+		if (!is_user_logged_in()) { return ""; } 
+
+		$user_id = $real_user_id = get_current_user_id();
+		if (!empty($_GET['sudo']))
+			$user_id = $_GET['sudo'] + 0;
+
+		$customer = new CBCustomer($user_id);
+		if (empty($customer->get_meta('tshirt_size')) || empty($customer->get_meta('clothing_gender'))) {
+			$return = <<<HTML
+				<div class="alert alert-warning" role="alert">
+					<b>Head's up!</b> We can't ship your box until you fill out at least a T-Shirt size and prefered clothing gender. <a href="/fitness-profile/">Click here</a> to fix.
+				</div>
+HTML;
+		}
+		return $return;
+	}
 }
+
+add_shortcode( 'cb_pref_warning', array( 'CB', 'pref_warning_shortcode' ) );

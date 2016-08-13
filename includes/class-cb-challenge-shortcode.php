@@ -41,6 +41,15 @@ class CBChallengeShortcode {
 
 		$fitbit_user = new CBFitbitAPI($user_id);
 
+		$customer = new CBCustomer($user_id);
+		if (empty($customer->get_meta('tshirt_size')) || empty($customer->get_meta('clothing_gender'))) {
+		 ?>	
+				<div class="alert alert-warning" role="alert">
+					<b>Head's up!</b> We can't ship your box until you fill out at least a T-Shirt size and prefered clothing gender. <a href="/fitness-profile/">Click here</a> to fix.
+				</div>
+			<?php
+		}
+
 		//
 		// Script setup
 		//
