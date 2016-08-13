@@ -49,31 +49,66 @@ class CBWoo {
 	//
 
 	public function get_product($id) {
-		return $this->api->products->get($id)->product;
+		try {
+			return $this->api->products->get($id)->product;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->products->get($id)->product;
+		}
 	}
 	public function get_product_by_sku($id) {
-		return $this->api->products->get_by_sku($id)->product;
+		try {
+			return $this->api->products->get_by_sku($id)->product;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->products->get_by_sku($id)->product;
+		}
 	}
 	public function get_customer($id) {
-		return $this->api->customers->get($id)->customer;
+		try {
+			return $this->api->customers->get($id)->customer;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->customers->get($id)->customer;
+		}
 	}
 	public function get_order($id) {
-		return $this->api->orders->get($id)->order;
+		try {
+			return $this->api->orders->get($id)->order;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->orders->get($id)->order;
+		}
 	}
 	public function get_order_notes($id) {
-		return $this->api->order_notes->get($id)->order_notes;
+		try {
+			return $this->api->order_notes->get($id)->order_notes;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->order_notes->get($id)->order_notes;
+		}
 	}
 	public function get_subscription($id) {
-		return $this->api->subscriptions->get($id)->subscription;
+		try {
+			return $this->api->subscriptions->get($id)->subscription;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->subscriptions->get($id)->subscription;
+		}
 	}
 	public function get_customer_orders($id) {
-		return $this->api->customers->get_orders($id)->orders;
+		try {
+			return $this->api->customers->get_orders($id)->orders;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->customers->get_orders($id)->orders;
+		}
 	}
 	public function get_customer_subscriptions($id) { 
-		return array_map(
-			function ($s) {return $s->subscription;},
-			$this->api->customers->get_subscriptions($id)->customer_subscriptions
-		);
+		try {
+			return array_map(
+				function ($s) {return $s->subscription;},
+				$this->api->customers->get_subscriptions($id)->customer_subscriptions
+			);
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return array_map(
+				function ($s) {return $s->subscription;},
+				$this->api->customers->get_subscriptions($id)->customer_subscriptions
+			);
+		}
 	}
 
 	//
@@ -101,14 +136,24 @@ class CBWoo {
 	 * Returns order statuses (including any custom statuses define in the admin)
 	 */
 	public function get_order_statuses() { 
-		if (empty($this->order_statuses)) {
-			$this->order_statuses = (array) $this->api->orders->get_statuses()->order_statuses;
+		try {
+			if (empty($this->order_statuses)) {
+				$this->order_statuses = (array) $this->api->orders->get_statuses()->order_statuses;
+			}
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			if (empty($this->order_statuses)) {
+				$this->order_statuses = (array) $this->api->orders->get_statuses()->order_statuses;
+			}
 		}
 		return $this->order_statuses;
 	}
 
 	public function get_attributes() { 
-		return $this->api->product_attributes->get()->product_attributes;
+		try {
+			return $this->api->product_attributes->get()->product_attributes;
+		} catch (WC_API_Client_HTTP_Exception $e) {
+			return $this->api->product_attributes->get()->product_attributes;
+		}
 		/*
 		if (empty($this->attribute_slug_map)) {
 			$attributes = $thi->api->product_attributes->get()->product_attributes;
@@ -122,7 +167,11 @@ class CBWoo {
 	 */
 	public function get_subscription_statuses() { 
 		if (empty($this->subscription_statuses)) {
-			$s = (array) $this->api->subscriptions->get_statuses()->subscription_statuses;
+			try {
+				$s = (array) $this->api->subscriptions->get_statuses()->subscription_statuses;
+			} catch (WC_API_Client_HTTP_Exception $e) {
+				$s = (array) $this->api->subscriptions->get_statuses()->subscription_statuses;
+			}
 			$this->subscription_statuses = array();
 			foreach ($s as $key => $value) {
 				$this->subscription_statuses[substr($key,3)] = $value;

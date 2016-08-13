@@ -298,7 +298,7 @@ class CB {
 	 * @link slack incoming webhook docs https://api.slack.com/incoming-webhooks
 	 * @example ar_post_to_slack('message','#channel','bot-name',':monkey:');
 	 */
-	function post_to_slack($message, $channel) {
+	public function post_to_slack($message, $channel) {
 
 		// Slack webhook endpoint from Slack settings
 		$slack_endpoint = 'https://hooks.slack.com/services/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';

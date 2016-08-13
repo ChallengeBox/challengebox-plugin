@@ -416,7 +416,7 @@ class CBCmd extends WP_CLI_Command {
 			foreach ($customer->get_active_subscriptions() as $sub) {
 
 				// Skip if we don't have a renewal date to work from
-				if ($sub->billing_schedule->next_payment_at) {
+				if (empty($sub->billing_schedule->next_payment_at)) {
 					WP_CLI::debug("\t\tSubscription doesn't have renewal date. Skipping.");
 					$results[] = array(
 						'id' => $user_id,
