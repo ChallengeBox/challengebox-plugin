@@ -22,9 +22,9 @@ class Test_CBWeeklyChallenge extends WP_UnitTestCase {
 
 		// Just a normal week
 		$this->assertEquals(Carbon::createFromDate(2016, 8, 15, 'America/New_York')->startOfDay(),
-			$challenge->challenge_start);
+			$challenge->start);
 		$this->assertEquals(Carbon::createFromDate(2016, 8, 21, 'America/New_York')->endOfDay(),
-			$challenge->challenge_end);
+			$challenge->end);
 		$this->assertEquals(Carbon::createFromDate(2016, 8, 12, 'America/New_York')->startOfDay(),
 			$challenge->entry_open);
 		$this->assertEquals(Carbon::createFromDate(2016, 8, 14, 'America/New_York')->endOfDay(),
@@ -34,9 +34,9 @@ class Test_CBWeeklyChallenge extends WP_UnitTestCase {
 		$today = Carbon::createFromDate(2016, 2, 29, 'America/New_York');
 		$challenge = new CBWeeklyChallenge($this->customer, $today);
 		$this->assertEquals(Carbon::createFromDate(2016, 2, 29, 'America/New_York')->startOfDay(),
-			$challenge->challenge_start);
+			$challenge->start);
 		$this->assertEquals(Carbon::createFromDate(2016, 3, 6, 'America/New_York')->endOfDay(),
-			$challenge->challenge_end);
+			$challenge->end);
 		$this->assertEquals(Carbon::createFromDate(2016, 2, 26, 'America/New_York')->startOfDay(),
 			$challenge->entry_open);
 		$this->assertEquals(Carbon::createFromDate(2016, 2, 28, 'America/New_York')->endOfDay(),

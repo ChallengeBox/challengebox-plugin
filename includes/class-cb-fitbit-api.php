@@ -171,6 +171,7 @@ class CBFitbitAPI {
 				'water_days' => array_sum(array_map(function ($v) { return $v > 0; }, $water)),
 				'food_days' => array_sum(array_map(function ($v) { return $v > 0; }, $food)),
 				'food_or_water_days' => array_sum(array_map(function ($f, $w) { return $f > 0 || $w > 0; }, $food, $water)),
+				'distance_total' => array_sum($distance),
 				'distance_1' => array_sum(array_map(function ($v) { return $v >= 1; }, $distance)),
 				'distance_2' => array_sum(array_map(function ($v) { return $v >= 2; }, $distance)),
 				'distance_3' => array_sum(array_map(function ($v) { return $v >= 3; }, $distance)),
@@ -183,6 +184,7 @@ class CBFitbitAPI {
 				'distance_15' => array_sum(array_map(function ($v) { return $v >= 15; }, $distance)),
 				'distance_max' => max($distance),
 				'distance_max_index' => array_keys($distance, max($distance))[0],
+				'steps_total' => array_sum($steps),
 				'steps_8k' => array_sum(array_map(function ($v) { return $v >= 8000; }, $steps)),
 				'steps_10k' => array_sum(array_map(function ($v) { return $v >= 10000; }, $steps)),
 				'steps_12k' => array_sum(array_map(function ($v) { return $v >= 12000; }, $steps)),
@@ -202,7 +204,7 @@ class CBFitbitAPI {
 		$key = $this->_time_series_cache_key($activity, $start, $end);
 		if (false === ($raw = get_transient($key))) {
 			$raw = $this->oldGetTimeSeries($activity, $start, $end);
-			set_transient($key, $raw, 60*60*24);
+			set_transient($key, $raw, 60*60);
 		}
 		return array_map(function ($v) { return 0 + $v->value; }, $raw);
 	}

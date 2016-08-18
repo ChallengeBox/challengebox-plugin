@@ -2602,6 +2602,77 @@ class CBCmd extends WP_CLI_Command {
 		}
 	}
 
+	/**
+	 * Updates user data for the weekly challenge.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) of which to update.
+	 *
+	 * [--date=<date>]
+	 * : Some date in the week of the challenge. Will still update using all of the data available
+	 *   for that week, even if this date is partially through the week. Defaults to now.
+	 *
+	 * [--all]
+	 * : Work on all users. (Ignores <id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--pretend]
+	 * : Don't actually work, just print out what we'd do.
+   *
+	 * [--force]
+	 * : Force given user to join challenge. Cannot use with --all.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb update_weekly_challenge 167
+	 */
+	function update_weekly_challenge($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		if ($this->options->force && $this->options->all) {
+			WP_CLI::error("Cannot use the --force and --all options together.");
+		}
+
+		$results = array();
+		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level');
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id);
+			WP_CLI::debug("Customer $user_id...");
+			
+			$challenge = new CBWeeklyChallenge($customer, $this->options->date);
+			if ($challenge->user_has_joined) {
+				$challenge->fetch_user_progress();
+				if (!$this->options->pretend) {
+					$challenge->save_user_progress();
+				}
+			} else {
+				if (!$this->options->pretend && $this->options->force) {
+					$challenge->fetch_user_progress();
+					$challenge->save_user_progress();
+				}
+			}
+			$results[] = array(
+				'user_id' =>  $user_id,
+				'joined' =>  $challenge->user_has_joined ? 'true' : 'false',
+				'previous_metric_level' => $challenge->previous_metric_level,
+				'metric_level' => $challenge->metric_level,
+			);
+		}
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );
