@@ -39,7 +39,7 @@ class CBWeeklyChallenge {
 		$this->entry_closed = $date->copy()->endOfWeek()->subWeek();
 
 		$this->load_global();
-		$this->load_user_progress();
+		if ($this->customer) $this->load_user_progress();
 	}
 
 	private function _cache_key() {

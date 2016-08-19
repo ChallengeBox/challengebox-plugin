@@ -2615,7 +2615,7 @@ class CBCmd extends WP_CLI_Command {
 	 *   for that week, even if this date is partially through the week. Defaults to now.
 	 *
 	 * [--all]
-	 * : Work on all users. (Ignores <id>... if found).
+	 * : Work on all users *that have registered for this challenge*. (Ignores <id>... if found).
 	 *
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
@@ -2627,7 +2627,7 @@ class CBCmd extends WP_CLI_Command {
 	 * : Don't actually work, just print out what we'd do.
    *
 	 * [--force]
-	 * : Force given user to join challenge. Cannot use with --all.
+	 * : Force given user to join challenge. Only useful with <id> parameters.
 	 *
 	 * [--verbose]
 	 * : Print out extra information. (Use with --debug or you won't see anything)
@@ -2637,11 +2637,17 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb update_weekly_challenge 167
 	 */
 	function update_weekly_challenge($args, $assoc_args) {
-		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		if ($this->options->force && $this->options->all) {
-			WP_CLI::error("Cannot use the --force and --all options together.");
+		// Handle --all in a different way, meaning all relevant users
+		// (that have signed up for this challenge)
+		if (!empty($assoc_args['all'])) {
+			unset($assoc_args['all']);
+			$date = empty($assoc_args['date']) ? Carbon::now() : Carbon($assoc_args['date']);
+			$leaderboard = (new CBWeeklyChallenge(null, $date))->get_leaderboard();
+			foreach ($leaderboard as $index => $row) { $args[] = $row->user_id; }
 		}
+
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		$results = array();
 		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level');
