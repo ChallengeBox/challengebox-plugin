@@ -204,6 +204,9 @@ class CBWeeklyChallenge {
 		$customer = new CBCustomer(get_current_user_id());
 		$challenge = new CBWeeklyChallenge($customer, $date_in_week);
 		$challenge->fetch_user_progress();
+		if ($challenge->is_in_progress()) {
+			$challenge->save_user_progress(); // update here so the results show up in leaderboard
+		}																		// but don't bother for old challenges
 
 		// Use this to compare challenges, regardless of where we are in navigation
 		$present_week = new CBWeeklyChallenge($customer, Carbon::now($timezone));
@@ -294,19 +297,19 @@ HTML;
 
 		$result .= "<p>";
 		if ($challenge->is_upcoming()) {
-			$result .= $challenge->user_has_joined ? '<div class="label label-info">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
+			$result .= $challenge->user_has_joined ? '<div class="label label-success">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
 			$result .= "&nbsp; <span style=\"font-size: small;\">";
 			$result .= $challenge->user_has_joined ? "along with $participants others" : "but $participants people are";
 			$result .= ".</span>";
 		}
 		if ($challenge->is_in_progress()) {
-			$result .= $challenge->user_has_joined ? '<div class="label label-info">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
+			$result .= $challenge->user_has_joined ? '<div class="label label-success">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
 			$result .= "&nbsp; <span style=\"font-size: small;\">";
 			$result .= $challenge->user_has_joined ? "along with $participants others" : "but $participants people are";
 			$result .= ".</span>";
 		}
 		if ($challenge->is_over()) {
-			$result .= $challenge->user_has_joined ? '<div class="label label-info">You participated</div>' : '<div class="label label-danger">You did not participate</div>';
+			$result .= $challenge->user_has_joined ? '<div class="label label-success">You participated</div>' : '<div class="label label-danger">You did not participate</div>';
 			$result .= "&nbsp; <span style=\"font-size: small;\">";
 			$result .= $challenge->user_has_joined ? "along with $participants others" : "but $participants people did";
 			$result .= ".</span>";
@@ -397,7 +400,7 @@ HTML;
 			// Join button
 			if ($next->user_has_joined) {
 				$result .= "<p>";
-				$result .= $next->user_has_joined ? '<div class="label label-info">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
+				$result .= $next->user_has_joined ? '<div class="label label-success">You are participating</div>' : '<div class="label label-danger">You are not participating</div>';
 				$result .= "&nbsp; <span style=\"font-size: small;\">";
 				$result .= $next->user_has_joined ? "along with $next_participants others" : "but $next_participants people are";
 				$result .= ".</span>";

@@ -2632,6 +2632,17 @@ class CBCmd extends WP_CLI_Command {
 	 * [--verbose]
 	 * : Print out extra information. (Use with --debug or you won't see anything)
 	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb update_weekly_challenge 167
