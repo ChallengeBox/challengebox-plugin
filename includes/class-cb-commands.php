@@ -33,6 +33,7 @@ class CBCmd extends WP_CLI_Command {
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
+			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'credit' => !empty($assoc_args['credit']) ? intval($assoc_args['credit']) : 1,
 			'adjustment' => !empty($assoc_args['adjustment']) ? intval($assoc_args['adjustment']) : false,
@@ -45,6 +46,7 @@ class CBCmd extends WP_CLI_Command {
 			'bonus' => !empty($assoc_args['bonus']),
 			'save' => !empty($assoc_args['save']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
+			'channel' => !empty($assoc_args['channel']) ? $assoc_args['channel'] : '@ryan',
 		);
 
 		// Month option should be pegged to the first day
@@ -59,9 +61,8 @@ class CBCmd extends WP_CLI_Command {
 		$this->options->month->setTime(0, 0);
 
 		if (empty($assoc_args['renewal-cutoff'])) {
-			$this->options->renewal_cutoff = clone $this->options->month;
-			$this->options->renewal_cutoff->sub(new DateInterval("P1M"));
-			$this->options->renewal_cutoff->add(new DateInterval("P19D"));
+			$this->options->renewal_cutoff = Carbon::instance($this->options->month);
+			$this->options->renewal_cutoff->subMonth()->endOfMonth();
 		}
 
 		// All option triggers gathering user ids
@@ -83,9 +84,18 @@ class CBCmd extends WP_CLI_Command {
 			$args = array_reverse($args);
 		}
 
+		// Skip option affects incoming args
+		if ($this->options->skip) {
+			$args = array_slice($args, $this->options->skip);
+		}
+
 		// Limit option affects incoming args
 		if ($this->options->limit) {
 			$args = array_slice($args, 0, $this->options->limit);
+		}
+
+		if ($this->options->verbose) {
+			WP_CLI::debug(var_export($this->options, true));
 		}
 
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
@@ -354,7 +364,7 @@ class CBCmd extends WP_CLI_Command {
 		$user_day_override = isset($assoc_args['day']);
 
 		$results = array();
-		$columns = array('id', 'sub_id', 'type', 'action', 'reason', 'old_renewal', 'new_renewal', 'box_credit_renewal', 'renewal_day', 'credits', 'debits', 'box_this_month', 'next_box', 'errors');
+		$columns = array('id', 'sub_id', 'type', 'action', 'reason', 'old_renewal', 'new_renewal', 'box_credit_renewal', 'selected_renewal', 'renewal_day', 'credits', 'debits', 'box_this_month', 'next_box', 'errors');
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
@@ -427,6 +437,7 @@ class CBCmd extends WP_CLI_Command {
 						'old_renewal' => NULL,
 						'new_renewal' => NULL,
 						'box_credit_renewal' => NULL,
+						'selected_renewal' => NULL,
 						'renewal_day' => $renewal_day,
 						'credits' => $credits,
 						'debits' => $debits,
@@ -485,11 +496,19 @@ class CBCmd extends WP_CLI_Command {
 				// See if the box credit model thinks we should bill on a different date
 				//
 				$months_before_renewal = $credits - $debits + ($box_this_month ? 0 : -1);
-				$now = new Carbon();
+				$now = Carbon::now();
 				$box_credit_renewal = $new_renewal->copy()->year($now->year)->month($now->month)->addMonths($months_before_renewal);
 
+
+				// Adopt the box-credit model if it's sooner, but also still in the future
+				if ($box_credit_renewal->lte($new_renewal) && $box_credit_renewal->gt(Carbon::now())) {
+					$selected_renewal = $box_credit_renewal;
+				} else {
+					$selected_renewal = $new_renewal;
+				}
+
 				// Skip if old renewal happened already
-				if ($old_renewal < new Carbon()) {
+				if ($old_renewal->lte(Carbon::now())) {
 					WP_CLI::debug("\t\tOld renewal in the past. Skipping.");
 					$results[] = array(
 						'id' => $user_id,
@@ -500,6 +519,7 @@ class CBCmd extends WP_CLI_Command {
 						'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
 						'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
 						'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+						'selected_renewal' => $selected_renewal->format('Y-m-d H:i:s'),
 						'renewal_day' => $renewal_day,
 						'credits' => $credits,
 						'debits' => $debits,
@@ -510,9 +530,9 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				// Skip if new renewal is in the past
-				if ($new_renewal < new DateTime()) {
-					WP_CLI::debug("\t\tNew renewal in the past. Skipping.");
+				// Skip if selected renewal is in the past
+				if ($selected_renewal->lte(Carbon::now())) {
+					WP_CLI::debug("\t\tSelected renewal in the past. Skipping.");
 					$results[] = array(
 						'id' => $user_id,
 						'sub_id' => $sub->id,
@@ -522,6 +542,7 @@ class CBCmd extends WP_CLI_Command {
 						'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
 						'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
 						'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+						'selected_renewal' => $selected_renewal->format('Y-m-d H:i:s'),
 						'renewal_day' => $renewal_day,
 						'credits' => $credits,
 						'debits' => $debits,
@@ -532,14 +553,10 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				if ($this->options->verbose)
-					WP_CLI::debug(var_export(array('new' => $new_renewal, 'old' => $old_renewal), true));
-
-
 				WP_CLI::debug("\t\tExisting renewal is incorrect, adjusting.");
 				$new_sub = array(
 					'subscription' => array(
-						'next_payment_date' => CBWoo::format_DateTime_for_api($new_renewal)
+						'next_payment_date' => CBWoo::format_DateTime_for_api($selected_renewal)
 					)
 				);
 				if ($this->options->verbose)
@@ -556,6 +573,7 @@ class CBCmd extends WP_CLI_Command {
 					'reason' => $reason,
 					'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
 					'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
+					'selected_renewal' => $selected_renewal->format('Y-m-d H:i:s'),
 					'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
 					'renewal_day' => $renewal_day,
 					'credits' => $credits,
@@ -657,6 +675,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
 	 *
+	 * [--skip=<skip>]
+	 * : Skip this first <skip> users out of the list given.
+	 *
 	 * [--reverse]
 	 * : Iterate users in reverse order.
 	 *
@@ -732,6 +753,12 @@ class CBCmd extends WP_CLI_Command {
 
 			$latest_renewal = end($customer->get_subscription_orders());
 			$latest_renewal_date = CBWoo::parse_date_from_api($latest_renewal->created_at);
+
+			// XXX: Pretend: add one credit if sub is active, assuming it will renew
+			if ($this->options->pretend && $customer->has_renewing_subscription()) {
+				$credits += 1;
+				$latest_renewal_date = $this->options->renewal_cutoff->copy()->subHour();
+			}
 
 			$sub_id = $latest_renewal->id;
 			$udata = get_userdata($customer->get_user_id())->data;
@@ -888,7 +915,12 @@ class CBCmd extends WP_CLI_Command {
 				WP_CLI::debug("\tNext order: " . var_export($next_order, true));
 			}
 
-			if (!$this->options->pretend) {
+			if ($this->options->pretend) {
+				// Pretend: record which box we would generate
+				$customer->set_meta('next_box_sku', $new_sku);
+				$customer->set_meta('next_box_m', 'm'.($customer->estimate_box_month()+1));
+			} else {
+				// Real: actually generate the order
 				try {
 					$response = $this->api->create_order($next_order);
 					WP_CLI::debug("\tCreated new order");
@@ -896,6 +928,8 @@ class CBCmd extends WP_CLI_Command {
 						$oid = $response->order->id;
 						CB::post_to_slack("Rush order <https://www.getchallengebox.com/wp-admin/post.php?post=$oid&action=edit|#$oid> from *$name* &lt;$email&gt; (renewal <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> sku $new_sku)", 'rush-orders');
 					}
+					$customer->set_meta('next_box_sku', 'pending');
+					$customer->set_meta('next_box_m', 'pending');
 
 				} catch (Exception $e) {
 					$results[] = array(
@@ -928,6 +962,56 @@ class CBCmd extends WP_CLI_Command {
 		}
 		if (sizeof($results)) {
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Prints out a prediction of the orders this month. Relies on generate_orders --all --pretend
+	 * having been run prior to calling this.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--pretend]
+	 * : Don't print output ot slack.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--channel=<channel>]
+	 * : Post to the given slack <channel> or username.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb predict_orders 167
+	 */
+	function predict_orders( $args, $assoc_args ) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		if (!$this->options->pretend) {
+			$bot = new ChallengeBot();
+			$bot->post_predictions($this->options->channel);
 		}
 	}
 

@@ -417,6 +417,37 @@ class CBCustomer {
 	}
 
 	/**
+	 * Returns customer's WooCommerce subscriptions that are active.
+	 * If $as_of is set, it returns the subscriptions active as of that date.
+	 */
+	public function get_renewing_subscriptions($as_of = false) {
+		if ($as_of) {
+			return array_filter(
+				$this->get_subscriptions(),
+				function ($s) use ($as_of) {
+					$start = CBWoo::parse_date_from_api($s->billing_schedule->start_at);
+					$end = CBWoo::parse_date_from_api($s->billing_schedule->end_at);
+					if ($start && $end) {
+						return $as_of >= $start && $as_of < $end;
+					}
+					// Default to subscription status if we don't have an end date
+					if ($as_of >= $start) {
+						return 'active' == $s->status;
+					}
+				}
+			);
+		}
+		else {
+			return array_filter(
+				$this->get_subscriptions(),
+				function ($s) {
+					return 'active' == $s->status;
+				}
+			);
+		}
+	}
+
+	/**
 	 * Returns customer's WooCommerce subscriptions that are on hold.
 	 */
 	public function get_subscriptions_on_hold($as_of = false) {
@@ -584,6 +615,9 @@ class CBCustomer {
 	 */
 	public function has_active_subscription($as_of = false) {
 		return (bool) sizeof($this->get_active_subscriptions($as_of));
+	}
+	public function has_renewing_subscription($as_of = false) {
+		return (bool) sizeof($this->get_renewing_subscriptions($as_of));
 	}
 	/**
 	 * Returns true if the customer has a subscription on-hold.

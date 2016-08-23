@@ -78,6 +78,33 @@ class ChallengeBot {
 		}
 	}
 
+	public function post_simple_message($channel, $message) {
+			$response = $this->slack->execute('chat.postMessage', array(
+				'channel' => $channel, 'text' => $message,
+				'as_user' => true, 'token' => $this->token,
+			));
+			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
+				var_dump("posted response");
+			} else {
+				var_dump($response);
+			}	
+	}
+
+	public function post_predictions($channel) {
+		$predictions = CBWoo::get_order_predictions();
+		$rows = array();
+		foreach ($predictions as $row) {
+			$rows[] = "*$row->month* " . number_format($row->count);
+		}
+		$table = implode("\n", $rows);
+		$message = "Order prediction for next month's boxes:\n$table";
+		$this->post_simple_message($channel, $message);
+	}
+
+	public function command_predict($args, $text, $channel, $user, $ts, $team) {
+		$this->post_predictions($channel);
+	}
+
 	public function command_find($args, $text, $channel, $user, $ts, $team) {
 		$query = implode(' ', array_slice($args, 0, 3));
 		var_dump($args);

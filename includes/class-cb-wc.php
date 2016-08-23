@@ -686,6 +686,28 @@ class CBWoo {
 		return $dateTime->format('Y-m-d H:i:s');
 	}
 
+	public static function get_order_predictions() {
+		global $wpdb;
+		$data = $wpdb->get_results("
+			select 
+				count(meta_value) as count, meta_value as month
+			from $wpdb->usermeta
+			where
+				meta_key = 'next_box_m'
+			group by
+				meta_value
+			order by
+				meta_value
+			;
+		");
+		$total = 0;
+		foreach ($data as $row) {
+			$total += intval($row->count);
+		}
+		$data[] = (object) array('count' => $total, 'month' => 'total');
+		return $data;
+	}
+
 	/**
 	 * Grab churn data from the database and returns an object with two properties:
 	 *
