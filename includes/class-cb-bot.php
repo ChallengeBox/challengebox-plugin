@@ -4,6 +4,8 @@ use Frlnc\Slack\Http\SlackResponseFactory;
 use Frlnc\Slack\Http\CurlInteractor;
 use Frlnc\Slack\Core\Commander;
 
+class SlackError extends Exception {}
+
 /**
  * 
  */
@@ -25,6 +27,18 @@ class ChallengeBot {
 
 	}
 
+	private function handle_slack_response($response) {
+		if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
+			$this->debug("slack call successfull");
+		} else {
+			throw new SlackError(json_encode($response), $response->getStatusCode());
+		}
+	}
+
+	public function debug($thing) {
+		WP_CLI::debug(var_export($thing, true));
+	}
+
 	public function text_mentions_me($text) {
 		return preg_match('/' . preg_quote("<@$this->user>") . '/i', $text);
 	}
@@ -35,20 +49,20 @@ class ChallengeBot {
 		// If the text mentions me, process it as a command
 		if ($this->text_mentions_me($text)) {
 			//$clean = preg_replace("/[[:punct:]]+/", " ", $text);
-			//var_dump($clean);
+			//$this->debug($clean);
 			$email_preserved = preg_replace("/<mailto:[^|]+\|([^>]+)>/i", "$1", $text);
-			//var_dump($email_preserved);
+			//$this->debug($email_preserved);
 
 			$tokens = preg_split('#[[:punct:]]+|\s+#', $email_preserved, null, PREG_SPLIT_NO_EMPTY);
 			$raw_tokens = preg_split('#\s+#', $email_preserved, null, PREG_SPLIT_NO_EMPTY);
-			var_dump($tokens);
-			var_dump($raw_tokens);
+			$this->debug($tokens);
+			$this->debug($raw_tokens);
 			$after_me = array_slice($tokens, array_search("$this->user", $tokens) + 1);
 			$after_me_raw = array_slice($raw_tokens, array_search("$this->user", $tokens) + 1);
 
 			$command = current($after_me);
 			$args = array_slice($after_me_raw, 1);
-			var_dump(array(
+			$this->debug(array(
 				'command' => $command,
 				'args' => $args,
 			));
@@ -59,35 +73,25 @@ class ChallengeBot {
 				try {
 					$this->$command_func($args, $text, $channel, $user, $ts, $team);
 				} catch (Exception $e) {
-					var_dump($e);
+					$this->debug($e);
 				}
 			} else {
-				$response = $this->slack->execute('chat.postMessage', array(
+				$this->handle_slack_response($this->slack->execute('chat.postMessage', array(
 					'channel'   => $channel,
 					'text'      => ($command ? "I don't know how to `$command`." : "Hi!") . " Basically you can just ask me to `find PERSON`.",
 					'mrkdwn'    => true,
-				    'as_user'   => true,
-				    'token'     => $this->token,
-				));
-				if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
-					var_dump("posted response");
-				} else {
-					var_dump($response);
-				}	
+					'as_user'   => true,
+					'token'     => $this->token,
+				)));
 			}
 		}
 	}
 
 	public function post_simple_message($channel, $message) {
-			$response = $this->slack->execute('chat.postMessage', array(
+			$this->handle_slack_response($this->slack->execute('chat.postMessage', array(
 				'channel' => $channel, 'text' => $message,
 				'as_user' => true, 'token' => $this->token,
-			));
-			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
-				var_dump("posted response");
-			} else {
-				var_dump($response);
-			}	
+			)));
 	}
 
 	public function post_predictions($channel) {
@@ -107,10 +111,10 @@ class ChallengeBot {
 
 	public function command_find($args, $text, $channel, $user, $ts, $team) {
 		$query = implode(' ', array_slice($args, 0, 3));
-		var_dump($args);
+		$this->debug($args);
 		$guesser = new UserGuesser($query);
 		$guesses = array_filter($guesser->guess(), function($guess) { return $guess->rank; });
-		var_dump($guesses);
+		$this->debug($guesses);
 		if (sizeof($guesses)) {
 
 			$max_results = 5;
@@ -146,14 +150,12 @@ class ChallengeBot {
 				);
 			}
 
-			$response = $this->slack->execute('chat.postMessage', array(
+			$this->handle_slack_response($this->slack->execute('chat.postMessage', array(
 				'channel'   => $channel,
 				'attachments' => json_encode($attachments),
 				'as_user'   => true,
 				'token'     => $this->token,
-			));
-
-			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) { var_dump("posted response"); } else { var_dump($response); }	
+			)));
 
 			if (sizeof($guesses) > $max_results && $guesser->first_name_guess == $guesser->last_name_guess) {
 				$number_left = sizeof($guesses) - $max_results;
@@ -165,27 +167,21 @@ class ChallengeBot {
 					//'mrkdwn' => true,
 				);
 				*/
-				$response = $this->slack->execute('chat.postMessage', array(
+				$this->handle_slack_response($this->slack->execute('chat.postMessage', array(
 					'channel'   => $channel,
 					'text'      => $message,
 					'as_user'   => true,
 					'token'     => $this->token,
-				));
-				if ($response->getStatusCode() == 200 && $response->getBody()['ok']) { var_dump("posted response"); } else { var_dump($response); }	
+				)));
 			}
 		} else {
-			$response = $this->slack->execute('chat.postMessage', array(
+			$this->handle_slack_response($this->slack->execute('chat.postMessage', array(
 				'channel'   => $channel,
 				'text'      => "I couldn't find anybody. Maybe try alternate spellings or include an email?",
 				'mrkdwn'    => true,
 				'as_user'   => true,
 				'token'     => $this->token,
-			));
-			if ($response->getStatusCode() == 200 && $response->getBody()['ok']) {
-				var_dump("posted response");
-			} else {
-				var_dump($response);
-			}	
+			)));
 		}
 	}
 
@@ -199,18 +195,15 @@ class ChallengeBot {
 
 		$bot = $this;
 		$client->on('message', function ($data) use ($client, $bot) {
-			try {
-				var_dump($data);
-				if ($data['type']) {
-					$bot->process_message($data['text'], $data['channel'], $data['user'], $data['ts'], $data['team']);
-				}
-			} catch (Exception $e) {
-				var_dump($e);
+			$bot->debug($data);
+			if ($data['type']) {
+				$bot->process_message($data['text'], $data['channel'], $data['user'], $data['ts'], $data['team']);
 			}
 		});
 
-		$client->connect()->then(function () {
+		$client->connect()->then(function () use ($bot) {
 			echo "Connected!\n";
+			$bot->post_simple_message('@ryan', "I'm connected.");
 		});
 
 		$loop->run();
