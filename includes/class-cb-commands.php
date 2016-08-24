@@ -800,6 +800,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL, 
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'renewal_too_late');
+				$customer->set_meta('next_box_m', 'renewal_too_late_m'.($customer->estimate_box_month()+1));
 				continue;
 			}
 
@@ -816,6 +818,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL, 
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'no_credit');
+				$customer->set_meta('next_box_m', 'no_credit_m'.($customer->estimate_box_month()+1));
 				continue;
 			}
 
@@ -834,6 +838,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL, 
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'pending');
+				$customer->set_meta('next_box_m', 'already_generated_m'.($customer->estimate_box_month()+1));
 				continue;
 			} 
 			// XXX: Special case for next_box = '2016-07'
@@ -850,6 +856,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL, 
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'postponed');
+				$customer->set_meta('next_box_m', 'postponed_m'.($customer->estimate_box_month()+1));
 				continue;
 			}
 			// XXX: Special case for next_box = '2016-08'
@@ -866,6 +874,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL,
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'postponed');
+				$customer->set_meta('next_box_m', 'postponed_m'.($customer->estimate_box_month()+1));
 				continue;
 			}
 			// XXX: Special case for next_box = '2016-09'
@@ -882,6 +892,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => NULL,
 					'error' => NULL
 				);
+				$customer->set_meta('next_box_sku', 'postponed');
+				$customer->set_meta('next_box_m', 'postponed_m'.($customer->estimate_box_month()+1));
 				continue;
 			}
 
@@ -903,6 +915,8 @@ class CBCmd extends WP_CLI_Command {
 					'new_sku' => $new_sku, 
 					'error' => $e->getMessage()
 				);
+				$customer->set_meta('next_box_sku', $new_sku);
+				$customer->set_meta('next_box_m', 'missing_data_m'.($customer->estimate_box_month()+1));
 
 				if ($this->options->rush) {
 					CB::post_to_slack("- Missing data: <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> from *$name* &lt;$email&gt;. Partial sku: $new_sku", 'rush-orders');
@@ -929,7 +943,7 @@ class CBCmd extends WP_CLI_Command {
 						CB::post_to_slack("Rush order <https://www.getchallengebox.com/wp-admin/post.php?post=$oid&action=edit|#$oid> from *$name* &lt;$email&gt; (renewal <https://www.getchallengebox.com/wp-admin/post.php?post=$sub_id&action=edit|#$sub_id> sku $new_sku)", 'rush-orders');
 					}
 					$customer->set_meta('next_box_sku', 'pending');
-					$customer->set_meta('next_box_m', 'pending');
+					$customer->set_meta('next_box_m', 'already_generated_m'.($customer->estimate_box_month()+1));
 
 				} catch (Exception $e) {
 					$results[] = array(
@@ -943,6 +957,8 @@ class CBCmd extends WP_CLI_Command {
 						'new_sku' => $new_sku, 
 						'error' => $e->getMessage()
 					);
+					$customer->set_meta('next_box_sku', $new_sku);
+					$customer->set_meta('next_box_m', 'error_m'.($customer->estimate_box_month()+1));
 				}
 				if ($this->options->verbose) {
 					WP_CLI::debug("\tResponse: " . var_export($response, true));

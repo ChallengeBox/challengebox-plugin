@@ -96,13 +96,24 @@ class ChallengeBot {
 
 	public function post_predictions($channel) {
 		$predictions = CBWoo::get_order_predictions();
+
 		$rows = array();
+		$other_rows = array();
 		foreach ($predictions as $row) {
-			$rows[] = "*$row->month* " . number_format($row->count);
+			if (preg_match('/^(m\d|total)/', $row->name)) {
+				$rows[] = "*$row->name* " . number_format($row->count);
+			} else {
+				$other_rows[] = "*$row->name* " . number_format($row->count);
+			}
 		}
+
 		$table = implode("\n", $rows);
 		$message = "Order prediction for next month's boxes:\n$table";
 		$this->post_simple_message($channel, $message);
+
+		$other_table = implode("\n", $other_rows);
+		$other_message = "Other numbers:\n$other_table";
+		$this->post_simple_message($channel, $other_message);
 	}
 
 	public function command_predict($args, $text, $channel, $user, $ts, $team) {

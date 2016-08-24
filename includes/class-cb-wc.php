@@ -690,21 +690,27 @@ class CBWoo {
 		global $wpdb;
 		$data = $wpdb->get_results("
 			select 
-				count(meta_value) as count, meta_value as month
+				count(meta_value) as count, meta_value as name
 			from $wpdb->usermeta
 			where
 				meta_key = 'next_box_m'
 			group by
-				meta_value
+				name
 			order by
-				meta_value
+				name
 			;
 		");
-		$total = 0;
+		$box_total = 0;
+		$other_total = 0;
 		foreach ($data as $row) {
-			$total += intval($row->count);
+			if (preg_match('/^m\d/', $row->name)) {
+				$box_total += intval($row->count);
+			} else {
+				$other_total += intval($row->count);
+			}
 		}
-		$data[] = (object) array('count' => $total, 'month' => 'total');
+		$data[] = (object) array('count' => $box_total, 'name' => 'total');
+		$data[] = (object) array('count' => $other_total, 'name' => 'other_total');
 		return $data;
 	}
 
