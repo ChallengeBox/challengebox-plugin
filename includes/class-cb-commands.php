@@ -338,6 +338,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
 	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
 	 * [--pretend]
 	 * : Don't actually adjust dates, just print out what we'd do.
 	 *
@@ -410,6 +413,7 @@ class CBCmd extends WP_CLI_Command {
 					'old_renewal' => NULL,
 					'new_renewal' => NULL,
 					'box_credit_renewal' => NULL,
+					'selected_renewal' => NULL,
 					'renewal_day' => $renewal_day,
 					'credits' => $credits,
 					'debits' => $debits,
