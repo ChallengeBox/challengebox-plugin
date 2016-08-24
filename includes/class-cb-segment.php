@@ -9,7 +9,9 @@
  *
  * # Usage
  * $segment = new CBSegment();
- * $segment->identify(167);
+ * $customer = new CBCustomer(167);
+ * $segment->identify($customer);
+ * $segment->track($customer, 'Event Name', ['properties'=>'array', 'goes'=>'here']);
  */
 class CBSegment {
 
@@ -36,7 +38,6 @@ class CBSegment {
 	}
 
 	/**
-	 * Class to control server-side Segment.com integration for ChallengeBox
 	 * Pass it a CBCustomer instance.
 	 */
 	public function identify($customer, $pretend = false, $revenue = false) {
@@ -58,6 +59,23 @@ class CBSegment {
 
 		if ($this->active && !$pretend) {
 			Segment::identify($data);
+		}
+
+		return $data;
+	}
+
+	public function track($customer, $event_name, $properties = null, $pretend = false) {
+
+		if (!isset($properties)) $properties = array();
+
+		$data = array(
+			'userId' => $customer->get_user_id(),
+			'event' => $event_name,
+			'properties' => $properties,
+		);
+
+		if ($this->active && !$pretend) {
+			Segment::track($data);
 		}
 
 		return $data;
