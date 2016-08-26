@@ -254,6 +254,14 @@ class CB {
 		return $new_date;
 	}
 
+	public static function ordinal($number) {
+		$ends = array('th','st','nd','rd','th','th','th','th','th','th');
+		if ((($number % 100) >= 11) && (($number%100) <= 13))
+			return $number. 'th';
+		else
+			return $number. $ends[$number % 10];
+	}
+
 	/**
 	 * Provides WooCommerce Points event description if the event type is one of 'product-review' or
 	 * 'account-signup'

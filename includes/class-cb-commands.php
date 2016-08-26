@@ -26,7 +26,7 @@ class CBCmd extends WP_CLI_Command {
 			'force' => !empty($assoc_args['force']),
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
-			'date' => !empty($assoc_args['date']) ? new DateTime($assoc_args['date']) : new DateTime(),
+			'date' => !empty($assoc_args['date']) ? new Carbon($assoc_args['date']) : Carbon::now(),
 			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : (new DateTime())->format('d')),
 			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new DateTime($assoc_args['renewal-cutoff']) : new DateTime(),
 			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
@@ -2718,6 +2718,10 @@ class CBCmd extends WP_CLI_Command {
 	 * : Some date in the week of the challenge. Will still update using all of the data available
 	 *   for that week, even if this date is partially through the week. Defaults to now.
 	 *
+	 * [--settle]
+	 * : Settles last week's challenge and triggers emails. Should only be run once unless you're
+	 *   using the --pretend option.
+	 *
 	 * [--all]
 	 * : Work on all users *that have registered for this challenge*. (Ignores <id>... if found).
 	 *
@@ -2753,6 +2757,11 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function update_weekly_challenge($args, $assoc_args) {
 
+		// For --settle, make sure default date is last week's challenge
+		if (!empty($assoc_args['settle']) && empty($assoc_args['date'])) {
+			$assoc_args['date'] = Carbon::now()->subtractWeek()->format('Y-m-d');
+		}
+
 		// Handle --all in a different way, meaning all relevant users
 		// (that have signed up for this challenge)
 		if (!empty($assoc_args['all'])) {
@@ -2766,13 +2775,16 @@ class CBCmd extends WP_CLI_Command {
 
 		$results = array();
 		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level');
+		$joined_challenges = array();
 
+		// Update each customer's progress
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
 			WP_CLI::debug("Customer $user_id...");
 			
 			$challenge = new CBWeeklyChallenge($customer, $this->options->date);
 			if ($challenge->user_has_joined) {
+				$joined_challenges[] = $challenge;
 				$challenge->fetch_user_progress();
 				if (!$this->options->pretend) {
 					$challenge->save_user_progress();
@@ -2790,6 +2802,29 @@ class CBCmd extends WP_CLI_Command {
 				'metric_level' => $challenge->metric_level,
 			);
 		}
+
+		// For the --settle option, we calculate their leaderboard as well
+		// and generate the winners list.
+		if ($this->options->settle) {
+
+			$segment = new CBSegment();
+			$global_challenge = new CBWeeklyChallenge(null, $this->options->date);
+
+			foreach ($joined_challenges as $challenge) {
+				WP_CLI::debug("Settling customer " . $challenge->customer->get_user_id() . "...");
+
+				// Use the already cached copy of the leaderboard to avoid db calls
+				$challenge->get_leaderboard($global_challenge->get_leaderboard());
+
+				$event_params = array(
+					'leaderboard_html' => $challenge->render_leaderboard(),
+					'leaderboard_rank' => $challenge->get_rank(),
+				);
+			}
+
+			$segment->flush();
+		}
+
 		if (sizeof($results))
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}

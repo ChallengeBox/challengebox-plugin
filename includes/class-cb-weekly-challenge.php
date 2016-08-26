@@ -101,6 +101,14 @@ class CBWeeklyChallenge {
 		}
 	}
 
+	/**
+	 * Note: progress must be saved first for this to work properly!
+	 */
+	public function settle_challenge() {
+		if ($this->user_has_joined) {
+		}
+	}
+
 	public function get_previous() {
 		return new CBWeeklyChallenge($this->customer, $this->start->copy()->subWeek());
 	}
@@ -137,7 +145,10 @@ class CBWeeklyChallenge {
 		}
 	}
 
-	public function get_leaderboard() {
+	public function get_leaderboard($already_fetched_leaderboard = null) {
+		if ($already_fetched_leaderboard) {
+			$this->_leaderboard = $already_fetched_leaderboard;
+		}
 		if (!isset($this->_leaderboard)) {
 			global $wpdb;
 			$key = $this->_cache_key();
@@ -149,12 +160,20 @@ class CBWeeklyChallenge {
 				WHERE
 					meta_key = %s
 				ORDER BY
-					CAST(meta_value AS DECIMAL(10,2)) DESC
+					CAST(meta_value AS DECIMAL(10,2)) DESC, umeta_id DESC
 				;",
 				$this->_cache_key()
 			));
 		}
 		return $this->_leaderboard;
+	}
+
+	public function get_rank() {
+		foreach ($this->get_leaderboard() as $index => $row) {
+			$rank = $index + 1;
+			$is_me = $row->user_id == $this->customer->get_user_id();
+			if ($is_me) return $rank;
+		}
 	}
 
 	public static function get_state_name_from_abbr($abbr) {
@@ -233,8 +252,8 @@ HTML;
 					$extra = "";
 				}
 				return <<<HTML
-				<p>
-					<div class="alert alert-warning">
+				<div class="row">
+					<div class="col-md-12 alert alert-warning">
 						&nbsp; You have not joined this challenge yet!
 						<form method="post" style="display: inline;" action="?$query" class="form-horizontal">
 							<input type="hidden" name="join" value="1"></input>
@@ -242,7 +261,7 @@ HTML;
 						</form>
 						$extra
 					</div>
-				</p>
+				</div>
 HTML;
 			}
 		}
@@ -279,10 +298,56 @@ HTML;
 
 	}
 
+	public function apply_points() {
+		$rank = $this->get_rank();
+		$points = $this->points_for_rank($rank);
+		// WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'monthly-challenge', $month_start);
+		// XXX: TODO
+	}
+
+	public static function points_for_rank($rank) {
+		if (1 === $rank) return 510;
+		if (2 <= $rank && $rank <= 5) return 210;
+		if (6 <= $rank && $rank <= 25) return 110;
+		return 10;
+	}
+
+	public static function emoji_for_rank($rank) {
+		//return '🏅';
+		if (1 === $rank) return '🏆';
+		if (2 <= $rank && $rank <= 5) return '🏅';
+		if (6 <= $rank && $rank <= 25) return '🎖';
+		return '';
+	}
+
+	public function render_congrats() {
+		$result = "";
+		if ($this->user_has_joined && $this->is_over()) {
+			$rank = $this->get_rank();
+			$points = $this->points_for_rank($rank);
+			if ($points) {
+				$emoji = $this->emoji_for_rank($rank);
+				$ordinal = CB::ordinal($rank);
+				$nf_points = number_format($points);
+				$result .= <<<HTML
+				<div class="alert alert-success">
+					$emoji You placed $ordinal in this challenge and earned $nf_points challenge points.
+				</div>
+HTML;
+			}
+		}
+		return $result;
+	}
+
 	public function render_leaderboard() {
 
 		$result = "";
 		$leaderboard = $this->get_leaderboard();
+
+		function render_rank($rank) {
+			
+			return '&nbsp; #$rank';
+		}
 
 		if ($leaderboard) {
 
@@ -299,7 +364,7 @@ HTML;
 	
 			// Render table
 			foreach ($leaderboard as $index => $row) {
-				$near_top = $index < 3;
+				$near_top = $index < 30;
 				$near_bottom = (sizeof($leaderboard) - 1 - $index) < 3;
 				$near_me = abs($index - $my_index) < 2;
 
@@ -307,7 +372,7 @@ HTML;
 				if (!($near_top /*|| $near_bottom*/ || $near_me)) {
 					if (!$elips) {
 						$elips = true;
-						$result .= '<tr><td colspan=2> &hellip; </td></tr>';
+						$result .= '<tr><td style="text-align: center;" colspan=3> &hellip; </td></tr>';
 					}
 					continue;
 				} else {
@@ -323,27 +388,69 @@ HTML;
 
 				$result .= $is_me ? '<tr style="background-color: #d9edf7; border-color: #bce8f1; color: #31708f;">' : '<tr>';
 
-					$result .= '<td class="hidden-xs">';
+					// Desktop: #Rank -- First L. Sate
+					$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
 					$result .= "#$rank &nbsp;&mdash;&nbsp; ";
 					$result .= "<b>$name.</b> &nbsp; $state";
 					$result .= $is_me ? '&nbsp; <span class="label label-info">you</span>' : '';
+
 					$result .= '</td>';
 
-					$result .= '<td class="visible-xs">';
+					// Mobile: #Rank -- First L. ST
+					$result .= $is_me ? '<td style="background-color: #d9edf7;" class="visible-xs">' : '<td class="visible-xs">';
 					$result .= "#$rank &nbsp;&mdash;&nbsp; ";
 					$result .= "<b>$name.</b> &nbsp; $state_ab";
 					$result .= $is_me ? '&nbsp; <span class="label label-info">you</span>' : '';
 					$result .= '</td>';
 
+					// Steps
 					if ($this->is_upcoming()) {
-						$result .= '<td> &mdash; </td>';
+						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+						$result .= ' &mdash; </td>';
+					} elseif ($this->is_over()) {
+						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+						$result .= number_format($row->meta_value);
+						$result .= ' ';
+						$result .= explode('_', $this->metric)[0];
+						$result .= '</td>';
 					} else {
-						$result .= '<td>';
+						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
 						$result .= number_format($row->meta_value);
 						$result .= ' ';
 						$result .= explode('_', $this->metric)[0];
 						$result .= '</td>';
 					}
+
+					// Rank / Reward
+					if ($this->is_over()) {
+						$emoji = $this->emoji_for_rank($rank);
+						$points = $this->points_for_rank($rank);
+						if ($points) {
+							// Rank (Desktop)
+							$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
+							$result .= $emoji;
+							$result .= ' ' . CB::ordinal($rank) . ' place ';
+							$result .= ' &nbsp;&mdash;&nbsp; ';
+							$result .= number_format($this->points_for_rank($rank));
+							$result .= ' challenge points';
+							$result .= '</td>';
+
+							// Rank (Desktop)
+							$result .= $is_me ? '<td style="background-color: #d9edf7;" class="visible-xs">' : '<td class="visible-xs">';
+							$result .= $emoji;
+							$result .= number_format($this->points_for_rank($rank));
+							$result .= ' points';
+							$result .= '</td>';
+						} else {
+							$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+							$result .= '</td>';
+						}
+					} else {
+						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+						$result .= '</td>';
+					}
+
+
 
 				$result .= '</tr>';
 			}
@@ -359,9 +466,12 @@ HTML;
 		$clockid = uniqid("countdown_clock_");
 		return <<<HTML
 			<style>
-			#$clockid{
-				font-family: sans-serif;
+			#$clockid div {
 				color: #fff;
+			}
+
+			#$clockid {
+				font-family: sans-serif;
 				display: inline-block;
 				font-weight: 100;
 				text-align: center;
@@ -389,26 +499,26 @@ HTML;
 				font-size: 16px;
 			}
 			</style>
-			<p>
-			<div class="" id="$clockid">
-				<div>
-					<span class="days"></span>
-					<div class="smalltext">Days</div>
-				</div>
-				<div>
-					<span class="hours"></span>
-					<div class="smalltext">Hours</div>
-				</div>
-				<div>
-					<span class="minutes"></span>
-					<div class="smalltext">Minutes</div>
-				</div>
-				<div>
-					<span class="seconds"></span>
-					<div class="smalltext">Seconds</div>
+			<div class="row">
+				<div class="xcol-md-12" id="$clockid">
+					<div>
+						<span class="days"></span>
+						<div class="smalltext">Days</div>
+					</div>
+					<div>
+						<span class="hours"></span>
+						<div class="smalltext">Hours</div>
+					</div>
+					<div>
+						<span class="minutes"></span>
+						<div class="smalltext">Minutes</div>
+					</div>
+					<div>
+						<span class="seconds"></span>
+						<div class="smalltext">Seconds</div>
+					</div>
 				</div>
 			</div>
-			</p>
 			<script>
 			function getTimeRemaining(endtime) {
 				var t = Date.parse(endtime) - Date.parse(new Date());
@@ -455,25 +565,45 @@ HTML;
 			error_reporting(E_ALL);
 			ini_set('display_errors', true);
 		}
-		error_reporting(E_ALL);
-		ini_set('display_errors', true);
+
+		if (is_user_logged_in()) {}
+		else { return do_shortcode('[wppb-login]'); }
 
 		$result = "";
 
-		if (is_user_logged_in()) {}
-		else return $result;
-
 		$is_admin = current_user_can('shop_manager') || current_user_can('administrator');
+		$is_admin = $is_admin && isset($_GET['admin']);
+
+		$timezone = 'America/New_York';
 
 		// Figure out what date we have, otherwise use today
-		$timezone = 'America/New_York';
 		if (!empty($_GET['date'])) {
 			$date_in_week = Carbon::createFromFormat('Y-m-d', $_GET['date'], $timezone);
 		} else {
 			$date_in_week = Carbon::now($timezone);
 		}
 
-		// Lookup customer and challenge
+		$generic_challenge = new CBWeeklyChallenge(null, Carbon::now());
+		$earliest_date = new Carbon("2016-08-29", $timezone);
+		$latest_date = $generic_challenge->end->copy()->addWeek();
+
+		// Bail if date falls outside our range
+		$date_too_early = $date_in_week->lt($earliest_date);
+		if ($date_too_early && !$is_admin) {
+			wp_redirect('?' . http_build_query(array_merge($_GET, array(
+				'date' => $earliest_date->format('Y-m-d')
+			)))); 
+			exit;
+		}
+		$date_too_late = $date_in_week->gt($latest_date);
+		if ($date_too_late && !$is_admin) {
+			wp_redirect('?' . http_build_query(array_merge($_GET, array(
+				'date' => $latest_date->format('Y-m-d')
+			)))); 
+			exit;
+		}
+
+		// Lookup customer and challenges
 		$customer = new CBCustomer(get_current_user_id());
 		$challenge = new CBWeeklyChallenge($customer, $date_in_week);
 
@@ -490,12 +620,11 @@ HTML;
 			$challenge->save_user_progress();
 		}
 
+		// Fetch other challenges
 		$next = $challenge->get_next();
 		$prev = $challenge->get_previous();
-
-		$next_link = http_build_query(['date' => $next->start->format('Y-m-d')]);
-		$prev_link = http_build_query(['date' => $prev->start->format('Y-m-d')]);
-
+		$next_link = http_build_query(array_merge($_GET, ['date' => $next->start->format('Y-m-d')]));
+		$prev_link = http_build_query(array_merge($_GET, ['date' => $prev->start->format('Y-m-d')]));
 		$next_week_open = $next->entry_open->lte(Carbon::now());
 
 		// Use this upcoming variable to create the joing button and clock, regardless
@@ -511,32 +640,38 @@ HTML;
 		//
 		// Navigation
 		//
+		$prev_too_early = $prev->start->lt($earliest_date) || $prev->start->gt($latest_date);
+		$next_too_late = $next->start->gt($latest_date) || $next->start->lt($earliest_date);
+
 		$result .= <<<HTML
 		<nav class="challenge_nav" style="float: right; clear: both; margin-bottom: 10px;" aria-label="Challenge navigation">
 HTML;
 
 		// Previous (limit how far back it can go)
-		if ($prev->start->gt(new Carbon("2016-08-01"))) {
+		if (!$prev_too_early || $is_admin) {
+			$admin_only_text = $is_admin && $prev_too_early ? '<i style="color: purple;">(admin only)</i>' : '';
 			$result .= <<<HTML
 				<a href="?$prev_link" aria-label="Previous Week">
 					<span aria-hidden="true">&larr;</span>
-					Previous
+					Previous $admin_only_text
 				</a>
 HTML;
 		}
 
 		// Middle (current week)
-		$result .= '&nbsp; <b> ' . $challenge->format_relative_week() . '</b> &nbsp;';
+		$admin_only_text = ($date_too_early || $date_too_late) && $is_admin ? '<i style="color: purple;">(admin only)</i>' : '';
+		$result .= '&nbsp; <b> ' . $challenge->format_relative_week() . "</b> $admin_only_text &nbsp;";
 
 		// Next
 		if (
-			$next_week_open && (
+			($next_week_open && (
 				$next === $upcoming || $next->is_over() || $next->is_in_progress()
-			)
+			)) || $is_admin
 		) {
+			$admin_only_text = $is_admin && $next_too_late ? '<i style="color: purple;">(admin only)</i>' : '';
 			$result .= <<<HTML
 				<a href="?$next_link" aria-label="Next Week">
-					Next
+					Next $admin_only_text
 					<span aria-hidden="true">&rarr;</span>
 				</a>
 HTML;
@@ -545,7 +680,7 @@ HTML;
 
 
 		// Tease next week's challenge if appropriate
-		if ($next_week_open && !$next->user_has_joined) {
+		if ($challenge->is_in_progress() && $next_week_open && !$next->user_has_joined) {
 			$query = http_build_query(array_merge($_GET, array(
 					'date' => $next->start->format('Y-m-d'),
 			)));
@@ -562,19 +697,20 @@ HTML;
 
 		// Display current week's challenge
 		$result .= $challenge->render_header();
+		if ($challenge->is_upcoming()) $result .= $challenge->render_countdown_clock();
 		$result .= $challenge->render_join_status();
+		$result .= $challenge->render_congrats();
 		$result .= $challenge->render_leaderboard();
-		if ($challenge->is_upcoming()) {
-			$result .= $challenge->render_countdown_clock();
-		}
 
 		// Display upcoming Challenge, only if we're on the current week page
-		if (false && $next === $upcoming && $next_week_open) {
+		/*
+		if ($next === $upcoming && $next_week_open) {
 			$result .= $upcoming->render_header();
 			$result .= $upcoming->render_join_status();
 			// no leaderboarfd
 			$result .= $upcoming->render_countdown_clock();
 		}
+		*/
 
 		return $result;
 	}
