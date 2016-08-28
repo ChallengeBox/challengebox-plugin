@@ -2848,6 +2848,11 @@ class CBCmd extends WP_CLI_Command {
 				}
 			}
 
+			if (!$this->options->pretend) {
+				$global_challenge->settled = true;
+				$global_challenge->save_global();
+			}
+
 			$segment->flush();
 		}
 

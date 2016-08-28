@@ -22,6 +22,7 @@ class CBWeeklyChallenge {
 	public $metric;
 	public $title;
 	public $description;
+	public $settled;
 
 	public $user_has_joined;
 	public $previous_metric_level;
@@ -54,19 +55,22 @@ class CBWeeklyChallenge {
 			$this->metric = empty($data['metric']) ? null : $data['metric'];
 			$this->title = empty($data['title']) ? null : $data['title'];
 			$this->description = empty($data['description']) ? null : $data['description'];
+			$this->settled = empty($data['settled']) ? false : true;
 		} else {
 			$this->metric = 'steps_total';
 			$this->title = 'Total Steps';
 			$this->description = 'Compete for getting in the most steps in a week!';
+			$this->settled = false;
 		}
 	}
-	private function save_global() {
+	public function save_global() {
 		$data = update_option(
 			$this->_cache_key(),
 			array(
 				'metric' => $this->metric,
 				'title' => $this->title,
 				'description' => $this->description,
+				'settled' => $this->settled,
 			),
 			false
 		);
@@ -338,7 +342,7 @@ HTML;
 
 	public function render_congrats() {
 		$result = "";
-		if ($this->user_has_joined && $this->is_over()) {
+		if ($this->user_has_joined && $this->settled) {
 			$rank = $this->get_rank();
 			$points = $this->points_for_rank($rank);
 			if ($points) {
@@ -351,6 +355,12 @@ HTML;
 				</div>
 HTML;
 			}
+		} elseif ($this->is_over() && !$this->settled) {
+				$result .= <<<HTML
+					<div class="alert alert-info">
+						🕓 Sync your fitness tracker! We're compiling the data and will announce official winners on Monday morning.
+					</div>
+HTML;
 		}
 		return $result;
 	}
@@ -435,7 +445,7 @@ HTML;
 					}
 
 					// Rank / Reward
-					if ($this->is_over()) {
+					if ($this->is_over() && $this->settled) {
 						$emoji = $this->emoji_for_rank($rank);
 						$points = $this->points_for_rank($rank);
 						if ($points) {
