@@ -35,9 +35,9 @@ class CBWeeklyChallenge {
 		$date = Carbon::instance($date_in_week);
 
 		$this->start = $date->copy()->startOfWeek();
-		$this->end   = $date->copy()->endOfWeek();
+		$this->end   = $date->copy()->endOfWeek()->subDay();
 
-		$this->entry_open   = $date->copy()->startOfWeek()->subWeek()->addDays(2);
+		$this->entry_open   = $date->copy()->startOfWeek()->subWeek()->addDays(4);
 		$this->entry_closed = $date->copy()->endOfWeek()->subWeek();
 
 		$this->load_global();
@@ -98,14 +98,6 @@ class CBWeeklyChallenge {
 			$segment->track($this->customer, 'Joined Weekly Challenge', array(
 				'start_date' => $this->start->format('Y-m-d'),
 			));
-		}
-	}
-
-	/**
-	 * Note: progress must be saved first for this to work properly!
-	 */
-	public function settle_challenge() {
-		if ($this->user_has_joined) {
 		}
 	}
 
@@ -301,8 +293,32 @@ HTML;
 	public function apply_points() {
 		$rank = $this->get_rank();
 		$points = $this->points_for_rank($rank);
-		// WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'monthly-challenge', $month_start);
-		// XXX: TODO
+		$user_id = $this->customer->get_user_id();
+
+		$key = $this->_cache_key() . '_points';
+		$previous_points = intval($this->customer->get_meta($key));
+		$difference = $points - $previous_points;
+
+		$data = (object) array(
+			'week' => $this->start,
+			'rank' => $rank,
+		);
+
+		if ($difference > 0) {
+			WC_Points_Rewards_Manager::increase_points($user_id, $difference, 'weekly-challenge', $data);
+		} elseif ($difference < 0) {
+			WC_Points_Rewards_Manager::decrease_points($user_id, -$difference, 'weekly-challenge', $data);
+		}
+
+		$this->customer->set_meta($key, $points);
+
+		return $points;
+	}
+
+	public static function format_points_description($data) {
+		$emoji = CBWeeklyChallenge::emoji_for_rank($data->rank);
+		$ordinal = CB::ordinal($data->rank);
+		return "Weekly challenge: $emoji $ordinal place";
 	}
 
 	public static function points_for_rank($rank) {
@@ -339,15 +355,10 @@ HTML;
 		return $result;
 	}
 
-	public function render_leaderboard() {
+	public function render_leaderboard($email = false) {
 
 		$result = "";
 		$leaderboard = $this->get_leaderboard();
-
-		function render_rank($rank) {
-			
-			return '&nbsp; #$rank';
-		}
 
 		if ($leaderboard) {
 
@@ -388,13 +399,15 @@ HTML;
 
 				$result .= $is_me ? '<tr style="background-color: #d9edf7; border-color: #bce8f1; color: #31708f;">' : '<tr>';
 
-					// Desktop: #Rank -- First L. Sate
-					$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
-					$result .= "#$rank &nbsp;&mdash;&nbsp; ";
-					$result .= "<b>$name.</b> &nbsp; $state";
-					$result .= $is_me ? '&nbsp; <span class="label label-info">you</span>' : '';
+					if (!$email) {
+						// Desktop: #Rank -- First L. Sate
+						$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
+						$result .= "#$rank &nbsp;&mdash;&nbsp; ";
+						$result .= "<b>$name.</b> &nbsp; $state";
+						$result .= $is_me ? '&nbsp; <span class="label label-info">you</span>' : '';
 
-					$result .= '</td>';
+						$result .= '</td>';
+					}
 
 					// Mobile: #Rank -- First L. ST
 					$result .= $is_me ? '<td style="background-color: #d9edf7;" class="visible-xs">' : '<td class="visible-xs">';
@@ -426,16 +439,19 @@ HTML;
 						$emoji = $this->emoji_for_rank($rank);
 						$points = $this->points_for_rank($rank);
 						if ($points) {
-							// Rank (Desktop)
-							$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
-							$result .= $emoji;
-							$result .= ' ' . CB::ordinal($rank) . ' place ';
-							$result .= ' &nbsp;&mdash;&nbsp; ';
-							$result .= number_format($this->points_for_rank($rank));
-							$result .= ' challenge points';
-							$result .= '</td>';
 
-							// Rank (Desktop)
+							if (!$email) {
+								// Rank (Desktop)
+								$result .= $is_me ? '<td style="background-color: #d9edf7;" class="hidden-xs">' : '<td class="hidden-xs">';
+								$result .= $emoji;
+								$result .= ' ' . CB::ordinal($rank) . ' place ';
+								$result .= ' &nbsp;&mdash;&nbsp; ';
+								$result .= number_format($this->points_for_rank($rank));
+								$result .= ' challenge points';
+								$result .= '</td>';
+							}
+
+							// Rank (Mobile)
 							$result .= $is_me ? '<td style="background-color: #d9edf7;" class="visible-xs">' : '<td class="visible-xs">';
 							$result .= $emoji;
 							$result .= number_format($this->points_for_rank($rank));
@@ -585,7 +601,7 @@ HTML;
 
 		$generic_challenge = new CBWeeklyChallenge(null, Carbon::now());
 		$earliest_date = new Carbon("2016-08-29", $timezone);
-		$latest_date = $generic_challenge->end->copy()->addWeek();
+		$latest_date = $generic_challenge->end->copy()->endOfWeek()->addWeek();
 
 		// Bail if date falls outside our range
 		$date_too_early = $date_in_week->lt($earliest_date);
@@ -598,7 +614,7 @@ HTML;
 		$date_too_late = $date_in_week->gt($latest_date);
 		if ($date_too_late && !$is_admin) {
 			wp_redirect('?' . http_build_query(array_merge($_GET, array(
-				'date' => $latest_date->format('Y-m-d')
+				'date' => $generic_challenge->start->format('Y-m-d')
 			)))); 
 			exit;
 		}

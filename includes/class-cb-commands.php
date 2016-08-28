@@ -15,8 +15,11 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	private function parse_args($args, $assoc_args) {
+		$tz = !empty($assoc_args['timezone']) ? $assoc_args['timezone'] : 'America/New_York';
+		$now = Carbon::now($tz);
 		$this->options = (object) array(
 			'all' => !empty($assoc_args['all']),
+			'timezone' => $tz,
 			'orientation' => !empty($assoc_args['orientation']) ? $assoc_args['orientation'] : 'user',
 			'reverse' => !empty($assoc_args['reverse']),
 			'pretend' => !empty($assoc_args['pretend']),
@@ -26,10 +29,10 @@ class CBCmd extends WP_CLI_Command {
 			'force' => !empty($assoc_args['force']),
 			'skip' => !empty($assoc_args['skip']),
 			'format' => !empty($assoc_args['format']) ? $assoc_args['format'] : 'table',
-			'date' => !empty($assoc_args['date']) ? new Carbon($assoc_args['date']) : Carbon::now(),
-			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : (new DateTime())->format('d')),
-			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new DateTime($assoc_args['renewal-cutoff']) : new DateTime(),
-			'month' => !empty($assoc_args['month']) ? new DateTime($assoc_args['month']) : new DateTime(),
+			'date' => !empty($assoc_args['date']) ? new Carbon($assoc_args['date'], $tz) : $now,
+			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : $now->format('d')),
+			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new Carbon($assoc_args['renewal-cutoff'], $tz) : $now,
+			'month' => !empty($assoc_args['month']) ? new Carbon($assoc_args['month'], $tz) : $now,
 			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
@@ -40,6 +43,7 @@ class CBCmd extends WP_CLI_Command {
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
 			'segment' => !empty($assoc_args['segment']) ? $assoc_args['segment'] : false,
 			'flatten' => !empty($assoc_args['flatten']),
+			'settle' => !empty($assoc_args['settle']),
 			'rush' => !empty($assoc_args['rush']),
 			'auto' => !empty($assoc_args['auto']),
 			'revenue' => !empty($assoc_args['revenue']),
@@ -383,7 +387,7 @@ class CBCmd extends WP_CLI_Command {
 			} else {
 				// Spec: If the customer joined before July 1, the renewal day should
 				// be the 25th of the month.
-				if ($customer->earliest_subscription_date() < new DateTime("2016-07-01")) {
+				if ($customer->earliest_subscription_date() < new Carbon("2016-07-01")) {
 					$renewal_day = 25;
 				} else {
 					// Spec: If the customer joined on or after July 1, the renewal day
@@ -2756,17 +2760,18 @@ class CBCmd extends WP_CLI_Command {
 	 *     wp cb update_weekly_challenge 167
 	 */
 	function update_weekly_challenge($args, $assoc_args) {
+		$tz = $this->options->timezone;
 
 		// For --settle, make sure default date is last week's challenge
 		if (!empty($assoc_args['settle']) && empty($assoc_args['date'])) {
-			$assoc_args['date'] = Carbon::now()->subtractWeek()->format('Y-m-d');
+			$assoc_args['date'] = Carbon::now($tz)->subWeek()->format('Y-m-d');
 		}
 
 		// Handle --all in a different way, meaning all relevant users
 		// (that have signed up for this challenge)
 		if (!empty($assoc_args['all'])) {
 			unset($assoc_args['all']);
-			$date = empty($assoc_args['date']) ? Carbon::now() : Carbon($assoc_args['date']);
+			$date = empty($assoc_args['date']) ? Carbon::now($tz) : new Carbon($assoc_args['date'], $tz);
 			$leaderboard = (new CBWeeklyChallenge(null, $date))->get_leaderboard();
 			foreach ($leaderboard as $index => $row) { $args[] = $row->user_id; }
 		}
@@ -2777,21 +2782,28 @@ class CBCmd extends WP_CLI_Command {
 		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level');
 		$joined_challenges = array();
 
+		$global_challenge = new CBWeeklyChallenge(null, $this->options->date);
+		WP_CLI::debug("Challenge that starts $global_challenge->start and ends $global_challenge->end");
+
 		// Update each customer's progress
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id);
-			WP_CLI::debug("Customer $user_id...");
+			WP_CLI::debug("\tCustomer $user_id...");
 			
 			$challenge = new CBWeeklyChallenge($customer, $this->options->date);
 			if ($challenge->user_has_joined) {
 				$joined_challenges[] = $challenge;
+				WP_CLI::debug("\t\t-> fetching progress");
 				$challenge->fetch_user_progress();
 				if (!$this->options->pretend) {
+					WP_CLI::debug("\t\t-> saving progress");
 					$challenge->save_user_progress();
 				}
 			} else {
 				if (!$this->options->pretend && $this->options->force) {
+					WP_CLI::debug("\t\t-> fetching progress");
 					$challenge->fetch_user_progress();
+					WP_CLI::debug("\t\t-> saving progress");
 					$challenge->save_user_progress();
 				}
 			}
@@ -2805,21 +2817,35 @@ class CBCmd extends WP_CLI_Command {
 
 		// For the --settle option, we calculate their leaderboard as well
 		// and generate the winners list.
+		// NOTE: This relies on fetch_user_progress() and save_user_progress()
+		//       being called for each user above to generate a consistent
+		//       leaderboard.
 		if ($this->options->settle) {
 
 			$segment = new CBSegment();
-			$global_challenge = new CBWeeklyChallenge(null, $this->options->date);
 
 			foreach ($joined_challenges as $challenge) {
-				WP_CLI::debug("Settling customer " . $challenge->customer->get_user_id() . "...");
+				WP_CLI::debug("\tSettling customer " . $challenge->customer->get_user_id() . "...");
 
 				// Use the already cached copy of the leaderboard to avoid db calls
 				$challenge->get_leaderboard($global_challenge->get_leaderboard());
 
-				$event_params = array(
-					'leaderboard_html' => $challenge->render_leaderboard(),
-					'leaderboard_rank' => $challenge->get_rank(),
+				$rank = $challenge->get_rank();
+				$params = array(
+					'participants' => sizeof($challenge->get_leaderboard()),
+					'rank' => $rank,
+					'rank_ordinal' => CB::ordinal($rank),
+					'rank_emoji' => $challenge->emoji_for_rank($rank),
+					'rank_points' => $challenge->points_for_rank($rank),
+					'leaderboard_html' => $challenge->render_leaderboard(true),
 				);
+
+				if (!$this->options->pretend) {
+					WP_CLI::debug("\t\t-> applying points");
+					$challenge->apply_points();
+					WP_CLI::debug("\t\t-> sending analytics event");
+					$segment->track($challenge->customer, 'Completed Weekly Challenge', $params);
+				}
 			}
 
 			$segment->flush();

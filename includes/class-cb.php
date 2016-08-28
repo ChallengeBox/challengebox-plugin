@@ -268,14 +268,18 @@ class CB {
 	 */
 	public function add_points_event_descriptions( $event_description, $event_type, $event ) {
 		switch ( $event_type ) {
+			case 'weekly-challenge':
+				$event_description = CBWeeklyChallenge::format_points_description($event->data);
+				//$event_description = "";
+				break;
 			case 'monthly-challenge':
-				$event_description = sprintf('%s challenge.', $event->data->format('F'));
+				$event_description = sprintf('%s monthly challenge', $event->data->format('F'));
 				break;
 			case 'point-adjustment':
 				$event_description = sprintf('%s', $event->data);
 				break;
 			case 'double-points':
-				$event_description = sprintf('2x point bonus for %s challenge.', $event->data->format('F'));
+				$event_description = sprintf('2x point bonus for %s challenge', $event->data->format('F'));
 				break;
 		}
 		return $event_description;
