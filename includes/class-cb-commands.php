@@ -601,18 +601,6 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Prints out an estimate of what orders will need to be shipped.
-	 *
-	 * ## OPTIONS
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     wp cb shipping_estimate
-	 */
-	function shipping_estimate( $args, $assoc_args ) {
-	}
-
-	/**
 	 * Prints out customer data.
 	 *
 	 * ## OPTIONS
@@ -637,6 +625,29 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function order_statuses( $args, $assoc_args ) {
 		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_order_statuses(), true));
+	}
+
+	/**
+	 * Prints out product data.
+	 *
+	 * [<id_or_sku>...]
+	 * : Product IDs or skus for the products you want to examine..
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb product b1609_m1
+	 */
+	function product( $args, $assoc_args ) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$results = array();
+		foreach ($args as $id_or_sku) {
+		//	try {
+				$product = $this->api->get_product_by_sku(strval($id_or_sku));
+			//} catch (Exception $e) {
+		//		$product = $this->api->get_product($id_or_sku);
+		//	}
+			var_dump($product);
+		}
 	}
 
 	/**
@@ -912,7 +923,7 @@ class CBCmd extends WP_CLI_Command {
 			$new_sku = $customer->get_next_box_sku($this->options->month, $this->options->sku_version);
 			try {
 				$next_order = $customer->next_order_data(
-					$this->options->month, $this->options->date, $this->options->sku_version
+					$this->options->month, $this->options->date, false, $this->options->sku_version
 				);
 				WP_CLI::debug("\tWould use sku: " . $new_sku);
 			} catch (Exception $e) {
@@ -2065,7 +2076,6 @@ class CBCmd extends WP_CLI_Command {
 	 * ## EXAMPLES
 	 *
 	 *     wp cb product 8514
-	 */
 	function product( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $product_id) {
@@ -2076,6 +2086,7 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 	}
+	 */
 
 	/**
 	 * Prints out product attributes.
