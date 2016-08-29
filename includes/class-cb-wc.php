@@ -340,6 +340,12 @@ class CBWoo {
 					strtolower($clothing_gender)[0],
 					strtolower($tshirt_size),
 				));
+			case 'v3':
+				$sku = implode('_', array(
+					'b' . $ship_month->format('ym'),
+					'm' . $box_num,
+				));
+				return $sku;
 			default:
 				throw new Exception('Invalid sku version');
 		}
@@ -354,6 +360,7 @@ class CBWoo {
 	public static function parse_box_sku($sku) {
 		$exploded = explode('_', $sku);
 
+		// #livefit
 		if ('#livefit' == $exploded[0]) {
 			return (object) array(
 				'sku_version' => 'v0',
@@ -370,7 +377,7 @@ class CBWoo {
 			);
 		}
 
-		// Old version sku
+		// cb_m1_female_m
 		if ('cb' == $exploded[0]) {
 			switch (sizeof($exploded)) {
 				case 4: 
@@ -404,7 +411,7 @@ class CBWoo {
 			);
 		}
 
-		// New version single box sku
+		// sbox, sbox_f_m, etc. 
 		if ('sbox' == $exploded[0]) {
 			switch (sizeof($exploded)) {
 				case 1: 
@@ -444,15 +451,22 @@ class CBWoo {
 			);
 		}
 
-		// New version sku
+		// b1608_m1_f_m, b1608_m1, etc.
 		if ('b' === $exploded[0][0]) {
 			switch (sizeof($exploded)) {
+				case 2: 
+					list($ship_month, $box_raw) = $exploded;
+					$version = 'v3';
+					$gender = false; $size = false; $diet = false;
+					break;
 				case 4: 
 					list($ship_month, $box_raw, $gender, $size) = $exploded;
+					$version = 'v2';
 					$diet = false;
 					break;
 				case 5: 
 					list($ship_month, $box_raw, $gender, $size, $diet) = $exploded;
+					$version = 'v2';
 					$diet = true;
 					break;
 				default: 
@@ -461,12 +475,12 @@ class CBWoo {
 			if ('m' !== $box_raw[0])
 					throw new InvalidSku($sku . ': month field incorrect');
 			return (object) array(
-				'sku_version' => 'v2',
+				'sku_version' => $version,
 				'ship_raw' => $ship_month,
 				'box_number' => (int) substr($box_raw, 1),
 				'month' => (int) substr($box_raw, 1),
-				'gender' => strtolower($gender),
-				'size' => strtolower($size),
+				'gender' => $gender ? strtolower($gender) : NULL,
+				'size' => $size ? strtolower($size) : NULL,
 				'plan' => NULL,
 				'diet' => $diet,
 				'is_box' => true,
@@ -477,7 +491,7 @@ class CBWoo {
 			);
 		}
 
-		// New version single box sku
+		// Subscription skus
 		if ('subscription' == $exploded[0]) {
 			switch (sizeof($exploded)) {
 				case 2: list($subscription, $plan) = $exploded; break;

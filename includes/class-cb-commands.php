@@ -33,7 +33,7 @@ class CBCmd extends WP_CLI_Command {
 			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : $now->format('d')),
 			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new Carbon($assoc_args['renewal-cutoff'], $tz) : $now->copy(),
 			'month' => !empty($assoc_args['month']) ? new Carbon($assoc_args['month'], $tz) : $now->copy(),
-			'sku_version' => !empty($assoc_args['sku-version']) ? $assoc_args['sku-version'] : 'v1',
+			'sku_version' => !empty($assoc_args['sku_version']) ? $assoc_args['sku_version'] : 'v2',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
@@ -706,6 +706,9 @@ class CBCmd extends WP_CLI_Command {
 	 * : Last date on which a renewal can be and still have an order generated. Defaults to
 	 *   the 20th of the previous month to the month option.  
 	 *
+	 * [--sku_version=<sku_version>]
+	 * : Which sku version to use. Defaults to v2.
+	 *
 	 * [--pretend]
 	 * : Don't do anything, just print out what we would have done.
 	 *
@@ -906,10 +909,10 @@ class CBCmd extends WP_CLI_Command {
 				continue;
 			}
 
-			$new_sku = $customer->get_next_box_sku($this->options->month, $version='v2');
+			$new_sku = $customer->get_next_box_sku($this->options->month, $this->options->sku_version);
 			try {
 				$next_order = $customer->next_order_data(
-					$this->options->month, $this->options->date
+					$this->options->month, $this->options->date, $this->options->sku_version
 				);
 				WP_CLI::debug("\tWould use sku: " . $new_sku);
 			} catch (Exception $e) {

@@ -697,7 +697,7 @@ class CBCustomer {
 	/**
 	 * Generates the request data for the next order in the customer's sequence.
 	 */
-	public function next_order_data($ship_month, $date = false, $rush = false) {
+	public function next_order_data($ship_month, $date = false, $rush = false, $sku_version = 'v2') {
 		if (!$date) {
 			$date = new DateTime();
 		}
@@ -705,7 +705,7 @@ class CBCustomer {
 		if (!$subscription) {
 			$subscription = current($this->get_subscriptions($date));
 		}
-		$sku = $this->get_next_box_sku($ship_month, $version='v2');
+		$sku = $this->get_next_box_sku($ship_month, $sku_version);
 		$product = $this->api->get_product_by_sku($sku);
 		$order = array(
 			'status' => 'processing',
