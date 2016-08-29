@@ -2777,7 +2777,7 @@ class CBCmd extends WP_CLI_Command {
 			unset($assoc_args['all']);
 			$date = empty($assoc_args['date']) ? Carbon::now($tz) : new Carbon($assoc_args['date'], $tz);
 			$leaderboard = (new CBWeeklyChallenge(null, $date))->get_leaderboard();
-			foreach ($leaderboard as $index => $row) { $args[] = $row->user_id; }
+			foreach ($leaderboard as $index => $row) { $args[] = strval($row->user_id); }
 		}
 
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
@@ -2834,6 +2834,7 @@ class CBCmd extends WP_CLI_Command {
 				// Use the already cached copy of the leaderboard to avoid db calls
 				$challenge->get_leaderboard($global_challenge->get_leaderboard());
 
+				// Prepare analytics/email trigger data
 				$rank = $challenge->get_rank();
 				$params = array(
 					'participants' => sizeof($challenge->get_leaderboard()),
@@ -2844,14 +2845,16 @@ class CBCmd extends WP_CLI_Command {
 					'leaderboard_html' => $challenge->render_leaderboard(true),
 				);
 
-				if (!$this->options->pretend) {
+				// Apply points 
+				if (!$this->options->pretend && !$this->options->no_points) {
 					WP_CLI::debug("\t\t-> applying points");
-					if (!$this->options->no_points) {
-						$challenge->apply_points();
-					}
-					WP_CLI::debug("\t\t-> sending analytics event");
-					$segment->track($challenge->customer, 'Completed Weekly Challenge', $params);
+					$challenge->apply_points();
 				}
+
+				// Send analytics event
+				WP_CLI::debug("\t\t-> sending analytics event");
+				$segment->track($challenge->customer, 'Completed Weekly Challenge', $params, $this->options->pretend);
+				$segment->flush();
 			}
 
 			if (!$this->options->pretend) {
@@ -2859,7 +2862,6 @@ class CBCmd extends WP_CLI_Command {
 				$global_challenge->save_global();
 			}
 
-			$segment->flush();
 		}
 
 		if (sizeof($results))

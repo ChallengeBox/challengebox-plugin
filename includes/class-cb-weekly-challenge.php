@@ -641,7 +641,7 @@ HTML;
 
 		// If user is checking current challenge, update save progress here
 		$challenge->fetch_user_progress();
-		if ($challenge->is_in_progress()) {
+		if ($challenge->is_in_progress() && $challenge->user_has_joined) {
 			$challenge->save_user_progress();
 		}
 

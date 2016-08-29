@@ -53,7 +53,7 @@ class CBSegment {
 		));
 
 		$data = array(
-			'userId' => $user->ID,
+			'userId' => strval($user->ID),
 			'traits' => $traits
 		);
 
@@ -69,13 +69,13 @@ class CBSegment {
 		if (!isset($properties)) $properties = array();
 
 		$data = array(
-			'userId' => $customer->get_user_id(),
+			'userId' => strval($customer->get_user_id()),
 			'event' => $event_name,
 			'properties' => $properties,
 		);
 
 		if ($this->active && !$pretend) {
-			Segment::track($data);
+			$data['success'] = Segment::track($data);
 		}
 
 		return $data;
