@@ -33,7 +33,7 @@ class CBWeeklyChallenge {
 	public function __construct($customer, $date_in_week) {
 		$this->customer = $customer;
 
-		$date = Carbon::instance($date_in_week);
+		$date = new Carbon($date_in_week);
 
 		$this->start = $date->copy()->startOfWeek();
 		$this->end   = $date->copy()->endOfWeek()->subDay();
@@ -79,11 +79,11 @@ class CBWeeklyChallenge {
 	public function load_user_progress() {
 		$level = $this->customer->get_meta($this->_cache_key());
 		$this->previous_metric_level = isset($level) ? intval($level) : null;
-		$this->user_has_joined = isset($level);
+		$this->user_has_joined = isset($level) || $level === 0;
 	}
 	public function fetch_user_progress() {
 		$activity = $this->customer->fitbit()->get_cached_activity_data($this->start, $this->end);
-		$this->metric_level = $activity['metrics'][$this->metric];
+		$this->metric_level = max(1, $activity['metrics'][$this->metric]);
 	}
 	public function save_user_progress() {
 		$this->customer->set_meta($this->_cache_key(), $this->metric_level);
@@ -430,18 +430,17 @@ HTML;
 					if ($this->is_upcoming()) {
 						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
 						$result .= ' &mdash; </td>';
-					} elseif ($this->is_over()) {
-						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
-						$result .= number_format($row->meta_value);
-						$result .= ' ';
-						$result .= explode('_', $this->metric)[0];
-						$result .= '</td>';
 					} else {
-						$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
-						$result .= number_format($row->meta_value);
-						$result .= ' ';
-						$result .= explode('_', $this->metric)[0];
-						$result .= '</td>';
+						if ($row->meta_value <= 1) {
+							$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+							$result .= ' &mdash; </td>';
+						} else {
+							$result .= $is_me ? '<td style="background-color: #d9edf7;">' : '<td>';
+							$result .= number_format($row->meta_value);
+							$result .= ' ';
+							$result .= explode('_', $this->metric)[0];
+							$result .= '</td>';
+						}
 					}
 
 					// Rank / Reward
@@ -587,7 +586,7 @@ HTML;
 
 	public static function shortcode($atts, $content = "") {
 		$atts = shortcode_atts(array('debug' => false), $atts);
-		if ($a['debug']) {
+		if (isset($_GET['debug'])) {
 			error_reporting(E_ALL);
 			ini_set('display_errors', true);
 		}
