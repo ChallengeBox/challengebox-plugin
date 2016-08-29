@@ -38,6 +38,7 @@ class CBCmd extends WP_CLI_Command {
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
+			'no_points' => !empty($assoc_args['no_points']),
 			'credit' => !empty($assoc_args['credit']) ? intval($assoc_args['credit']) : 1,
 			'adjustment' => !empty($assoc_args['adjustment']) ? intval($assoc_args['adjustment']) : false,
 			'note' => !empty($assoc_args['note']) ? $assoc_args['note'] : false,
@@ -2738,6 +2739,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--pretend]
 	 * : Don't actually work, just print out what we'd do.
    *
+	 * [--no_points]
+	 * : Don't update users' points. Kinda like pretend, but for testing emails.t 
+	 *
 	 * [--force]
 	 * : Force given user to join challenge. Only useful with <id> parameters.
 	 *
@@ -2842,7 +2846,9 @@ class CBCmd extends WP_CLI_Command {
 
 				if (!$this->options->pretend) {
 					WP_CLI::debug("\t\t-> applying points");
-					$challenge->apply_points();
+					if (!$this->options->no_points) {
+						$challenge->apply_points();
+					}
 					WP_CLI::debug("\t\t-> sending analytics event");
 					$segment->track($challenge->customer, 'Completed Weekly Challenge', $params);
 				}
