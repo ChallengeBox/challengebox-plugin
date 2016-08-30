@@ -1,0 +1,9 @@
+allow from all
+AuthType Basic
+AuthName "Dev Login"
+AuthUserFile "/var/www/box/wp-content/plugins/challengebox/.htpasswd"
+Require valid-user
+
+#<Files /var/www/box/wp-content/plugins/challengebox/ops-logs/*/*/*/*/*>
+#	allow from all
+#</Files>

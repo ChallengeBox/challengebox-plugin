@@ -1,6 +1,10 @@
 #!/bin/bash
 set -ex
 URL=https://hooks.slack.com/services/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
+LOG_DIR=/var/www/box/wp-content/plugins/challengebox/ops-logs
+CMD_DIR=$(date +"%Y/%m/%d/%H:%M:%S_$RANDOM")
+LINK_BASE=https://www.getchallengebox.com/wp-content/plugins/challengebox/ops-logs
+mkdir -p $LOG_DIR/$CMD_DIR
 LOG=$(mktemp -t command_log_XXXX)
 tail -f $LOG &
 command="$@"
@@ -18,8 +22,16 @@ else
 fi
 PAYLOAD=$(mktemp -t deploy_slack_payload_XXXX)
 echo PAYLOAD=$PAYLOAD
-python -c "import json; file(\"$PAYLOAD\",'w+').write(json.dumps({'attachments':[{'color':\"$COLOR\",'text':file(\"$LOG\").read()}]}))"
+python -c "import json; file(\"$PAYLOAD\",'w+').write(json.dumps({'attachments':[{'color':\"$COLOR\",'text':'<$LINK_BASE/$CMD_DIR/log|download log>\n' + file(\"$LOG\").read(1024)}]}))"
 curl -X POST -H 'Content-type: application/json' --data @$PAYLOAD $URL
 echo
-rm $LOG $PAYLOAD
+# Save state
+echo $STATUS > $LOG_DIR/$CMD_DIR/status
+echo $VERB > $LOG_DIR/$CMD_DIR/verb
+echo $COLOR > $LOG_DIR/$CMD_DIR/color
+echo $command > $LOG_DIR/$CMD_DIR/command
+chmod 755 $LOG
+chmod 755 $PAYLOAD
+mv $LOG $LOG_DIR/$CMD_DIR/log
+mv $PAYLOAD $LOG_DIR/$CMD_DIR/payload
 curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$STATUS $VERB '$command'\"}" $URL
