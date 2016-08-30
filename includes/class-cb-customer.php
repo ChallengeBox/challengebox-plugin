@@ -641,8 +641,12 @@ class CBCustomer {
 	 * subscription is found.
 	 */
 	public function get_subscription_type($as_of = false) {
-		$sub = array_values($this->get_subscriptions($as_of))[0];
-		return CBWoo::extract_subscription_type($sub);
+		$subs = $this->get_subscriptions($as_of);
+		if (sizeof($subs)) {
+			$sub = array_values($subs)[0];
+			return CBWoo::extract_subscription_type($sub);
+		}
+		return false;
 	}
 
 	//

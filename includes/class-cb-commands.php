@@ -562,6 +562,29 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
+				// Skip if renewal date is correct already
+				if ($selected_renewal->isSameDay($old_renewal)) {
+					WP_CLI::debug("\t\tRenewal already correct.");
+					$results[] = array(
+						'id' => $user_id,
+						'sub_id' => $sub->id,
+						'type' => $customer->get_subscription_type(),
+						'action' => 'skip',
+						'reason' => 'date already correct',
+						'old_renewal' => $old_renewal->format('Y-m-d H:i:s'),
+						'new_renewal' => $new_renewal->format('Y-m-d H:i:s'),
+						'box_credit_renewal' => $box_credit_renewal->format('Y-m-d H:i:s'),
+						'selected_renewal' => $selected_renewal->format('Y-m-d H:i:s'),
+						'renewal_day' => $renewal_day,
+						'credits' => $credits,
+						'debits' => $debits,
+						'box_this_month' => $box_this_month,
+						'next_box' => $next_box,
+						'errors' => NULL,
+					);
+					continue;
+				}
+
 				WP_CLI::debug("\t\tExisting renewal is incorrect, adjusting.");
 				$new_sub = array(
 					'subscription' => array(
