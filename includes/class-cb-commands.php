@@ -33,7 +33,7 @@ class CBCmd extends WP_CLI_Command {
 			'day' => intval(!empty($assoc_args['day']) ? $assoc_args['day'] : $now->format('d')),
 			'renewal_cutoff' => !empty($assoc_args['renewal-cutoff']) ? new Carbon($assoc_args['renewal-cutoff'], $tz) : $now->copy(),
 			'month' => !empty($assoc_args['month']) ? new Carbon($assoc_args['month'], $tz) : $now->copy(),
-			'sku_version' => !empty($assoc_args['sku_version']) ? $assoc_args['sku_version'] : 'v2',
+			'sku_version' => !empty($assoc_args['sku_version']) ? $assoc_args['sku_version'] : 'v3',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
 			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
