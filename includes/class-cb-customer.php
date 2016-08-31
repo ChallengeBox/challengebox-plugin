@@ -11,6 +11,7 @@ class CBCustomer {
 	private $user_id;
 	private $api;
 	private $fitbit;
+	private $interactive;
 	private $orders;
 	private $subscriptions;
 	private $metadata;
@@ -40,15 +41,16 @@ class CBCustomer {
 	 * $customer->get_meta('tshirt_size');     // no api calls, uses cached metadata from last get_meta()
 	 *
 	 */
-	public function __construct($user_id) {
+	public function __construct($user_id, $interactive = true) {
 		$this->user_id = 0 + $user_id;
 		$this->api = new CBWoo();
 		$this->challenges = new CBChallenges($this);
+		$this->interactive = $interactive;
 	}
 
 	public function fitbit() {
 		if (!isset($this->fitbit)) {
-			$this->fitbit = new CBFitbitAPI($this->user_id);
+			$this->fitbit = new CBFitbitAPI($this->user_id, $this->interactive);
 		}
 		return $this->fitbit;
 	}

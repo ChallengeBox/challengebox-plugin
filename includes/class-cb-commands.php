@@ -156,7 +156,7 @@ class CBCmd extends WP_CLI_Command {
 
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			$data = $segment->identify($customer, $this->options->pretend, $this->options->revenue);
 			$result = array_merge(array('id' => $user_id), $data['traits']);
 			array_push($results, $result);
@@ -222,7 +222,7 @@ class CBCmd extends WP_CLI_Command {
 		foreach ($args as $user_id) {
 
 			WP_CLI::debug("User $user_id");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 
 			if ($this->options->skip && $customer->get_meta('active_subscriber')) {
 				WP_CLI::debug("\tSkipping, already an active subscriber.");
@@ -375,7 +375,7 @@ class CBCmd extends WP_CLI_Command {
 		$columns = array('id', 'sub_id', 'type', 'action', 'reason', 'old_renewal', 'new_renewal', 'box_credit_renewal', 'selected_renewal', 'renewal_day', 'credits', 'debits', 'box_this_month', 'next_box', 'errors');
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			$next_box = $customer->get_meta('next_box');
 
 			WP_CLI::debug("Synchronizing $user_id");
@@ -777,7 +777,7 @@ class CBCmd extends WP_CLI_Command {
 		$date_string = CBWoo::format_DateTime_for_api($this->options->date);
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 
 			$skus = array();
@@ -1111,7 +1111,7 @@ class CBCmd extends WP_CLI_Command {
 
 		$results = array();
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 			$any_order_cancelled = CB::any(array_filter(
 				$customer->get_orders(),
@@ -1150,7 +1150,7 @@ class CBCmd extends WP_CLI_Command {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 			if (false !== $this->options->credit) {
 				$customer->set_meta('extra_box_credits', $this->options->credit);
@@ -1263,7 +1263,7 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function orders( $args, $assoc_args ) {
 		list( $user_id ) = $args;
-		$customer = new CBCustomer($user_id);
+		$customer = new CBCustomer($user_id, $interactive = false);
 		WP_CLI::line(var_export($customer->get_orders(), true));
 	}
 
@@ -1281,7 +1281,7 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function box_orders( $args, $assoc_args ) {
 		list( $user_id ) = $args;
-		$customer = new CBCustomer($user_id);
+		$customer = new CBCustomer($user_id, $interactive = false);
 		WP_CLI::line(var_export($customer->get_box_orders(), true));
 	}
 
@@ -1325,7 +1325,7 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function subscriptions( $args, $assoc_args ) {
 		list( $user_id ) = $args;
-		$customer = new CBCustomer($user_id);
+		$customer = new CBCustomer($user_id, $interactive = false);
 		WP_CLI::line(var_export($customer->get_subscriptions(), true));
 	}
 
@@ -1350,7 +1350,7 @@ class CBCmd extends WP_CLI_Command {
 	function clear_fitbit_month_cache( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		list( $user_id, $year_month ) = $args;
-		$customer = new CBCustomer($user_id);
+		$customer = new CBCustomer($user_id, $interactive = false);
 		$month_start = new DateTime($year_month);
 		$month_start->setTime(0,0);
 		$month_end = clone $month_start; $month_end->modify('last day of');
@@ -1424,7 +1424,7 @@ class CBCmd extends WP_CLI_Command {
 
 			try {
 				WP_CLI::debug("User $user_id.");
-				$customer = new CBCustomer($user_id);
+				$customer = new CBCustomer($user_id, $interactive = false);
 				$registered = new DateTime(get_userdata($user_id)->user_registered);
 				if ($registered > $month_end) {
 					WP_CLI::debug("\tSkipping, user registered after month end.");
@@ -1540,7 +1540,7 @@ class CBCmd extends WP_CLI_Command {
 
 			try {
 				WP_CLI::debug("User $user_id.");
-				$customer = new CBCustomer($user_id);
+				$customer = new CBCustomer($user_id, $interactive = false);
 				$before_total = WC_Points_Rewards_Manager::get_users_points($user_id);
 				$points = $customer->get_meta($points_key, 0);
 				$points_applied = $customer->get_meta($points_applied_key, 0);
@@ -1661,7 +1661,7 @@ class CBCmd extends WP_CLI_Command {
 
 			try {
 				WP_CLI::debug("User $user_id.");
-				$customer = new CBCustomer($user_id);
+				$customer = new CBCustomer($user_id, $interactive = false);
 				$before_total = WC_Points_Rewards_Manager::get_users_points($user_id);
 
 				if ($points >= 0) {
@@ -1754,7 +1754,7 @@ class CBCmd extends WP_CLI_Command {
 
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			if (! $this->options->pretend) {
 				WP_CLI::debug("\tSetting special_segment to $segment_name.");
 				$customer->set_meta('special_segment', $segment_name);
@@ -1827,7 +1827,7 @@ class CBCmd extends WP_CLI_Command {
 
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			$data = $customer->fitbit()->getTimeSeries($series, $month_start, $month_end);
 			// Turn keys into strings
 			$data = array_combine(array_map(function ($s) { return 'd' . $s; }, array_keys($data)), $data);
@@ -1874,7 +1874,7 @@ class CBCmd extends WP_CLI_Command {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			$data = $customer->challenges->get_month_activity($this->options->date);
 
 			$results = array();
@@ -1937,7 +1937,7 @@ class CBCmd extends WP_CLI_Command {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			//var_dump($customer->challenges->get_raw_challenges_for_month($this->options->date));
 			var_dump($customer->challenges->get_ordered_challenges_for_month($this->options->date));
 		}
@@ -2164,7 +2164,7 @@ class CBCmd extends WP_CLI_Command {
 		$columns = array('user_id', 'sub_id', 'current_sku', 'new_sku', 'error');
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("Synchronizing $user_id");
 
 			if (sizeof($customer->get_subscriptions()) == 0) {
@@ -2296,7 +2296,7 @@ class CBCmd extends WP_CLI_Command {
 		*/
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 
 			foreach ($customer->get_subscription_orders() as $order) {
@@ -2368,7 +2368,7 @@ class CBCmd extends WP_CLI_Command {
 		);
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 
 			$skus = array();
@@ -2481,7 +2481,7 @@ class CBCmd extends WP_CLI_Command {
 		);
 
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
 			WP_CLI::debug("User $user_id");
 
 			$latest_renewal = end($customer->get_subscription_orders());
@@ -2820,7 +2820,7 @@ class CBCmd extends WP_CLI_Command {
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		$results = array();
-		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level');
+		$columns = array('user_id', 'joined', 'previous_metric_level', 'metric_level', 'error');
 		$joined_challenges = array();
 
 		$global_challenge = new CBWeeklyChallenge(null, $this->options->date);
@@ -2828,32 +2828,43 @@ class CBCmd extends WP_CLI_Command {
 
 		// Update each customer's progress
 		foreach ($args as $user_id) {
-			$customer = new CBCustomer($user_id);
+			$customer = new CBCustomer($user_id, $interactive = false);
+			$challenge = new CBWeeklyChallenge($customer, $this->options->date);
 			WP_CLI::debug("\tCustomer $user_id...");
 			
-			$challenge = new CBWeeklyChallenge($customer, $this->options->date);
-			if ($challenge->user_has_joined) {
-				$joined_challenges[] = $challenge;
-				WP_CLI::debug("\t\t-> fetching progress");
-				$challenge->fetch_user_progress();
-				if (!$this->options->pretend) {
-					WP_CLI::debug("\t\t-> saving progress");
-					$challenge->save_user_progress();
-				}
-			} else {
-				if (!$this->options->pretend && $this->options->force) {
+			try {
+				if ($challenge->user_has_joined) {
+					$joined_challenges[] = $challenge;
 					WP_CLI::debug("\t\t-> fetching progress");
 					$challenge->fetch_user_progress();
-					WP_CLI::debug("\t\t-> saving progress");
-					$challenge->save_user_progress();
+					if (!$this->options->pretend) {
+						WP_CLI::debug("\t\t-> saving progress");
+						$challenge->save_user_progress();
+					}
+				} else {
+					if (!$this->options->pretend && $this->options->force) {
+						WP_CLI::debug("\t\t-> fetching progress");
+						$challenge->fetch_user_progress();
+						WP_CLI::debug("\t\t-> saving progress");
+						$challenge->save_user_progress();
+					}
 				}
+				$results[] = array(
+					'user_id' =>  $user_id,
+					'joined' =>  $challenge->user_has_joined ? 'true' : 'false',
+					'previous_metric_level' => $challenge->previous_metric_level,
+					'metric_level' => $challenge->metric_level,
+					'error' => null,
+				);
+			} catch (FitbitNeedsAuth $e) {
+				$results[] = array(
+					'user_id' =>  $user_id,
+					'joined' =>  $challenge->user_has_joined ? 'true' : 'false',
+					'previous_metric_level' => $challenge->previous_metric_level,
+					'metric_level' => $challenge->metric_level,
+					'error' => $e->getMessage(),
+				);
 			}
-			$results[] = array(
-				'user_id' =>  $user_id,
-				'joined' =>  $challenge->user_has_joined ? 'true' : 'false',
-				'previous_metric_level' => $challenge->previous_metric_level,
-				'metric_level' => $challenge->metric_level,
-			);
 		}
 
 		// For the --settle option, we calculate their leaderboard as well

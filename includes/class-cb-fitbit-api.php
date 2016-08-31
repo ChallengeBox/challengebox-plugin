@@ -18,6 +18,8 @@ use djchen\OAuth2\Client\Provider\Fitbit;
  * @package challengebox
  */
 
+class FitbitNeedsAuth extends Exception {}
+
 class CBFitbitAPI {
 
 	private $user_id;
@@ -303,7 +305,11 @@ class CBFitbitAPI {
 	 */
 	private function maybe_authenticate_user() {
 		if ($this->is_authenticated()) return;
-		if ($this->interactive) $this->authenticate_user();
+		if ($this->interactive) {
+			$this->authenticate_user();
+		} else {
+			throw new FitbitNeedsAuth("Fitbit for user $this->user_id not authenticated");
+		}
 	}
 	/**
 	 * Forces the user to authenticate.
