@@ -22,7 +22,7 @@ else
 fi
 PAYLOAD=$(mktemp -t deploy_slack_payload_XXXX)
 echo PAYLOAD=$PAYLOAD
-python -c "import json; file(\"$PAYLOAD\",'w+').write(json.dumps({'attachments':[{'color':\"$COLOR\",'text':'<$LINK_BASE/$CMD_DIR/log|download log>\n' + file(\"$LOG\").read(1024)}]}))"
+python -c "import json; log=file(\"$LOG\"); file(\"$PAYLOAD\",'w+').write(json.dumps({'attachments':[{'color':\"$COLOR\",'text':log.read(1024) + (\"...\n<$LINK_BASE/$CMD_DIR/log|download log>\" if log.read(1) else \"\")}]}))"
 curl -X POST -H 'Content-type: application/json' --data @$PAYLOAD $URL
 echo
 # Save state
