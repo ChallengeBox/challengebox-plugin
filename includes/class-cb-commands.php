@@ -1954,6 +1954,9 @@ class CBCmd extends WP_CLI_Command {
 	 * [--date=<date>]
 	 * : The month to check (can be any day in month). Defaults to current month.
 	 *
+	 * [--pretend]
+	 * : Don't actually save any data.
+	 *
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
@@ -1979,8 +1982,8 @@ class CBCmd extends WP_CLI_Command {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
-			var_dump($customer->challenges->calculate_personal_bests($this->options->date));
+			$customer = new CBCustomer($user_id, $interactive = false);
+			var_dump($customer->challenges->calculate_personal_bests($this->options->date, $this->options->pretend));
 		}
 	}
 
@@ -1994,6 +1997,9 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * [--date=<date>]
 	 * : The date to check (can be any day in month). Defaults to current day.
+	 *
+	 * [--pretend]
+	 * : Don't actually save any data.
 	 *
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
@@ -2020,8 +2026,8 @@ class CBCmd extends WP_CLI_Command {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id.");
-			$customer = new CBCustomer($user_id);
-			var_dump($customer->challenges->calculate_month_points($this->options->date));
+			$customer = new CBCustomer($user_id, $interactive = false);
+			var_dump($customer->challenges->calculate_month_points($this->options->date, $this->options->pretend));
 		}
 	}
 
@@ -2661,6 +2667,20 @@ class CBCmd extends WP_CLI_Command {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		$bot = new ChallengeBot();
 		$bot->run();
+	}
+
+	/**
+	 * Tests ABSPATH
+	 *
+	 * ## OPTIONS
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb test
+	 */
+	function test( $args, $assoc_args ) {
+		var_dump(defined('ABSPATH'));
+		var_dump(defined('WPINC'));
 	}
 
 	/**

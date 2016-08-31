@@ -102,13 +102,13 @@ class CBChallenges {
 	/**
 	 * Calculates points in a month so far and records them. This uses most of the other systems in this class.
 	 */
-	public function calculate_month_points($date_in_month) {
+	public function calculate_month_points($date_in_month, $pretend = false) {
 
 		$d = $this->parse_month($date_in_month);
 		$fitness_goal = $this->customer->get_meta('fitness_goal1', 'weight_loss');
 		$ordered_goals = $this->get_ordered_challenges_for_month($date_in_month);
 		$data = $this->get_month_activity($date_in_month);
-		$bests = $this->calculate_personal_bests($date_in_month);
+		$bests = $this->calculate_personal_bests($date_in_month, $pretend);
 
 		$personal_goals = array_slice($ordered_goals[$fitness_goal], 0, 2);
 		$personal_goals_completed = $personal_goals[0]['analysis']->completed && $personal_goals[1]['analysis']->completed;
@@ -119,11 +119,11 @@ class CBChallenges {
 
 		$personal_best_completed = count($bests->bests_this_month) > 0;
 
-		if ($personal_goals_completed) $this->record_points('personal-goals', 40, $d->start);
-		if ($consistency_goal->completed) $this->record_points('consistency-goal', 30, $d->start);
-		if ($personal_best_completed) $this->record_points('personal-best', 20, $d->start);
-		if ($steps_goal->completed) $this->record_points('steps-goal', 5, $d->start);
-		if ($logging_goal->completed) $this->record_points('logging-goal', 5, $d->start);
+		if ($personal_goals_completed) $this->record_points('personal-goals', 40, $d->start, $pretend);
+		if ($consistency_goal->completed) $this->record_points('consistency-goal', 30, $d->start, $pretend);
+		if ($personal_best_completed) $this->record_points('personal-best', 20, $d->start, $pretend);
+		if ($steps_goal->completed) $this->record_points('steps-goal', 5, $d->start, $pretend);
+		if ($logging_goal->completed) $this->record_points('logging-goal', 5, $d->start, $pretend);
 
 		return (object) array(
 			'fitness_goal' => $fitness_goal,
@@ -148,24 +148,32 @@ class CBChallenges {
 	public function get_total_points() {
 		return 0 + $this->customer->get_meta($this->_point_total_key(), 0);
 	}
-	public function record_points($point_key, $point_amount, $date_in_month) {
+	public function record_points($point_key, $point_amount, $date_in_month, $pretend = false) {
 
 		// Write new points
 		$current_points = $this->get_points($point_key, $date_in_month);
 		$difference = $point_amount - $current_points;
 		$new_points = $current_points + $difference;
-		$this->customer->set_meta($this->_point_detail_key($point_key, $date_in_month), $new_points);
+		if (!$pretend) $this->customer->set_meta($this->_point_detail_key($point_key, $date_in_month), $new_points);
 
 		// Write new month points
 		$current_month_points = $this->get_month_points($date_in_month);
 		$new_month_points = $current_month_points + $difference;
-		$this->customer->set_meta($this->_point_month_key($date_in_month), $new_month_points);
+		if (!$pretend) $this->customer->set_meta($this->_point_month_key($date_in_month), $new_month_points);
 
 		// Write new total points
 		$current_total_points = $this->get_total_points();
 		$new_total_points = $current_total_points + $difference;
-		$this->customer->set_meta($this->_point_total_key(), $new_total_points);
+		if (!$pretend) $this->customer->set_meta($this->_point_total_key(), $new_total_points);
 
+		return (object) array(
+			'previous_points' => $current_points,
+			'new_points' => $new_points,
+			'previous_month_points' => $current_month_points,
+			'new_month_points' => $new_month_points,
+			'previous_total_points' => $current_total_points,
+			'new_total_points' => $new_total_points,
+		);
 		/*
 			 var_dump(array(
 			 'month_string'=>$month_string,
@@ -243,19 +251,19 @@ class CBChallenges {
 	 *                         // otherwise false
 	 * );
 	 */
-	public function update_personal_best($key, $value, $date = null) {
+	public function update_personal_best($key, $value, $date = null, $pretend = false) {
 		if (null === $date) $date = new DateTime();
 		// Returns false if no personal best was achieved, or an object containing
 		// the personal best and previous best if a personal best was achieved.
 		$previous_best = $this->get_personal_best($key, $date);
 		if ($previous_best) {
 			if ($value > $previous_best->value)
-				$new_best = $this->set_personal_best($key, $value, $date, $previous_best->value, $previous_best->date);
+				$new_best = $this->set_personal_best($key, $value, $date, $previous_best->value, $previous_best->date, $pretend);
 			else
 				$new_best = false;
 		}
 		else {
-			$new_best = $this->set_personal_best($key, $value, $date, false, false);
+			$new_best = $this->set_personal_best($key, $value, $date, false, false, $pretend);
 		}
 		return (object) array(
 			'previous_best' => $previous_best,
@@ -267,7 +275,7 @@ class CBChallenges {
 	 * Calculate personal bests.
 	 *
 	 */
-	public function calculate_personal_bests($date_in_month) {
+	public function calculate_personal_bests($date_in_month, $pretend = false) {
 		$d = $this->parse_month($date_in_month);
 		$data = $this->get_month_activity($date_in_month);
 
@@ -293,7 +301,7 @@ class CBChallenges {
 		$bests_this_month = array();
 		$previous_bests = array();
 		foreach ($best_metrics as $metric => $entry) {
-			$bests[$metric] = $result = $this->update_personal_best($metric, $data['metrics'][$metric], $entry->completion_date);
+			$bests[$metric] = $result = $this->update_personal_best($metric, $data['metrics'][$metric], $entry->completion_date, $pretend);
 			if ($result->previous_best) {
 				$previous_bests[$metric] = $result->previous_best;
 				// If this month had a best (even if it was since beaten) still consider it for this month
@@ -334,13 +342,15 @@ class CBChallenges {
 		);
 	}
 
-	private function set_personal_best($key, $value, $date, $prev_value, $prev_date) {
+	private function set_personal_best($key, $value, $date, $prev_value, $prev_date, $pretend = false) {
 		// Just writes data, doesn't check that it makes sense!
 		$args = $this->_personal_best_args($key, $date);
-		$this->customer->set_meta($args->value_key, $value);
-		$this->customer->set_meta($args->date_key, $date);
-		$this->customer->set_meta($args->previous_value_key, $prev_value);
-		$this->customer->set_meta($args->previous_date_key, $prev_date);
+		if (!$pretend) {
+			$this->customer->set_meta($args->value_key, $value);
+			$this->customer->set_meta($args->date_key, $date);
+			$this->customer->set_meta($args->previous_value_key, $prev_value);
+			$this->customer->set_meta($args->previous_date_key, $prev_date);
+		}
 		return (object) array(
 			'value' => $value,
 			'date' => $date,
@@ -812,6 +822,5 @@ class CBChallenges {
 			return round($dpw)+'';
 		}
 	}
-
 
 }
