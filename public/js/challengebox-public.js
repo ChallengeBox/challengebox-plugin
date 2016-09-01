@@ -29,4 +29,10 @@
 	 * practising this, we should strive to set a better example in our own work.
 	 */
 
-})( jQuery );
+	 $(function() {
+		$('.spark-line').sparkline('html');
+		$('.spark-bar').sparkline('html', {type:'bar'});
+		$('.spark-bullet').sparkline('html', {type:'bullet'});
+	 });
+
+})( jqcb );

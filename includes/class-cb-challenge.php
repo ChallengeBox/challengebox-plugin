@@ -589,6 +589,10 @@ class CBChallenges {
 			case "2016-06":
 			case "2016-07":
 			case "2016-08":
+			case "2016-09":
+			case "2016-10":
+			case "2016-11":
+			case "2016-12":
 				return array(
 					"strength" => array(
 						"goals" => array(
@@ -797,7 +801,6 @@ class CBChallenges {
 	}
 
 
-
 	//
 	// Utility functions
 	//
@@ -823,4 +826,20 @@ class CBChallenges {
 		}
 	}
 
+	public static function shortcode( $atts, $content = "" ) {
+
+		if ($_GET['debug']) {
+			error_reporting(E_ALL);
+			ini_set('display_errors', true);
+		}
+		return <<<HTML
+		<p>Inline Sparkline: <span class="spark-line">1,4,4,7,5,9,10</span>.</p>
+		<p>Inline Bullet: <span class="spark-bullet">8,11,31</span>.</p>
+		<p>Inline Bar: <span class="spark-bar">8,11,31</span>.</p>
+HTML;
+
+	}
+
 }
+
+add_shortcode( 'cb_monthly_challenge', array( 'CBChallenges', 'shortcode' ) );
