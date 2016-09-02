@@ -96,9 +96,12 @@ class ChallengeBox_Public {
 		 * class.
 		 */
 
-		wp_enqueue_script( 'jqcb', plugin_dir_url( __FILE__ ) . 'js/jquery-1.12.2.min.js', array() , '1.12.2', true );
-		wp_enqueue_script( 'jquery-sparklines', plugin_dir_url( __FILE__ ) . 'js/jquery-sparkline-2.1.2.min.js', array('jqcb') , '2.1.2', true );
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/challengebox-public.js', array( 'jquery', 'jqcb', 'jquery-sparklines' ), $this->version, true );
+		//wp_enqueue_script( 'jqcb', plugin_dir_url( __FILE__ ) . 'js/jquery-1.12.2.min.js', array() , '1.12.2', true );
+		//wp_enqueue_script( 'jqcb', plugin_dir_url( __FILE__ ) . 'js/jquery-3.1.0.min.js', array() , '3.1.0', true );
+		//wp_enqueue_script( 'jquery-sparklines', plugin_dir_url( __FILE__ ) . 'js/jquery-sparkline-2.1.2.min.js', array('jqcb') , '2.1.2', true );
+		//wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/challengebox-public.js', array( 'jquery', 'jqcb', 'jquery-sparklines' ), $this->version, true );
+		wp_enqueue_script( 'jquery-sparklines', plugin_dir_url( __FILE__ ) . 'js/jquery-sparkline-2.1.2.min.js', array('jquery') , '2.1.2', true );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/challengebox-public.js', array( 'jquery', 'jquery-sparklines' ), $this->version, true );
 	}
 
 }

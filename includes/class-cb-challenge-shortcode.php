@@ -1353,7 +1353,7 @@ class CBChallengeShortcode {
 			<script>$("#<?php echo $thing_name ?>").sparkline(<?php echo json_encode($data[$thing_name]); ?>, {type: 'bar'});</script>
 			<?php
 			*/
-			echo '<span class="spark-bar">'.implode(',', $data[$thing_name]).'</span>';
+			echo '<span class="spark-line">'.implode(',', $data[$thing_name]).'</span>';
 		}
 
 		function bullet_chart($thing_one, $thing_two, $data, $days_in_month) {

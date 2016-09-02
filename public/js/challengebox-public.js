@@ -35,4 +35,4 @@
 		$('.spark-bullet').sparkline('html', {type:'bullet'});
 	 });
 
-})( jqcb );
+})( jQuery );
