@@ -1366,6 +1366,33 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Returns stripe charges for customer.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <user_id>
+	 * : The user id to check.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb stripe_charges 167
+	 */
+	function stripe_charges( $args, $assoc_args ) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id, $interactive = false);
+			WP_CLI::debug("\tCustomer $user_id.");
+			WP_CLI::debug("\t\tCharges:");
+			foreach (CBStripe::get_customer_charges($customer)->data as $charge) {
+				WP_CLI::debug("\t\t\t$charge->id, $charge->created, $charge->amount, $charge->amount_refunded");
+			}
+			if (false) {
+				WP_CLI::debug("\t\tNo stripe information.");
+			}
+		}
+	}
+
+	/**
 	 * Calculates churn variables for a user for a given month.
 	 *
 	 * Writes a list of what it did to stdout.
@@ -1413,11 +1440,15 @@ class CBCmd extends WP_CLI_Command {
 		$month = $month_start->format('Y-m');
 		//$last_month_start = clone $month_start; $last_month_start->modify('first day of last month');
 		//$last_month_end = clone $month_start; $last_month_end->modify('last day of last month');
+
+		/// TODO $wooactive_key = 'wooactive_' . $month;
+
 		$mrr_key = 'mrr_' . $month;
 		$revenue_key = 'revenue_' . $month;
 		$revenue_sub_key = 'revenue_sub_' . $month;
 		$revenue_single_key = 'revenue_single_' . $month;
 		$revenue_shop_key = 'revenue_shop_' . $month;
+		// TODO $columns = array('id', 'cohort', 'first_sub', $wooactive_key, $mrr_key, $revenue_key, $revenue_sub_key, $revenue_single_key, $revenue_shop_key, 'error');
 		$columns = array('id', 'cohort', 'first_sub', $mrr_key, $revenue_key, $revenue_sub_key, $revenue_single_key, $revenue_shop_key, 'error');
 
 		foreach ($args as $user_id) {

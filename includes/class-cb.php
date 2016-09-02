@@ -101,6 +101,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-wc.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-customer.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-segment.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-stripe.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-weekly-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-user-guesser.php';
