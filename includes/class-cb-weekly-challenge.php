@@ -33,10 +33,21 @@ class CBWeeklyChallenge {
 	public function __construct($customer, $date_in_week) {
 		$this->customer = $customer;
 
-		$date = new Carbon($date_in_week);
+		$date = Carbon::instance($date_in_week);
 
 		$this->start = $date->copy()->startOfWeek();
 		$this->end   = $date->copy()->endOfWeek()->subDay();
+
+		/*
+		if ($customer && $customer->get_user_id() === 167) {
+			echo '<pre>';
+			var_dump(array(
+				'$this->date_in_week' => $date_in_week,
+				'$this->start' => $this->start,
+			));
+			echo '</pre>';
+		}
+		*/
 
 		$this->entry_open   = $date->copy()->startOfWeek()->subWeek()->addDays(4);
 		$this->entry_closed = $date->copy()->endOfWeek()->subWeek();
@@ -609,7 +620,7 @@ HTML;
 		}
 
 		$generic_challenge = new CBWeeklyChallenge(null, Carbon::now());
-		$earliest_date = new Carbon("2016-08-29", $timezone);
+		$earliest_date = new Carbon('2016-08-29T00:00:00', $timezone);
 		$latest_date = $generic_challenge->end->copy()->endOfWeek()->addWeek();
 
 		// Bail if date falls outside our range
@@ -667,6 +678,15 @@ HTML;
 		//
 		$prev_too_early = $prev->start->lt($earliest_date) || $prev->start->gt($latest_date);
 		$next_too_late = $next->start->gt($latest_date) || $next->start->lt($earliest_date);
+
+		/*
+		if ($customer->get_user_id() === 167) {
+			var_dump($date_in_week);
+			var_dump($challenge->start);
+			var_dump($prev->start);
+			var_dump($earliest_date);
+		}
+		*/
 
 		$result .= <<<HTML
 		<nav class="challenge_nav" style="float: right; clear: both; margin-bottom: 10px;" aria-label="Challenge navigation">
