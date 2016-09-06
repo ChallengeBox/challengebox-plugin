@@ -602,8 +602,7 @@ HTML;
 			ini_set('display_errors', true);
 		}
 
-		if (is_user_logged_in()) {}
-		else { return do_shortcode('[wppb-login]'); }
+		CB::login_redirect();
 
 		$result = "";
 

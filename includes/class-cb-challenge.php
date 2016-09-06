@@ -832,6 +832,23 @@ class CBChallenges {
 			error_reporting(E_ALL);
 			ini_set('display_errors', true);
 		}
+
+		CB::login_redirect();
+
+		$customer = new CBCustomer(get_current_user_id());
+		$challenges = new CBChallenges($customer);
+
+		if (empty($customer->get_meta('tshirt_size')) || empty($customer->get_meta('clothing_gender'))) {
+		 ?>	
+				<div class="alert alert-warning" role="alert">
+					<b>Head's up!</b> We can't ship your box until you fill out at least a T-Shirt size and prefered clothing gender. <a href="/fitness-profile/">Click here</a> to fix.
+				</div>
+			<?php
+		}
+
+
+		$result = '';
+
 		return <<<HTML
 		<p>Inline Sparkline: <span class="spark-line">1,4,4,7,5,9,10</span>.</p>
 		<p>Inline Bullet: <span class="spark-bullet">8,11,31</span>.</p>

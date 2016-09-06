@@ -363,6 +363,16 @@ HTML;
 		}
 		return $return;
 	}
+
+
+	/**
+	 * Standard way to protect a page with login.
+	 */
+	public static function login_redirect() {
+		if (is_user_logged_in()) {}
+		//else { return do_shortcode('[wppb-login]'); }
+		else { wp_redirect('/my-account/'); exit; }
+	}
 }
 
 add_shortcode( 'cb_pref_warning', array( 'CB', 'pref_warning_shortcode' ) );
