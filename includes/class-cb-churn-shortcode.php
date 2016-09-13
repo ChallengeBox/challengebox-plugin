@@ -149,7 +149,72 @@ class CBChurnShortcode {
 		return $return;
 
 	} // end fitgoal_auth_func_dev
+
+
+	/**
+	 * Revenue shortcode.
+	 */
+	public static function revenue_shortcode( $atts, $content = "" ) {
+
+		if ($_GET['debug']) {
+			error_reporting(E_ALL);
+			ini_set('display_errors', true);
+		}
+
+		$return = "";
+
+		if (!current_user_can('shop_manager') && !current_user_can('administrator')) {
+			$return = 'You don\'t have permisison to view this page.';
+			return $return;
+		} 
+
+		$revenue_data = CBWoo::get_revenue_data();
+
+		foreach ($revenue_data as $table) {
+
+			// Heading
+			$return .= "<h2>$table->title</h2>";
+			$return .= '<table class="table table-smaller table-striped">';
+
+			// Table head
+			$return .= '<tr>';
+			foreach (current($table->data) as $key => $row) {
+				$trend = array_values(array_filter(array_map(function ($row) use ($key) { return $row->$key; }, $table->data), 'is_numeric'));
+				$trend_numbers = implode(',', $trend);
+				$key = str_replace('boxes', '📦', $key);
+				$key = str_replace('box', '📦', $key);
+				$key = str_replace('users', '💁', $key);
+				$key = str_replace('user', '💁', $key);
+				$key = str_replace('calendar', '📅', $key);
+				if (sizeof($trend)) $return .= "<th><nobr>$key</nobr> <span class=\"spark-line\">$trend_numbers</span></th>";
+				else $return .= "<th><nobr>$key</nobr></th>";
+			}
+			$return .= '</tr>';
+
+			// Table body
+			foreach ($table->data as $row) {
+					$return .= '<tr>';
+					foreach ($row as $k => $datum) {
+						if (is_numeric($datum)) {
+							$return .= '<td>'.number_format($datum).'</td>';
+						} else {
+							$return .= '<td>'.$datum.'</td>';
+						}
+					}
+					$return .= '</tr>';
+			}
+			$return .= '</table>';
+
+			$query_id = uniqid();
+			$return .= "<a class=\"pull-right\" style=\"margin-top: -20px;\" onclick=\"jQuery('#$query_id').toggle();\">show query</a>";
+			$return .= "<pre id=\"$query_id\" style=\"display: none; font-size: 10px;\">$table->query</pre>";
+
+		}
+
+		return $return;
+	}
 }
 
 add_shortcode( 'cb_churn', array( 'CBChurnShortcode', 'shortcode' ) );
+add_shortcode( 'cb_revenue', array( 'CBChurnShortcode', 'revenue_shortcode' ) );
 

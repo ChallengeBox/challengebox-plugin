@@ -18,6 +18,12 @@ class CBStripe {
 		return \Stripe\Charge::all(array("customer" => $customer->get_meta('_stripe_customer_id')));
 	}
 
+	public static function get_order_charge($order_id_or_instance) {
+		$order = wc_get_order($order_id_or_instance);
+		$charge_id = get_post_meta($order->id, '_stripe_charge_id', true);
+		\Stripe\Stripe::setApiKey(get_option('woocommerce_stripe_settings')['secret_key']);
+		return \Stripe\Charge::retrieve($charge_id);
+	}
 }
 
 

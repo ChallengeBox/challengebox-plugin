@@ -1,5 +1,7 @@
 <?php
 
+use Carbon\Carbon;
+
 /**
  * Wrapper for WooCommerce API client and commands for dealing with woo data.
  *
@@ -76,6 +78,165 @@ class CBWoo {
 			return $this->api->orders->get($id)->order;
 		}
 	}
+	public function get_order_internal($id) {
+		// Get the decimal precession
+		$dp         = ( isset( $filter['dp'] ) ? intval( $filter['dp'] ) : 2 );
+		$order      = wc_get_order( $id );
+		$order_post = get_post( $id );
+
+		$order_data = array(
+			'id'                        => $order->id,
+			'order_number'              => $order->get_order_number(),
+			'created_at'                => (new Carbon($order_post->post_date_gmt))->format("Y-m-d\TH:i:s\Z"),
+			'updated_at'                => (new Carbon($order_post->post_modified_gmt))->format("Y-m-d\TH:i:s\Z"),
+			'completed_at'              => (new Carbon($order->completed_date))->format("Y-m-d\TH:i:s\Z"),
+			'status'                    => $order->get_status(),
+			'currency'                  => $order->get_order_currency(),
+			'total'                     => wc_format_decimal( $order->get_total(), $dp ),
+			'subtotal'                  => wc_format_decimal( $order->get_subtotal(), $dp ),
+			'total_line_items_quantity' => $order->get_item_count(),
+			'total_tax'                 => wc_format_decimal( $order->get_total_tax(), $dp ),
+			'total_shipping'            => wc_format_decimal( $order->get_total_shipping(), $dp ),
+			'cart_tax'                  => wc_format_decimal( $order->get_cart_tax(), $dp ),
+			'shipping_tax'              => wc_format_decimal( $order->get_shipping_tax(), $dp ),
+			'total_discount'            => wc_format_decimal( $order->get_total_discount(), $dp ),
+			'shipping_methods'          => $order->get_shipping_method(),
+			'payment_details' => (object) array(
+				'method_id'    => $order->payment_method,
+				'method_title' => $order->payment_method_title,
+				'paid'         => isset( $order->paid_date ),
+			),
+			'billing_address' => (object) array(
+				'first_name' => $order->billing_first_name,
+				'last_name'  => $order->billing_last_name,
+				'company'    => $order->billing_company,
+				'address_1'  => $order->billing_address_1,
+				'address_2'  => $order->billing_address_2,
+				'city'       => $order->billing_city,
+				'state'      => $order->billing_state,
+				'postcode'   => $order->billing_postcode,
+				'country'    => $order->billing_country,
+				'email'      => $order->billing_email,
+				'phone'      => $order->billing_phone,
+			),
+			'shipping_address' => (object) array(
+				'first_name' => $order->shipping_first_name,
+				'last_name'  => $order->shipping_last_name,
+				'company'    => $order->shipping_company,
+				'address_1'  => $order->shipping_address_1,
+				'address_2'  => $order->shipping_address_2,
+				'city'       => $order->shipping_city,
+				'state'      => $order->shipping_state,
+				'postcode'   => $order->shipping_postcode,
+				'country'    => $order->shipping_country,
+			),
+			'note'                      => $order->customer_note,
+			'customer_ip'               => $order->customer_ip_address,
+			'customer_user_agent'       => $order->customer_user_agent,
+			'customer_id'               => $order->get_user_id(),
+			'view_order_url'            => $order->get_view_order_url(),
+			'line_items'                => array(),
+			'shipping_lines'            => array(),
+			'tax_lines'                 => array(),
+			'fee_lines'                 => array(),
+			'coupon_lines'              => array(),
+		);
+
+		// add line items
+		foreach ( $order->get_items() as $item_id => $item ) {
+
+			$product     = $order->get_product_from_item( $item );
+			$product_id  = null;
+			$product_sku = null;
+
+			// Check if the product exists.
+			if ( is_object( $product ) ) {
+				$product_id  = ( isset( $product->variation_id ) ) ? $product->variation_id : $product->id;
+				$product_sku = $product->get_sku();
+			}
+
+			$meta = new WC_Order_Item_Meta( $item, $product );
+
+			$item_meta = array();
+
+			$hideprefix = ( isset( $filter['all_item_meta'] ) && $filter['all_item_meta'] === 'true' ) ? null : '_';
+
+			foreach ( $meta->get_formatted( $hideprefix ) as $meta_key => $formatted_meta ) {
+				$item_meta[] = (object) array(
+					'key'   => $formatted_meta['key'],
+					'label' => $formatted_meta['label'],
+					'value' => $formatted_meta['value'],
+				);
+			}
+
+			$order_data['line_items'][] = (object) array(
+				'id'           => $item_id,
+				'subtotal'     => wc_format_decimal( $order->get_line_subtotal( $item, false, false ), $dp ),
+				'subtotal_tax' => wc_format_decimal( $item['line_subtotal_tax'], $dp ),
+				'total'        => wc_format_decimal( $order->get_line_total( $item, false, false ), $dp ),
+				'total_tax'    => wc_format_decimal( $item['line_tax'], $dp ),
+				'price'        => wc_format_decimal( $order->get_item_total( $item, false, false ), $dp ),
+				'quantity'     => wc_stock_amount( $item['qty'] ),
+				'tax_class'    => ( ! empty( $item['tax_class'] ) ) ? $item['tax_class'] : null,
+				'name'         => $item['name'],
+				'product_id'   => $product_id,
+				'sku'          => $product_sku,
+				'meta'         => $item_meta,
+			);
+		}
+
+		// add shipping
+		foreach ( $order->get_shipping_methods() as $shipping_item_id => $shipping_item ) {
+
+			$order_data['shipping_lines'][] = (object) array(
+				'id'           => $shipping_item_id,
+				'method_id'    => $shipping_item['method_id'],
+				'method_title' => $shipping_item['name'],
+				'total'        => wc_format_decimal( $shipping_item['cost'], $dp ),
+			);
+		}
+
+		// add taxes
+		foreach ( $order->get_tax_totals() as $tax_code => $tax ) {
+
+			$order_data['tax_lines'][] = (object) array(
+				'id'       => $tax->id,
+				'rate_id'  => $tax->rate_id,
+				'code'     => $tax_code,
+				'title'    => $tax->label,
+				'total'    => wc_format_decimal( $tax->amount, $dp ),
+				'compound' => (bool) $tax->is_compound,
+			);
+		}
+
+		// add fees
+		foreach ( $order->get_fees() as $fee_item_id => $fee_item ) {
+
+			$order_data['fee_lines'][] = (object) array(
+				'id'        => $fee_item_id,
+				'title'     => $fee_item['name'],
+				'tax_class' => ( ! empty( $fee_item['tax_class'] ) ) ? $fee_item['tax_class'] : null,
+				'total'     => wc_format_decimal( $order->get_line_total( $fee_item ), $dp ),
+				'total_tax' => wc_format_decimal( $order->get_line_tax( $fee_item ), $dp ),
+			);
+		}
+
+		// add coupons
+		foreach ( $order->get_items( 'coupon' ) as $coupon_item_id => $coupon_item ) {
+
+			$order_data['coupon_lines'][] = (object) array(
+				'id'     => $coupon_item_id,
+				'code'   => $coupon_item['name'],
+				'amount' => wc_format_decimal( $coupon_item['discount_amount'], $dp ),
+			);
+		}
+
+		/*foreach (['line_items', 'shipping_lines', 'tax_lines', 'fee_lines', 'coupon_lines'] as $prop) {
+			$order_data->$prop = (object) $order_data->$prop;
+		}
+		*/
+		return (object) $order_data;
+	}
 	public function get_order_notes($id) {
 		try {
 			return $this->api->order_notes->get($id)->order_notes;
@@ -96,6 +257,22 @@ class CBWoo {
 		} catch (WC_API_Client_HTTP_Exception $e) {
 			return $this->api->customers->get_orders($id)->orders;
 		}
+	}
+	public function get_customer_orders_internal($id) {
+		global $wpdb;
+		$order_ids = $wpdb->get_col( $wpdb->prepare( "SELECT id
+						FROM $wpdb->posts AS posts
+						LEFT JOIN {$wpdb->postmeta} AS meta on posts.ID = meta.post_id
+						WHERE meta.meta_key = '_customer_user'
+						AND   meta.meta_value = '%s'
+						AND   posts.post_type = 'shop_order'
+						AND   posts.post_status IN ( '" . implode( "','", array_keys( wc_get_order_statuses() ) ) . "' )
+					", $id ) );
+		$orders = array();
+		foreach ( $order_ids as $order_id ) {
+			$orders[] = $this->get_order_internal($order_id);
+		}
+		return $orders;
 	}
 	public function get_customer_subscriptions($id) { 
 		try {
@@ -364,6 +541,7 @@ class CBWoo {
 		if ('#livefit' == $exploded[0]) {
 			return (object) array(
 				'sku_version' => 'v0',
+				'ship_raw' => NULL,
 				'month' => NULL,
 				'gender' => NULL,
 				'size' => NULL,
@@ -399,6 +577,7 @@ class CBWoo {
 			};
 			return (object) array(
 				'sku_version' => 'v1',
+				'ship_raw' => NULL,
 				'month' => (int) substr($month_raw, 1),
 				'gender' => strtolower($gender),
 				'size' => strtolower($size),
@@ -417,6 +596,7 @@ class CBWoo {
 				case 1: 
 					return (object) array(
 						'sku_version' => 'single-v1',
+						'ship_raw' => NULL,
 						'gender' => NULL,
 						'size' => NULL,
 						'plan' => NULL,
@@ -438,6 +618,7 @@ class CBWoo {
 			}
 			return (object) array(
 				'sku_version' => 'single-v2',
+				'ship_raw' => NULL,
 				'month' => NULL,
 				'gender' => strtolower($gender),
 				'size' => strtolower($size),
@@ -515,6 +696,7 @@ class CBWoo {
 			}
 			return (object) array(
 				'sku_version' => 'subscription-v2',
+				'ship_raw' => NULL,
 				'month' => NULL,
 				'gender' => NULL,
 				'size' => NULL,
@@ -530,6 +712,7 @@ class CBWoo {
 
 		return (object) array(
 			'sku_version' => NULL,
+			'ship_raw' => NULL,
 			'month' => NULL,
 			'gender' => NULL,
 			'size' => NULL,
@@ -652,6 +835,19 @@ class CBWoo {
 	}
 
 	/**
+	 * Returns all skus found in an order as an array.
+	 */
+	public static function extract_order_skus($order) {
+		$skus = array();
+		foreach ($order->line_items as $line_item) {
+			if (!empty($line_item->sku)) {
+				$skus[] = $line_item->sku;
+			}
+		}
+		return $skus;
+	}
+
+	/**
 	 * Returns the first subscription name found in a subscription object line item.
 	 */
 	public static function extract_subscription_name($sub) {
@@ -700,6 +896,83 @@ class CBWoo {
 		return $dateTime->format('Y-m-d H:i:s');
 	}
 
+	/**
+	 * Try and guess which month a thing shipped. If we know, just return that.
+	 */
+	public static function guess_ship_month($order) {
+			$created_at = CBWoo::parse_date_from_api($order->created_at);
+			$completed_at = CBWoo::parse_date_from_api($order->completed_at);
+			$sku = CBWoo::extract_order_sku($order);
+			$parsed_sku = CBWoo::parse_box_sku($sku);
+			$ship_month = $parsed_sku->ship_raw;
+			if ($ship_month) {
+				return $ship_month;
+			}
+			try {
+				$guess_date = Carbon::createFromFormat('\bym', $ship_month);
+			} catch (InvalidArgumentException $e) {
+				$guess_date = Carbon::instance($completed_at)->copy();
+				if (empty($guess_date)) {
+					$guess_date = Carbon::instance($created_at)->copy();
+				}
+			}
+			if ($guess_date->day > 20) {
+				$guess_date = $guess_date->startOfMonth()->addMonth();
+			} else {
+				$guess_date = $guess_date->startOfMonth();
+			}
+			$ship_month_guess = $guess_date->format('\bym');
+			return $ship_month_guess;
+	}
+
+
+	/**
+	 * Given an order object, calculate how many box credits that order gives.
+	 */
+	public static function calculate_box_credit($order, $verbose = false) {
+
+		$totals = array('credits' => 0, 'revenue' => 0);
+		
+		foreach ($order->line_items as $line) {
+			if (!isset($line->sku)) continue; 
+			$parsed = CBWoo::parse_box_sku($line->sku);
+			if ($parsed->credits > 0) {
+				if ($parsed->credit_only_with_total) {
+					if ($order->subtotal > 0) {
+						$totals['credits'] += $parsed->credits;
+						$totals['revenue'] += $order->total;
+						if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+					} else {
+						if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . 0 . ' amount ' . $order->total);
+					}
+				} else {
+					$totals['credits'] += $parsed->credits;
+					$totals['revenue'] += $order->total;
+					if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+				}
+			} elseif (0 === $parsed->credits) {
+				if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
+			} else {
+				// We need to calculate credits in another way
+				if ($order->total > 100) {
+					$totals['credits'] += 12;
+					$totals['revenue'] += $order->total;
+					if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 12 amount ' . $order->total);
+				} elseif ($order->total > 50) {
+					$totals['credits'] += 3;
+					$totals['revenue'] += $order->total;
+					if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 3 amount ' . $order->total);
+				} else {
+					$totals['credits'] += 1;
+					$totals['revenue'] += $order->total;
+					if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 1 amount ' . $order->total);
+				}
+			}
+		}
+
+		return $totals;
+	}
+
 	public static function get_order_predictions() {
 		global $wpdb;
 		$data = $wpdb->get_results("
@@ -725,6 +998,452 @@ class CBWoo {
 		}
 		$data[] = (object) array('count' => $box_total, 'name' => 'total');
 		$data[] = (object) array('count' => $other_total, 'name' => 'other_total');
+		return $data;
+	}
+
+	public static function get_revenue_data() {
+		global $wpdb;
+
+		$data = array();
+
+		$standard_sums = "
+				, sum(total) as `revenue`
+				, sum(revenue_items) as `box rev`
+				, sum(revenue_ship) as `ship rev`
+				, sum(revenue_rush) as `rush rev`
+				, sum(refund > 0) as `refunds`
+				, 100 * sum(refund) / sum(total) as `refund %`
+				, sum(refund) as `refund amt`
+				, sum(total) - sum(refund) as `net rev`
+		";
+
+		$per_box_sums = "
+				, (sum(total) - sum(refund)) / sum(1) as `rev/box`
+		";
+
+		$lag_lead_setup = "SET @lag_user_id=NULL; SET @lag_box_count=NULL;";
+
+		$ship_month_churn_base = "
+			select
+				user_id,
+				lag_user_id,
+				ship_month,
+				box_count,
+				round(lag_box_count) as lag_box_count,
+				case
+					when lag_user_id <> user_id then NULL
+					else case
+						when lag_box_count is not NULL and box_count is NULL then \"churned\"
+						when lag_box_count is NULL and box_count is not NULL then \"activated\"
+						when lag_box_count is NULL and box_count is NULL then NULL
+						else \"active\"
+					end
+				end as state,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is NULL and box_count is not NULL then 1
+						else 0
+					end
+				end as activated,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is not NULL and box_count is NULL then 0
+						when lag_box_count is NULL and box_count is not NULL then 1
+						when lag_box_count is NULL and box_count is NULL then 0
+						else 1
+					end
+				end as active,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is not NULL and box_count is NULL then 1
+						else 0
+					end
+				end as churned,
+				total,
+				revenue_items,
+				revenue_ship,
+				revenue_rush,
+				refund
+			from
+			(
+				select
+					@lag_user_id lag_user_id,
+					@lag_user_id:=user_id user_id,
+					ship_month,
+					total,
+					revenue_items,
+					revenue_ship,
+					revenue_rush,
+					refund,
+					@lag_box_count lag_box_count,
+					@lag_box_count:=box_count box_count
+				from
+				(
+					select
+						id_date_combinations.user_id,
+						id_date_combinations.ship_month,
+						sum(events.total) as total,
+						sum(events.revenue_items) as revenue_items,
+						sum(events.revenue_ship) as revenue_ship,
+						sum(events.revenue_rush) as revenue_rush,
+						sum(events.refund) as refund,
+						sum(events.status in (\"completed\", \"refunded\")) as box_count
+					from
+						cb_box_orders as events
+					right join
+						(
+							select id, user_id, date_format(month, \"b%y%m\") as ship_month from cb_box_orders, cb_months where month between \"2016-02-01\" and now() group by id, user_id, month order by user_id, month
+						) as id_date_combinations
+					on
+							events.id = id_date_combinations.id
+						and events.user_id = id_date_combinations.user_id 
+						and events.ship_month = id_date_combinations.ship_month
+					group by
+						user_id, ship_month
+					order by
+						user_id, ship_month
+				) as group_table
+				order by
+					user_id, ship_month
+			) as lag_lead_table
+		";
+
+		$calendar_month_churn_base = "
+			select
+				user_id,
+				lag_user_id,
+				month,
+				box_count,
+				round(lag_box_count) as lag_box_count,
+				case
+					when lag_user_id <> user_id then NULL
+					else case
+						when lag_box_count is not NULL and box_count is NULL then \"churned\"
+						when lag_box_count is NULL and box_count is not NULL then \"activated\"
+						when lag_box_count is NULL and box_count is NULL then NULL
+						else \"active\"
+					end
+				end as state,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is NULL and box_count is not NULL then 1
+						else 0
+					end
+				end as activated,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is not NULL and box_count is NULL then 0
+						when lag_box_count is NULL and box_count is not NULL then 1
+						when lag_box_count is NULL and box_count is NULL then 0
+						else 1
+					end
+				end as active,
+				case
+					when lag_user_id <> user_id then 0
+					else case
+						when lag_box_count is not NULL and box_count is NULL then 1
+						else 0
+					end
+				end as churned,
+				total,
+				revenue_items,
+				revenue_ship,
+				revenue_rush,
+				refund
+			from
+			(
+				select
+					@lag_user_id lag_user_id,
+					@lag_user_id:=user_id user_id,
+					month,
+					total,
+					revenue_items,
+					revenue_ship,
+					revenue_rush,
+					refund,
+					@lag_box_count lag_box_count,
+					@lag_box_count:=box_count box_count
+				from
+				(
+					select
+						id_date_combinations.user_id,
+						id_date_combinations.month,
+						sum(events.total) as total,
+						sum(events.revenue_items) as revenue_items,
+						sum(events.revenue_ship) as revenue_ship,
+						sum(events.revenue_rush) as revenue_rush,
+						sum(events.refund) as refund,
+						sum(events.status in (\"completed\", \"refunded\")) as box_count
+					from
+						cb_box_orders as events
+					right join
+						(
+							select id, user_id, month from cb_box_orders, cb_months where month between \"2016-02-01\" and now() group by id, user_id, month order by user_id, month
+						) as id_date_combinations
+					on
+							events.id = id_date_combinations.id
+						and events.user_id = id_date_combinations.user_id 
+						and date_format(events.completed_date, \"%Y-%m\") = date_format(id_date_combinations.month, \"%Y-%m\")
+					group by
+						user_id, month
+					order by
+						user_id, month
+				) as group_table
+				order by
+					user_id, month
+			) as lag_lead_table
+		";
+
+			$data[] = (object) array(
+				'title' => "by calendar month",
+				'data' => $wpdb->get_results($q = <<<SQL
+          select
+              a.calendar_month as `calendar month`
+            , `boxes shipped` as `boxes ship`
+            , `renewals shipped` as `renewals`
+            , `shop shipped` as `shop orders`
+            , `box revenue` as `box rev`
+            , `renewal revenue` as `sub rev`
+            , `shop revenue` as `shop rev`
+            , activated as `users +`
+            , if(date_format(now(), '%Y-%m') = a.calendar_month, '*', `box_churned`) as `users -`
+            , if(date_format(now(), '%Y-%m') = a.calendar_month, '*', 100 * `box_churned` / `boxes shipped`) as `churn %`
+
+          from
+            cb_calendar_month_boxes as a
+          join
+            cb_calendar_month_renewals as b
+          on
+            a.calendar_month = b.calendar_month
+		  join
+          	cb_calendar_month_shop as c
+          on
+          	a.calendar_month = c.calendar_month
+          ;
+SQL
+			),
+			'query' => $q,
+		);
+
+		//$wpdb->query($lag_lead_setup);
+/*
+		$data[] = (object) array(
+			'title' => 'churn by sku month',
+			'data' => $results = $wpdb->get_results($q = "
+				select
+					  ship_month as `ship month`
+					, sum(box_count) as `boxes shipped`
+					, sum(activated) as `added`
+					, sum(active) as `active`
+					, sum(churned) as `churned`
+				from
+					($ship_month_churn_base) as churn_base
+				group by
+					ship_month
+				order by
+					ship_month
+				; 
+			"),
+			'query' => $q
+		);
+		//var_dump($q);
+		//var_dump($wpdb->last_error);
+		//var_dump($results);
+
+		$data[] = (object) array(
+			'title' => 'churn by calendar month',
+			'data' => $results = $wpdb->get_results($q = "
+				select
+					  month as `calendar month`
+					, sum(box_count) as `boxes shipped`
+					, sum(activated) as `added`
+					, sum(active) as `active`
+					, sum(churned) as `churned`
+					, 100 * sum(churned) / sum(active) as `percent churn`
+				from
+					($calendar_month_churn_base) as churn_base
+				group by
+					month
+				order by
+					month
+				; 
+			"),
+		);
+*/
+		
+		$data[] = (object) array(
+			'title' => 'box detail by sku month',
+			'data' => $wpdb->get_results("
+				select
+					  ship_month as `sku month`
+					, sum(1) as `boxes shipped`
+					$standard_sums
+					$per_box_sums
+				from
+					cb_box_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					ship_month
+				order by
+					ship_month
+				; 
+			"),
+		);
+
+		$data[] = (object) array(
+			'title' => 'box detail by calendar month',
+			'data' => $wpdb->get_results("
+				select
+					  date_format(completed_date, '%Y-%m') as `calendar month`
+					, count(1) as `boxes shipped`
+					$standard_sums
+					$per_box_sums
+				from
+					cb_box_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					`calendar month`
+				order by
+					`calendar month`
+				; 
+			"),
+		);
+
+		$data[] = (object) array(
+			'title' => 'box detail by box month',
+			'data' => $wpdb->get_results("
+				select
+					  box_month as `box month`
+					, sum(1) as `boxes shipped`
+					$standard_sums
+					$per_box_sums
+				from
+					cb_box_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					box_month
+				order by
+					box_month
+				; 
+			"),
+		);
+
+		$data[] = (object) array(
+			'title' => 'box detail by price point',
+			'data' => $wpdb->get_results("
+				select
+					  5*round(total/5) as `price point`
+					, sum(1) as `boxes shipped`
+					$standard_sums
+					$per_box_sums
+				from
+					cb_box_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					`price point`
+				order by
+					`price point`
+				; 
+			"),
+		);
+
+
+		$data[] = (object) array(
+			'title' => 'subscription detail by month',
+			'data' => $wpdb->get_results("
+				select
+					  date_format(completed_date, '%Y-%m') as `calendar month`
+					, count(1) as `renewals`
+					$standard_sums
+					, (sum(total) - sum(refund)) / sum(1) as `rev/renewal`
+				from
+					(select * from cb_renewals order by user_id, created_date) as t
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					`calendar month`
+				order by
+					`calendar month`
+				; 
+			"),
+		);
+
+		$data[] = (object) array(
+			'title' => 'shop detail by month',
+			'data' => $wpdb->get_results("
+				select
+					  date_format(completed_date, '%Y-%m') as `calendar month`
+					, sum(1) as `orders`
+					$standard_sums
+					, (sum(total) - sum(refund)) / sum(1) as `rev/order`
+				from
+					cb_shop_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					`calendar month`
+				order by
+					`calendar month`
+				; 
+			"),
+		);
+
+		// Cohorts
+
+		$cohort_data = $wpdb->get_results("
+				select
+					  ship_month as `ship month`
+					, box_month as `box month`
+					, count(1) as `boxes shipped`
+					$standard_sums
+					$per_box_sums
+				from
+					cb_box_orders
+				where
+					status in (\"completed\", \"refunded\")
+				group by
+					ship_month, box_month
+				order by
+					ship_month, box_month
+				; 
+		", ARRAY_A);
+
+		$cohort_column  = 'ship month';
+		$cohort_row     = 'box month';
+		$cohort_stats   = array('boxes shipped', 'revenue');
+		$cohort_columns = array_values(array_unique(array_column($cohort_data, $cohort_column), SORT_REGULAR));
+		$cohort_rows    = array_values(array_unique(array_column($cohort_data, $cohort_row), SORT_REGULAR));
+
+		// Make a separate cohort table for each stat
+		foreach ($cohort_stats as $stat) {
+			$rows = array();
+			foreach ($cohort_rows as $row_name) {
+				$row = array($cohort_row => $row_name);
+				foreach ($cohort_columns as $column_name) {
+					$row[$column_name] = array_sum(array_map(function ($data_row) use ($stat, $cohort_column, $column_name, $cohort_row, $row_name) {
+						if ($data_row[$cohort_column] === $column_name && $data_row[$cohort_row] === $row_name) {
+							return $data_row[$stat];
+						} else {
+							return 0;
+						}
+					}, $cohort_data));
+				}
+				$rows[] = (object) $row;
+			}
+			$data[] = (object) array('title' => "$stat cohorts", 'data' => $rows);
+		}
+
+		//$data[] = (object) array('title' => 'cohort data', 'data' => $cohort_data);
+
 		return $data;
 	}
 

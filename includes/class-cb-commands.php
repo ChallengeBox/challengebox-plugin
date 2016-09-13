@@ -78,7 +78,7 @@ class CBCmd extends WP_CLI_Command {
 				WP_CLI::debug("Grabbing user ids...");
 				$args = array_map(function ($user) { return $user->ID; }, get_users());
 			} elseif ('order' == $this->options->orientation) {
-				WP_CLI::debug("Grabbing user ids...");
+				WP_CLI::debug("Grabbing order ids...");
 				global $wpdb;
 				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_order';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
@@ -2701,17 +2701,715 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
-	 * Tests ABSPATH
+	 * Runs churn analytics on the database.
 	 *
 	 * ## OPTIONS
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb test
+	 *     wp cb run_churn_analytics
 	 */
-	function test( $args, $assoc_args ) {
-		var_dump(defined('ABSPATH'));
-		var_dump(defined('WPINC'));
+	function run_churn_analytics( $args, $assoc_args ) {
+		$new_churn_base = <<<SQL
+			drop table if exists cb_sequence_temp_from_box_orders;
+			create table cb_sequence_temp_from_box_orders (
+				user_id bigint(20) unsigned not NULL,
+				ship_month varchar(5) character set utf8mb4 not null,
+				primary key (user_id, ship_month)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+			select
+					user_id
+				, date_format(month, 'b%y%m') as ship_month
+				, date_format(month, '%Y-%m') as calendar_month
+				, month
+			from
+				cb_box_orders, cb_months
+			where
+				month between '2016-02-01' and now()
+			group by
+				user_id, month
+			order by
+				user_id, month;
+
+			SET @lag_user_id=NULL; SET @lag_box_active=NULL; SET @lag2_boxes_shipped=NULL; SET @lag2_user_id=NULL;
+
+			drop table if exists cb_calendar_month_boxes;
+			create table cb_calendar_month_boxes
+				select
+						user_id
+					, (@lag2_user_id) as lag2_user_id
+					, (@lag2_user_id:=lag_user_id) as lag_user_id
+					, calendar_month
+					, sum(`boxes shipped` > 0) as active
+					, sum(`boxes shipped` + if(lag_boxes_shipped is NULL or lag_user_id is NULL or user_id <> lag_user_id, 0, lag_boxes_shipped) > 0) as active_grace_1m
+					, sum(`boxes shipped` > 0 and (lag_boxes_shipped = 0 or user_id <> lag_user_id)) as activated
+					, sum(`boxes shipped` > 0 and ((lag_boxes_shipped = 0 and @lag2_boxes_shipped = 0) or user_id <> lag_user_id)) as activated_grace_1m
+					, sum(user_id = lag_user_id and `boxes shipped` = 0 and lag_boxes_shipped > 0) as box_churned
+					, sum(`box user count`) as `box user count`
+					, sum(`box count`) as `box count`
+					, sum(`boxes shipped`) as `boxes shipped`
+					, round(@lag2_boxes_shipped) as lag2_boxes_shipped
+					, (@lag2_boxes_shipped:=lag_boxes_shipped) as lag_boxes_shipped
+					, sum(`boxes cancelled`) as `boxes cancelled`
+					, sum(`boxes processing`) as `boxes processing`
+					, sum(`boxes other`) as `boxes other`
+					, sum(`box revenue`) as `box revenue`
+					, sum(`box item rev`) as `box item rev`
+					, sum(`box ship rev`) as `box ship rev`
+					, sum(`box rush rev`) as `box rush rev`
+					, sum(`boxes from users with rush`) as `boxes from users with rush`
+					, sum(`box full refunds`) as `box full refunds`
+					, sum(`box partial refunds`) as `box partial refunds`
+					, sum(`box refund amt`) as `box refund amt`
+					, 100 * sum(`box refund amt`)/sum(`box revenue`) as `box refund amt % of rev`
+					, 100 * sum(`box refunds`)/sum(`boxes shipped`) as `box refunds % of shipped`
+					, 100 * sum(`box full refunds`)/sum(`boxes shipped`) as `box full refunds % of shipped`
+					, 100 * sum(`box partial refunds`)/sum(`boxes shipped`) as `box partial refunds % of shipped`
+					, sum(`box revenue`)-sum(`box refund amt`) as `box net rev`
+				from (
+					select
+								(@lag_user_id) as lag_user_id
+							, (@lag_user_id:=user_id) as user_id
+							, calendar_month
+							, `box user count`
+							, `box count`
+							, round(@lag_boxes_shipped) as lag_boxes_shipped
+							, (@lag_boxes_shipped:=`boxes shipped`) as `boxes shipped`
+							, `boxes cancelled`
+							, `boxes processing`
+							, `boxes other`
+							, `box revenue`
+							, `box item rev`
+							, `box ship rev`
+							, `box rush rev`
+							, `boxes from users with rush`
+							, `box refunds`
+							, `box full refunds`
+							, `box partial refunds`
+							, `box refund amt`
+							, `box net rev`
+
+					from (
+						select
+								source.user_id
+							, sequence.calendar_month
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, source.user_id, 0)) as `box user count`
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, id, 0)) as `box count`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('completed', 'refunded')) as `boxes shipped`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('cancelled')) as `boxes cancelled`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('processing')) as `boxes processing`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) not in ('completed', 'refunded', 'cancelled', 'processing')) as `boxes other`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) as `box revenue`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_items, 0)) as `box item rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_ship, 0)) as `box ship rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush, 0)) as `box rush rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush>0, 0)) as `boxes from users with rush`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund > 0 and total > 0, 0)) as `box refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund >= total and refund > 0 and total > 0, 0)) as `box full refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund < total and refund > 0 and total > 0, 0)) as `box partial refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `box refund amt`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) - sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `box net rev`
+						from
+							cb_box_orders as source
+						join
+							cb_sequence_temp_from_box_orders as sequence
+						on
+								source.user_id = sequence.user_id
+						group by
+							source.user_id, sequence.calendar_month
+						order by
+							source.user_id, sequence.calendar_month
+
+					) as base
+
+					group by
+						user_id, calendar_month
+					order by
+						user_id, calendar_month
+
+				) as lag_table
+				
+			group by
+				calendar_month
+			order by
+				calendar_month
+			;
+
+			drop table if exists cb_calendar_month_renewals;
+			create table cb_calendar_month_renewals
+				select
+						user_id
+					, (@lag2_user_id) as lag2_user_id
+					, (@lag2_user_id:=lag_user_id) as lag_user_id
+					, calendar_month
+					, sum(`renewals shipped` > 0) as renewal_active
+					, sum(`renewals shipped` + if(lag_renewals_shipped is NULL or lag_user_id is NULL or user_id <> lag_user_id, 0, lag_renewals_shipped) > 0) as renewal_active_grace_1m
+					, sum(`renewals shipped` > 0 and (lag_renewals_shipped = 0 or user_id <> lag_user_id)) as renewal_activated
+					, sum(`renewals shipped` > 0 and ((lag_renewals_shipped = 0 and @lag2_renewals_shipped = 0) or user_id <> lag_user_id)) as renewal_activated_grace_1m
+					, sum(user_id = lag_user_id and `renewals shipped` = 0 and lag_renewals_shipped > 0) as renewal_churned
+					, sum(`renewal user count`) as `renewal user count`
+					, sum(`renewal count`) as `renewal count`
+					, sum(`renewals shipped`) as `renewals shipped`
+					, round(@lag2_renewals_shipped) as lag2_renewals_shipped
+					, (@lag2_renewals_shipped:=lag_renewals_shipped) as lag_renewals_shipped
+					, sum(`renewals cancelled`) as `renewals cancelled`
+					, sum(`renewals processing`) as `renewals processing`
+					, sum(`renewals other`) as `renewals other`
+					, sum(`renewal revenue`) as `renewal revenue`
+					, sum(`renewal item rev`) as `renewal item rev`
+					, sum(`renewal ship rev`) as `renewal ship rev`
+					, sum(`renewal rush rev`) as `renewal rush rev`
+					, sum(`renewals from users with rush`) as `renewals from users with rush`
+					, sum(`renewal full refunds`) as `renewal full refunds`
+					, sum(`renewal partial refunds`) as `renewal partial refunds`
+					, sum(`renewal refund amt`) as `renewal refund amt`
+					, 100 * sum(`renewal refund amt`)/sum(`renewal revenue`) as `renewal refund amt % of rev`
+					, 100 * sum(`renewal refunds`)/sum(`renewals shipped`) as `renewal refunds % of shipped`
+					, 100 * sum(`renewal full refunds`)/sum(`renewals shipped`) as `renewal full refunds % of shipped`
+					, 100 * sum(`renewal partial refunds`)/sum(`renewals shipped`) as `renewal partial refunds % of shipped`
+					, sum(`renewal revenue`)-sum(`renewal refund amt`) as `renewal net rev`
+				from (
+					select
+								(@lag_user_id) as lag_user_id
+							, (@lag_user_id:=user_id) as user_id
+							, calendar_month
+							, `renewal user count`
+							, `renewal count`
+							, round(@lag_renewals_shipped) as lag_renewals_shipped
+							, (@lag_renewals_shipped:=`renewals shipped`) as `renewals shipped`
+							, `renewals cancelled`
+							, `renewals processing`
+							, `renewals other`
+							, `renewal revenue`
+							, `renewal item rev`
+							, `renewal ship rev`
+							, `renewal rush rev`
+							, `renewals from users with rush`
+							, `renewal refunds`
+							, `renewal full refunds`
+							, `renewal partial refunds`
+							, `renewal refund amt`
+							, `renewal net rev`
+
+					from (
+						select
+								source.user_id
+							, sequence.calendar_month
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, source.user_id, 0)) as `renewal user count`
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, id, 0)) as `renewal count`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('completed', 'refunded')) as `renewals shipped`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('cancelled')) as `renewals cancelled`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) in ('processing')) as `renewals processing`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status, 0) not in ('completed', 'refunded', 'cancelled', 'processing')) as `renewals other`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) as `renewal revenue`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_items, 0)) as `renewal item rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_ship, 0)) as `renewal ship rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush, 0)) as `renewal rush rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush>0, 0)) as `renewals from users with rush`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund > 0 and total > 0, 0)) as `renewal refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund >= total and refund > 0 and total > 0, 0)) as `renewal full refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund < total and refund > 0 and total > 0, 0)) as `renewal partial refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `renewal refund amt`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) - sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `renewal net rev`
+						from
+							cb_renewals as source
+						join
+							cb_sequence_temp_from_box_orders as sequence
+						on
+								source.user_id = sequence.user_id
+						group by
+							source.user_id, sequence.calendar_month
+						order by
+							source.user_id, sequence.calendar_month
+
+					) as base
+
+					group by
+						user_id, calendar_month
+					order by
+						user_id, calendar_month
+
+				) as lag_table
+				
+			group by
+				calendar_month
+			order by
+				calendar_month
+			;
+
+			drop table if exists cb_calendar_month_shop;
+			create table cb_calendar_month_shop
+				select
+						user_id
+					, (@lag2_user_id) as lag2_user_id
+					, (@lag2_user_id:=lag_user_id) as lag_user_id
+					, calendar_month
+					, sum(`shop shipped` > 0) as shop_active
+					, sum(`shop shipped` + if(lag_shop_shipped is NULL or lag_user_id is NULL or user_id <> lag_user_id, 0, lag_shop_shipped) > 0) as shop_active_grace_1m
+					, sum(`shop shipped` > 0 and (lag_shop_shipped = 0 or user_id <> lag_user_id)) as shop_activated
+					, sum(`shop shipped` > 0 and ((lag_shop_shipped = 0 and @lag2_shop_shipped = 0) or user_id <> lag_user_id)) as shop_activated_grace_1m
+					, sum(user_id = lag_user_id and `shop shipped` = 0 and lag_shop_shipped > 0) as shop_churned
+					, sum(`shop user count`) as `shop user count`
+					, sum(`shop count`) as `shop count`
+					, sum(`shop shipped`) as `shop shipped`
+					, round(@lag2_shop_shipped) as lag2_shop_shipped
+					, (@lag2_shop_shipped:=lag_shop_shipped) as lag_shop_shipped
+					, sum(`shop cancelled`) as `shop cancelled`
+					, sum(`shop processing`) as `shop processing`
+					, sum(`shop other`) as `shop other`
+					, sum(`shop revenue`) as `shop revenue`
+					, sum(`shop item rev`) as `shop item rev`
+					, sum(`shop ship rev`) as `shop ship rev`
+					, sum(`shop rush rev`) as `shop rush rev`
+					, sum(`shop from users with rush`) as `shop from users with rush`
+					, sum(`shop full refunds`) as `shop full refunds`
+					, sum(`shop partial refunds`) as `shop partial refunds`
+					, sum(`shop refund amt`) as `shop refund amt`
+					, 100 * sum(`shop refund amt`)/sum(`shop revenue`) as `shop refund amt % of rev`
+					, 100 * sum(`shop refunds`)/sum(`shop shipped`) as `shop refunds % of shipped`
+					, 100 * sum(`shop full refunds`)/sum(`shop shipped`) as `shop full refunds % of shipped`
+					, 100 * sum(`shop partial refunds`)/sum(`shop shipped`) as `shop partial refunds % of shipped`
+					, sum(`shop revenue`)-sum(`shop refund amt`) as `shop net rev`
+				from (
+					select
+								(@lag_user_id) as lag_user_id
+							, (@lag_user_id:=user_id) as user_id
+							, calendar_month
+							, `shop user count`
+							, `shop count`
+							, round(@lag_shop_shipped) as lag_shop_shipped
+							, (@lag_shop_shipped:=`shop shipped`) as `shop shipped`
+							, `shop cancelled`
+							, `shop processing`
+							, `shop other`
+							, `shop revenue`
+							, `shop item rev`
+							, `shop ship rev`
+							, `shop rush rev`
+							, `shop from users with rush`
+							, `shop refunds`
+							, `shop full refunds`
+							, `shop partial refunds`
+							, `shop refund amt`
+							, `shop net rev`
+
+					from (
+						select
+								source.user_id
+							, sequence.calendar_month
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, source.user_id, 0)) as `shop user count`
+							, count(distinct if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, id, 0)) as `shop count`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status in ('completed', 'refunded'), 0)) as `shop shipped`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status = 'cancelled', 0)) as `shop cancelled`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status = 'processing', 0)) as `shop processing`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, status not in ('completed', 'refunded', 'cancelled', 'processing'), 0) ) as `shop other`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) as `shop revenue`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_items, 0)) as `shop item rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_ship, 0)) as `shop ship rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush, 0)) as `shop rush rev`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, revenue_rush>0, 0)) as `shop from users with rush`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund > 0 and total > 0, 0)) as `shop refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund >= total and refund > 0 and total > 0, 0)) as `shop full refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund < total and refund > 0 and total > 0, 0)) as `shop partial refunds`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `shop refund amt`
+							, sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, total, 0)) - sum(if(date_format(source.completed_date, '%Y-%m') = sequence.calendar_month, refund, 0)) as `shop net rev`
+						from
+							cb_shop_orders as source
+						join
+							cb_sequence_temp_from_box_orders as sequence
+						on
+							source.user_id = sequence.user_id
+						group by
+							source.user_id, sequence.calendar_month
+						order by
+							source.user_id, sequence.calendar_month
+
+					) as base
+
+					group by
+						user_id, calendar_month
+					order by
+						user_id, calendar_month
+
+				) as lag_table
+				
+			group by
+				calendar_month
+			order by
+				calendar_month
+			;
+SQL;
+
+		$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+		if ($mysqli->connect_errno) {
+			WP_CLI::error("Failed to connect to MySQL: (" . $mysqli->connect_errno . ") " . $mysqli->connect_error);
+		}
+		$mysqli->set_charset(DB_CHARSET);
+/*
+		$mysqli->autocommit(FALSE);
+		$mysqli->begin_transaction();
+*/
+
+		foreach (explode(';', $new_churn_base) as $statement) {
+			if (!$statement) continue;
+			WP_CLI::debug("Statement: $statement");
+			if (!($result = $mysqli->query($statement))) {
+				$mysqli->close();
+				WP_CLI::error("Could not execute statement: (" . $mysqli->errno . ") " . $mysqli->error);
+			}
+			if (is_object($result)) {
+				$result->free();
+			}
+		}
+
+/*
+		if (!$mysqli->commit()) {
+			$mysqli->close();
+			WP_CLI::error("Could not commit: (" . $mysqli->errno . ") " . $mysqli->error);
+		}
+*/
+
+		$mysqli->multi_query($new_churn_base);
+
+/*
+		if ($mysqli->multi_query($new_churn_base)) {
+			do {
+				if ($result = $mysqli->store_result()) {
+					while ($row = $result->fetch_row()) {
+						WP_CLI::debug(var_export($row,true));
+					}
+					$result->free();
+				}
+				if ($mysqli->more_results()) {
+					printf("-----------------\n");
+				}
+			} while ($mysqli->next_result());
+		}
+*/
+
+		WP_CLI::debug("Done.");
+
+		$mysqli->close();
+	}
+
+	/**
+	 * Maintains order metadata.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<order_id>...]
+	 * : The order id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all orders. (Ignores <order_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate orders in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> orders out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't write anything, just show what we would do.
+	 *
+	 * [--verbose]
+	 * : Print out debugging data.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb maintain_order --all
+	 */
+	function maintain_order($args, $assoc_args) {
+		global $wpdb;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		// Schema
+		$columns = array(
+			'id',
+			'order_type',
+			'user_id',
+			'parent_id',
+			'status',
+			'created_date',
+			'completed_date',
+			'sku',
+			'box_month',
+			'ship_month',
+			'total',
+			'revenue_items',
+			'revenue_ship',
+			'revenue_rush',
+//			'stripe_fee',
+			'refund',
+		);
+
+		/**
+		 * Walks a list of orders sorted by date (earliest first) and returns
+		 * the first order preceeding this one that counts as a box credit.
+		 */
+		function find_credit_parent($order, $orders) {
+			$reached_us = false;
+			$found_parent = false;
+			// Try for a parent with a positive total
+			foreach (array_reverse($orders) as $parent) {
+				if ($parent === $order) $reached_us = true;
+				if ($reached_us && CBWoo::order_counts_as_box_credit($parent) && doubleval($parent->total) > 0) {
+					 $found_parent = $parent;
+					 break;
+				}
+			}
+			// If not, settle for whatever parent we find
+			if (!$found_parent) {
+				foreach (array_reverse($orders) as $parent) {
+					if ($parent === $order) $reached_us = true;
+					if ($reached_us && CBWoo::order_counts_as_box_credit($parent)) {
+						 $found_parent = $parent;
+						 break;
+					}
+				}
+			}
+			if ($found_parent) return $found_parent;
+			else return $order;
+		}
+
+		$results = array();
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id, $interactive = false);
+			WP_CLI::debug("User $user_id...");
+
+			// $orders = $customer->get_orders();
+			$orders = $this->api->get_customer_orders_internal($user_id);
+
+			foreach ($orders as $order) {
+
+				WP_CLI::debug("\t-> order $order->id");
+
+				if ($this->options->verbose) WP_CLI::debug(var_export($order, true));
+
+				//if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
+				$is_credit = CBWoo::order_counts_as_box_credit($order);
+				$is_debit = CBWoo::order_counts_as_box_debit($order);
+				$order_types = array();
+				if ($is_credit) $order_types[] = 'renewal';
+				if ($is_debit) $order_types[] = 'box';
+				if (!($is_credit || $is_debit)) $order_types[] = 'shop';
+				$order_type = implode(',', $order_types);
+				//if (!$is_debit) continue;
+				$order_options = CBWoo::parse_order_options($order);
+				$month = isset($order_options->month) ? "m$order_options->month" : null;
+				$sku = implode(',', CBWoo::extract_order_skus($order));
+				$parsed_sku = CBWoo::parse_box_sku($sku);
+				$ship_month = $parsed_sku->ship_raw;
+
+				$parent = find_credit_parent($order, $orders);
+				$parent_credits = CBWoo::calculate_box_credit($parent)['credits'];
+
+				if (false !== array_search('box', $order_types)) {
+					$find_charge_on = $parent;
+					$parent_id = $parent->id;
+				} else {
+					$find_charge_on = $order;
+					$parent_id = null;
+					$parent_credits = 0;
+				}
+				try {
+					$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
+					$stripe_total = $stripe_charge->amount / 100.0;
+					$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
+					//$stripe_fee = $stripe_charge->fee / 100.0;
+				} catch (InvalidArgumentException $e) {
+					$stripe_total = 0.0;
+					$stripe_refunded = 0.0;
+					$stripe_fee = 0.0;
+				}
+				$line_item_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->line_items));
+				$shipping_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->shipping_lines));
+				$fee_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->fee_lines));
+				$total = $stripe_total;
+				$refunded = $stripe_refunded;
+				if (false !== array_search('box', $order_types) && $parent_credits > 0) {
+					$total /= $parent_credits;
+					$line_item_total /= $parent_credits;
+					$shipping_total /= $parent_credits;
+					$fee_total /= $parent_credits;
+					$refunded /= $parent_credits;
+				}
+
+				$order_row = array(
+					'id' => $order->id,
+					'order_type' => $order_type,
+					'user_id' => $user_id,
+					'parent_id' => $parent_id,
+					'status' => $order->status,
+					'created_date' => $order->created_at,
+					'completed_date' => $order->completed_at,
+					'sku' => $sku,
+					'box_credits' => $parent_credits,
+					'box_month' => $month,
+					'ship_month' => $ship_month,
+					'total' => $total,
+					'revenue_items' => $line_item_total,
+					'revenue_ship' => $shipping_total,
+					'revenue_rush' => $fee_total,
+					//'stripe_fee' => $stripe_fee,
+					'refund' => $refunded,
+				);
+				$order_format = array(
+					'%d',  // id
+					'%s',  // order_type
+					'%d',  // user_id
+					'%d',  // parent_id
+					'%s',  // status
+					'%s',  // created_date
+					'%s',  // completed_date
+					'%s',  // sku
+					'%s',  // box_month
+					'%s',  // ship_month
+					'%f',  // total
+					'%f',  // revenue_items
+					'%f',  // revenue_ship
+					'%f',  // revenue_rush
+					'%f',  // refund
+				);
+
+				$box_row = array(
+					'id' => $order_row['id'],
+					'user_id' => $order_row['user_id'],
+					'parent_id' => $order_row['parent_id'],
+					'status' => $order_row['status'],
+					'created_date' => $order_row['created_date'],
+					'completed_date' => $order_row['completed_date'],
+					'sku' => $order_row['sku'],
+					'box_month' => $order_row['box_month'],
+					'ship_month' => $order_row['ship_month'],
+					'total' => $order_row['total'],
+					'revenue_items' => $order_row['revenue_items'],
+					'revenue_ship' => $order_row['revenue_ship'],
+					'revenue_rush' => $order_row['revenue_rush'],
+					//'stripe_fee' => $stripe_fee'],
+					'refund' => $order_row['refund'],
+				);
+				$box_format = array(
+					'%d',  // id
+					'%d',  // user_id
+					'%d',  // parent_id
+					'%s',  // status
+					'%s',  // created_date
+					'%s',  // completed_date
+					'%s',  // sku
+					'%s',  // box_month
+					'%s',  // ship_month
+					'%f',  // total
+					'%f',  // revenue_items
+					'%f',  // revenue_ship
+					'%f',  // revenue_rush
+					'%f',  // refund
+				);
+
+				$renewal_row = array(
+					'id' => $order_row['id'],
+					'user_id' => $order_row['user_id'],
+					'status' => $order_row['status'],
+					'created_date' => $order_row['created_date'],
+					'completed_date' => $order_row['completed_date'],
+					'sku' => $order_row['sku'],
+					'box_credits' => $order_row['box_credits'],
+					'total' => $order_row['total'],
+					'revenue_items' => $order_row['revenue_items'],
+					'revenue_ship' => $order_row['revenue_ship'],
+					'revenue_rush' => $order_row['revenue_rush'],
+					//'stripe_fee' => $stripe_fee'],
+					'refund' => $order_row['refund'],
+				);
+				$renewal_format = array(
+					'%d',  // id
+					'%d',  // user_id
+					'%s',  // status
+					'%s',  // created_date
+					'%s',  // completed_date
+					'%s',  // sku
+					'%f',  // total
+					'%f',  // revenue_items
+					'%f',  // revenue_ship
+					'%f',  // revenue_rush
+					'%f',  // refund
+				);
+
+				$shop_row = array(
+					'id' => $order_row['id'],
+					'user_id' => $order_row['user_id'],
+					'status' => $order_row['status'],
+					'created_date' => $order_row['created_date'],
+					'completed_date' => $order_row['completed_date'],
+					'skus' => $order_row['sku'],
+					'total' => $order_row['total'],
+					'revenue_items' => $order_row['revenue_items'],
+					'revenue_ship' => $order_row['revenue_ship'],
+					'revenue_rush' => $order_row['revenue_rush'],
+					//'stripe_fee' => $stripe_fee'],
+					'refund' => $order_row['refund'],
+				);
+				$shop_format = array(
+					'%d',  // id
+					'%d',  // user_id
+					'%s',  // status
+					'%s',  // created_date
+					'%s',  // completed_date
+					'%s',  // skus
+					'%f',  // total
+					'%f',  // revenue_items
+					'%f',  // revenue_ship
+					'%f',  // revenue_rush
+					'%f',  // refund
+				);
+
+				$results[] = $order_row;
+
+
+				// Write to database
+				$wpdb->show_errors = true;
+				// define( 'WP_DEBUG_LOG', true );
+				// define( 'SAVEQUERIES', true );
+				// var_dump($order_types);
+				if (!$this->options->pretend) {
+					WP_CLI::debug("\t\twriting row to database");
+					if ($this->options->verbose) WP_CLI::debug(var_export($order_row, true));
+					if (false === ($returned = $wpdb->replace('cb_orders', $order_row, $order_format))) {
+						WP_CLI::error($wpdb->last_error);
+					} 
+					if (false !== array_search('box', $order_types)) {
+						WP_CLI::debug("\t\twriting box to database");
+						if ($this->options->verbose) WP_CLI::debug(var_export($box_row, true));
+						if (false === ($returned = $wpdb->replace('cb_box_orders', $box_row, $box_format))) {
+							WP_CLI::error($wpdb->last_error);
+						} 
+					}
+					if (false !== array_search('renewal', $order_types)) {
+						WP_CLI::debug("\t\twriting renewal to database");
+						if ($this->options->verbose) WP_CLI::debug(var_export($renewal_row, true));
+						if (false === ($returned = $wpdb->replace('cb_renewals', $renewal_row, $renewal_format))) {
+							WP_CLI::error($wpdb->last_error);
+						} 
+					}
+					if (false !== array_search('shop', $order_types)) {
+						WP_CLI::debug("\t\twriting shop order to database");
+						if ($this->options->verbose) WP_CLI::debug(var_export($shop_row, true));
+						if (false === ($returned = $wpdb->replace('cb_shop_orders', $shop_row, $shop_format))) {
+							WP_CLI::error($wpdb->last_error);
+						} 
+					}
+				}
+
+			}
+
+		}
+
+		//WP_CLI::debug(var_export($wpdb->queries, true));;
+
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
 	}
 
 	/**
@@ -2724,6 +3422,9 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * [--all]
 	 * : Iterate through all orders. (Ignores <order_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate orders in reverse order.
 	 *
 	 * [--limit=<limit>]
 	 * : Only process <limit> orders out of the list given.
@@ -2744,7 +3445,8 @@ class CBCmd extends WP_CLI_Command {
 		$shops = array();
 
 		foreach ($args as $order_id) {
-			$order = $this->api->get_order($order_id);
+			//$order = $this->api->get_order($order_id);
+			$order = $this->api->get_order_internal($order_id);
 			WP_CLI::debug("Order $order_id...");
 			if ($this->options->verbose) WP_CLI::debug(var_export($order, true));
 
@@ -2754,6 +3456,29 @@ class CBCmd extends WP_CLI_Command {
 			$opts = CBWoo::parse_order_options($order);
 			$created_at = CBWoo::parse_date_from_api($order->created_at);
 			$completed_at = CBWoo::parse_date_from_api($order->completed_at);
+			$parsed_sku = CBWoo::parse_box_sku($sku);
+
+			//var_dump(wc_get_order($order_id));
+			try {
+				$stripe_charge = CBStripe::get_order_charge($order_id);
+				$stripe_total = $stripe_charge->amount / 100.0;
+				$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
+			} catch (InvalidArgumentException $e) {
+				$stripe_total = 0.0;
+				$stripe_refunded = 0.0;
+			}
+
+			// Try to guess the ship month
+			$ship_month = $parsed_sku->ship_raw;
+			try {
+				$guess_date = Carbon::createFromFormat('\bym', $ship_month);
+			} catch (InvalidArgumentException $e) {
+				$guess_date = Carbon::instance($completed_at)->copy();
+				if (empty($guess_date)) $guess_date = Carbon::instance($created_at)->copy();
+			}
+			if ($guess_date->day > 20) $guess_date = $guess_date->startOfMonth()->addMonth();
+			else $guess_date = $guess_date->startOfMonth();
+			$ship_month_guess = $guess_date->format('\bym');
 
 			if ($is_credit) {
 				$subs[] = array(
@@ -2762,9 +3487,13 @@ class CBCmd extends WP_CLI_Command {
 					'status' => $order->status,
 					'customer' => $order->customer_id,
 					'total' => $order->total,
+					'stripe_total' => $stripe_total,
+					'stripe_refunded' => $stripe_refunded,
 					'sku' => $sku,
 					'type' => CBWoo::extract_subscription_type($order),
 					'rush' => CBWoo::order_is_rush($order),
+					'ship_month' => $ship_month,
+					'ship_month_guess' => $ship_month_guess,
 				);
 			}
 			if ($is_debit) {
@@ -2772,6 +3501,8 @@ class CBCmd extends WP_CLI_Command {
 					'id' => $order->id,
 					'created_cohort' => $created_at->format('Y-m'),
 					'shipped_cohort' => $completed_at->format('Y-m'),
+					'stripe_total' => $stripe_total,
+					'stripe_refunded' => $stripe_refunded,
 					'status' => $order->status,
 					'customer' => $order->customer_id,
 					'sku' => $sku,
@@ -2779,6 +3510,8 @@ class CBCmd extends WP_CLI_Command {
 					'gender' => $opts->gender,
 					't-shirt' => $opts->size,
 					'sku_version' => $opts->sku_version,
+					'ship_month' => $ship_month,
+					'ship_month_guess' => $ship_month_guess,
 				);
 			}
 			if (!$is_credit && !$is_debit) {
@@ -2791,10 +3524,10 @@ class CBCmd extends WP_CLI_Command {
 			set_transient('cb_export_boxes_raw', $boxes);
 		} else {
 			WP_CLI::debug("Renewals");
-			$columns = array('id', 'created_cohort', 'status', 'customer', 'total', 'sku', 'type', 'rush');
+			$columns = array('id', 'created_cohort', 'status', 'customer', 'total', 'stripe_total', 'stripe_refunded', 'sku', 'type', 'rush', 'ship_month', 'ship_month_guess');
 			WP_CLI\Utils\format_items($this->options->format, $subs, $columns);
 			WP_CLI::debug("Boxes");
-			$columns = array('id', 'created_cohort', 'shipped_cohort', 'status', 'customer', 'sku', 'month', 'gender', 't-shirt', 'sku_version');
+			$columns = array('id', 'created_cohort', 'shipped_cohort', 'status', 'customer', 'sku', 'month', 'gender', 't-shirt', 'sku_version', 'ship_month', 'ship_month_guess');
 			WP_CLI\Utils\format_items($this->options->format, $boxes, $columns);
 		}
 	}
