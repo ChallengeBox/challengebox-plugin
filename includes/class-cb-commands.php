@@ -17,6 +17,11 @@ class CBCmd extends WP_CLI_Command {
 	private function parse_args($args, $assoc_args) {
 		$tz = !empty($assoc_args['timezone']) ? $assoc_args['timezone'] : 'America/New_York';
 		$now = Carbon::now($tz);
+		
+		echo $now . PHP_EOL;
+		echo print_r($args, true);
+		echo print_r($assoc_args, true);
+		
 		$this->options = (object) array(
 			'all' => !empty($assoc_args['all']),
 			'timezone' => $tz,
@@ -2966,8 +2971,218 @@ class CBCmd extends WP_CLI_Command {
 		if (sizeof($results))
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
+	
+	/**
+	 * test_call
+	 */
+	public function test_call($args, $assoc_args) {
+
+		$consumerKey = '227HLB';
+		$consumerSecret = 'b1c277cc25aea167c683624d2cba0df6';
+		$userId = '22WRRX';
+		
+		$fitbit = new CBFitbitAPI($userId);
+		
+		
+		try {
+	
+			$startDate = '2016-06-01';
+			$endDate = '2016-09-01';
+	
+			$carbon = $this->get_carbon();
+			$start = $carbon->createFromFormat('Y-m-d', $startDate);
+			$end = $carbon->createFromFormat('Y-m-d', $endDate);
+			
+	
+			$data = array();
+			$results = $fitbit->get_cached_time_series('steps', $start, $end);
+			echo 'Results: ' . PHP_EOL;
+			print_r($results);
+			$data = array_merge($data, $results);
+				
+			echo "Data: " . PHP_EOL;
+			print_r($data);
+		} catch (Exception $e) {
+			echo 'Error: ' . $e->getMessage() . PHP_EOL;
+		}
+	}
+	
+	/**
+	 * convert_fitbit_to_date_parsed_format
+	 * 
+	 * from:
+	 * {
+	 * 	"activity" : [
+	 * 		{ "date" : "2016-01-01", "value" : 34, "something" : "else" }
+	 *	],
+	 *  "other_activity" : [
+	 *  	{ "date" : "2016-01-01", "value" : 6 },
+	 *  	{ "date" : "2016-01-02", "value" : 7 }
+	 *  ]
+	 * }
+	 * 
+	 * to:
+	 * {
+	 *   "2016-01-01" : {
+	 *      "activity" : { "value" : 34, "something" : "else" },
+	 *      "other_activity" : { "value" : 6 }
+	 *   },
+	 *   "2016-01-02" : {
+	 *   	"other_activity" : { "value" : 7 }
+	 *   }
+	 * }
+	 * 
+	 */
+	private function convert_fitbit_to_date_parsed_format($rawFitbit) {
+		
+		$dateFormat = array();
+		
+		foreach ($rawFitbit as $activity => $activityRecords) {
+			
+			foreach ($activityRecords as $record) {
+				$date = $record->dateTime;
+				
+				if (!array_key_exists($date, $dateFormat)) {
+					$dateFormat[$date] = array();
+				}
+				if (!array_key_exists($activity, $dateFormat[$date])) {
+					$dateFormat[$date][$activity] = array();
+				}
+				
+				unset($record->dateTime);
+				$dateFormat[$date][$activity] = $record;
+			}
+		}
+		
+		return $dateFormat;
+	}
+	
+	/**
+	 * get_up_users
+	 */
+	public function get_wp_users($args = null)
+	{
+		return get_users($args);
+	}
+	
+	/**
+	 * Get customers fitbit
+	 */
+	public function get_customers_fitbit($userId)
+	{
+		$customer = new CBCustomer($user->ID);
+		return $customer->fitbit();
+	}
+	
+	/**
+	 * Get Carbon
+	 */
+	public function get_carbon()
+	{
+		if (is_null($this->carbon)) {
+			$this->carbon = new Carbon();
+		}
+		return $this->carbon;
+	}
+	
+	/**
+	 * generate_cb_raw_tracking_data
+	 */
+	public function generate_cb_raw_tracking_data($userId, $date, $source, $data)
+	{
+		return new CBRawTrackingData($userId, $date, $source, $data);
+	}
+	
+	/**
+	 * injest_daily_tracking
+	 */
+	public function injest_daily_tracking($args, $assocArgs) {
+
+		// make sure required dates are provided
+		if (count($args) < 2) {
+			echo 'wp cb injest_daily_tracking <start date> <end date>';
+			return;
+		}
+		
+		list($startDate, $endDate) = $args;
+
+		// get starts into Carbon format
+		$carbon = $this->get_carbon();
+		$start = $carbon->createFromFormat('Y-m-d', $startDate);
+		$end = $carbon->createFromFormat('Y-m-d', $endDate);
+
+		// build list of all fitbit activities to be included
+		$activities = array(
+				'caloriesIn',
+				'water',
+				'caloriesOut',
+				'steps',
+				'distance',
+				'floors',
+				'elevation',
+				'minutesSedentary',
+				'minutesLightlyActive',
+				'minutesFairlyActive',
+				'minutesVeryActive',
+				'activityCalories',
+				'tracker_caloriesOut',
+				'tracker_steps',
+				'tracker_distance',
+				'tracker_floors',
+				'tracker_elevation',
+				'startTime',
+				'timeInBed',
+				'minutesAsleep',
+				'awakeningsCount',
+				'minutesAwake',
+				'minutesToFallAsleep',
+				'minutesAfterWakeup',
+				'efficiency',
+				'weight',
+				'bmi',
+				'fat',
+				'activities_steps'
+		);
+
+		// for each user, get their ID
+		$userParams = array(
+			'fields' => array('ID')	
+		);
+		
+		foreach ($this->get_wp_users($userParams) as $user) {
+			
+			// if the user has a fitbit connection
+			$fitbit = $this->get_customers_fitbit($user->ID);
+			
+			if (!is_null($fitbit)) {
+				
+				try {
+					
+					// get fitbit data
+					$rawData = array();
+					foreach ($activities as $activity) {
+						$results = $fitbit->get_cached_time_series($activity, $start, $end);
+						$rawData = array_merge($rawData, $results);
+					}
+					
+					// reformat data, separated by date
+					$dateParsed = $this->convert_fitbit_to_date_parsed_format($rawData);
+					
+					// record raw tracking "fitbit" data into table
+					foreach ($dateParsed as $date => $data) {
+						$rawTrackingData = $this->generate_cb_raw_tracking_data($user->ID, $date, 'fitbit-1', $data);
+						$rawTrackingData->save();
+					}
+					
+				} catch (Exception $e) {
+					echo 'Error: ' . $e->getMessage() . PHP_EOL;
+				}
+			}
+		}
+	}
 
 }
+
 
 WP_CLI::add_command( 'cb', 'CBCmd' );
 

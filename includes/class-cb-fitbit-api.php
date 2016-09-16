@@ -65,6 +65,8 @@ class CBFitbitAPI {
 		$v1_token = get_user_meta($this->user_id, $this->v1_token_key, true);
 		$v1_secret = get_user_meta($this->user_id, $this->v1_secret_key, true);
 
+		
+		
 		if (is_object($fitbit_php) && !empty($v1_token) && !empty($v1_secret)) {
 			$_SESSION['fitbit_Session'] = 2;
 			$_SESSION['fitbit_Token'] = $v1_token;
@@ -139,6 +141,7 @@ class CBFitbitAPI {
 		// Use this to measure the time fitbit has actually been measuring data
 		$wearing_fitbit = array_sum(array_map(function ($v) { return $v >= 1; }, $any_activity));
 
+		
 		return array(
 			'time_series' => array(
 				'any_activity' => $any_activity,
@@ -204,6 +207,7 @@ class CBFitbitAPI {
 
 	public function get_cached_time_series($activity, $start, $end) {
 		$key = $this->_time_series_cache_key($activity, $start, $end);
+
 		if (false === ($raw = get_transient($key))) {
 			$raw = $this->oldGetTimeSeries($activity, $start, $end);
 			set_transient($key, $raw, 60*60);
