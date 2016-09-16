@@ -2977,23 +2977,23 @@ class CBCmd extends WP_CLI_Command {
 	 * 
 	 * from:
 	 * {
-	 * 	"activity" : [
-	 * 		{ "date" : "2016-01-01", "value" : 34, "something" : "else" }
-	 *	],
-	 *  "other_activity" : [
-	 *  	{ "date" : "2016-01-01", "value" : 6 },
-	 *  	{ "date" : "2016-01-02", "value" : 7 }
-	 *  ]
+	 * 	"activity" : {
+	 * 		"2016-01-01" => 34
+	 *	},
+	 *  "other_activity" : {
+	 *  	"2016-01-01" => 6,
+	 *  	"2016-01-02" => 7 
+	 *  }
 	 * }
 	 * 
 	 * to:
 	 * {
 	 *   "2016-01-01" : {
-	 *      "activity" : { "value" : 34, "something" : "else" },
-	 *      "other_activity" : { "value" : 6 }
+	 *      "activity" : 3,
+	 *      "other_activity" : 6
 	 *   },
 	 *   "2016-01-02" : {
-	 *   	"other_activity" : { "value" : 7 }
+	 *   	"other_activity" : 7
 	 *   }
 	 * }
 	 * 
@@ -3004,8 +3004,7 @@ class CBCmd extends WP_CLI_Command {
 		
 		foreach ($rawFitbit as $activity => $activityRecords) {
 			
-			foreach ($activityRecords as $record) {
-				$date = $record->dateTime;
+			foreach ($activityRecords as $date => $value) {
 				
 				if (!array_key_exists($date, $dateFormat)) {
 					$dateFormat[$date] = array();
@@ -3014,8 +3013,7 @@ class CBCmd extends WP_CLI_Command {
 					$dateFormat[$date][$activity] = array();
 				}
 				
-				unset($record->dateTime);
-				$dateFormat[$date][$activity] = $record;
+				$dateFormat[$date][$activity] = $value;
 			}
 		}
 		

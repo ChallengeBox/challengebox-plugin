@@ -204,13 +204,12 @@ class CBFitbitAPI {
 	//
 	//  Caching API
 	// 
-
 	public function get_cached_time_series($activity, $start, $end) {
 		$key = $this->_time_series_cache_key($activity, $start, $end);
 
 		if (false === ($raw = get_transient($key))) {
 			$raw = $this->oldGetTimeSeries($activity, $start, $end);
-			set_transient($key, $raw, 60*60);
+			set_transient($key, $raw, 3600);
 		}
 		return array_map(function ($v) { return 0 + $v->value; }, $raw);
 	}
@@ -548,7 +547,15 @@ class CBFitbitAPI {
 			));
 
 			$key = str_replace('/', '-', substr($path, 1));
-			return array_map(function ($v) { return (object) $v; }, $response[$key]);
+			
+			// key each value to a date
+			$keyedResults = array();
+			foreach ($response[$key] as $dateRecord) {
+				$keyedResults[$dateRecord->dateTime] = (object) $dateRecord;
+			}
+
+			return $keyedResults;
+			//return array_map(function ($v) { return (object) $v; }, $keyedResults);
 
 		} catch (OAuthException $ex) {
 			if ($ex->getCode() == 401) return $this->maybe_reauthorize_user();
