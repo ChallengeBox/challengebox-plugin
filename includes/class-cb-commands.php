@@ -3126,8 +3126,8 @@ class CBCmd extends WP_CLI_Command {
 					foreach ($activities as $activity) {
 						
 						$results = $fitbit->get_cached_time_series($activity, $start, $end);
-					
-						$rawData = array_merge($rawData, $results);
+						
+						$rawData = array_merge($rawData, array($activity => $results));
 					}
 					
 					// reformat data, separated by date

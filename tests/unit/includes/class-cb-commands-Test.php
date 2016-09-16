@@ -73,7 +73,7 @@ class Test_CBCmd extends TestCase {
 					$this->equalTo($startDateInCarbon),
 					$this->equalTo($endDateInCarbon)
 				)
-				->willReturn(array($activity => array('2016-01-01' => $i)));
+				->willReturn(array('2016-01-01' => $i));
 			$i++;
 		}
 
