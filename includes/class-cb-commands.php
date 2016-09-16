@@ -3079,7 +3079,7 @@ class CBCmd extends WP_CLI_Command {
 		// build list of all fitbit activities to be included
 		$activities = array(
 				'caloriesIn',
-			/*	'water',
+				'water',
 				'caloriesOut',
 				'steps',
 				'distance',
@@ -3106,7 +3106,7 @@ class CBCmd extends WP_CLI_Command {
 				'weight',
 				'bmi',
 				'fat',
-				'activities_steps' */
+				'activities_steps' 
 		);
 
 		// for each user, get their ID
