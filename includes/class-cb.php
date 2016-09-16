@@ -106,6 +106,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-weekly-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-user-guesser.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-bot.php';
+		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-raw-tracking-data.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-admin.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'admin/class-cb-customers-stats.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-fitbit-api.php';

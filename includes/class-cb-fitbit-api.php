@@ -502,7 +502,7 @@ class CBFitbitAPI {
 		try {
 
 			$this->maybe_authenticate_user();
-
+			
 			if ($this->active_api() == $this->api1)
 				return $this->api1->getTimeSeries($activity, $start_date, $end_date);
 

@@ -107,7 +107,7 @@ class CBRawTrackingData
 		
 		// does the record already exist?
 		$preparedStatement = $wpdb->prepare(
-			'select count(user_id) as num from ' . $this->table_name . ' where user_id = %d and date = %s and source = %s',
+			'select count(user_id) as num from ' . $wpdb->prefix . $this->table_name . ' where user_id = %d and date = %s and source = %s',
 			array($this->user_id, $this->date, $this->source)
 		);
 
@@ -132,7 +132,7 @@ class CBRawTrackingData
 		// yes? update the record
 		} else {
 			$wpdb->update(
-				$this->table_name,
+				$wpdb->prefix . $this->table_name,
 				array(
 					'data' => $this->data
 				),
