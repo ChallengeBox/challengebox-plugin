@@ -37,7 +37,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from raw_tracking_data where user_id = %d and date = %s and source = %s'),
+				$this->equalTo('select count(user_id) as num from wp_raw_tracking_data where user_id = %d and date = %s and source = %s'),
 				$this->equalTo(array($userId, $date, $source))
 			)
 			->willReturn($preparedStatement);
@@ -86,6 +86,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$data = '{"steps":5000,"calories":34,"water":40,"whiskey":940}';
 		
 		$preparedStatement = 'a_prepared_statement_object';
+		$wordpressPrefix = 'wp_';
 		
 		$result = new \stdClass();
 		$result->num = 1;
@@ -97,7 +98,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from raw_tracking_data where user_id = %d and date = %s and source = %s'),
+				$this->equalTo('select count(user_id) as num from wp_raw_tracking_data where user_id = %d and date = %s and source = %s'),
 				$this->equalTo(array($userId, $date, $source))
 			)
 			->willReturn($preparedStatement);
@@ -110,7 +111,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$wpdb->expects($this->once())
 			->method('update')
 			->with(
-				$this->equalTo('raw_tracking_data'),
+				$this->equalTo('wp_raw_tracking_data'),
 				$this->equalTo(array(
 					'data' => $data
 				)),
@@ -122,6 +123,7 @@ class Test_CBRawTrackingData extends TestCase {
 				$this->equalTo(array("%s")),
 				$this->equalTo(array("%d","%s","%s"))
 			);
+		$wpdb->prefix = $wordpressPrefix;
 		
 		
 		$rawTrackingData = $this->getMockBuilder('CBRawTrackingData')
