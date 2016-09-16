@@ -25,6 +25,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$data = '{"steps":5000,"calories":34,"water":40,"whiskey":940}';
 		
 		$preparedStatement = 'a_prepared_statement_object';
+		$wordpressPrefix = 'wp_';
 		
 		$result = new \stdClass();
 		$result->num = 0;
@@ -47,7 +48,7 @@ class Test_CBRawTrackingData extends TestCase {
 		$wpdb->expects($this->once())
 			->method('insert')
 			->with(
-				$this->equalTo('raw_tracking_data'),
+				$this->equalTo('wp_raw_tracking_data'),
 				$this->equalTo(array(
 					'user_id' => $userId,
 					'date' => $date,
@@ -57,6 +58,7 @@ class Test_CBRawTrackingData extends TestCase {
 			);
 		$wpdb->expects($this->never())
 			->method('update');
+		$wpdb->prefix = $wordpressPrefix;
 		
 		
 		$rawTrackingData = $this->getMockBuilder('CBRawTrackingData')

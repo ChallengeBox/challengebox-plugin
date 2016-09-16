@@ -1,4 +1,4 @@
-CREATE TABLE `raw_tracking_data` 
+CREATE TABLE `wp_raw_tracking_data` 
 ( 
 	`user_id` BIGINT NOT NULL , 
 	`date` DATE NOT NULL , 

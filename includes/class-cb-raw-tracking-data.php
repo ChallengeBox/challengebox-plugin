@@ -120,7 +120,7 @@ class CBRawTrackingData
 		// no? insert a new record
 		if ($count == 0) {
 			$wpdb->insert(
-				$this->table_name,
+				$wpdb->prefix . $this->table_name,
 				array(
 					'user_id' => $this->user_id, 
 					'date' => $this->date, 
