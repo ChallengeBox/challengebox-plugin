@@ -2973,41 +2973,6 @@ class CBCmd extends WP_CLI_Command {
 	}
 	
 	/**
-	 * test_call
-	 */
-	public function test_call($args, $assoc_args) {
-
-		$consumerKey = '227HLB';
-		$consumerSecret = 'b1c277cc25aea167c683624d2cba0df6';
-		$userId = '22WRRX';
-		
-		$fitbit = new CBFitbitAPI($userId);
-		
-		
-		try {
-	
-			$startDate = '2016-06-01';
-			$endDate = '2016-09-01';
-	
-			$carbon = $this->get_carbon();
-			$start = $carbon->createFromFormat('Y-m-d', $startDate);
-			$end = $carbon->createFromFormat('Y-m-d', $endDate);
-			
-	
-			$data = array();
-			$results = $fitbit->get_cached_time_series('steps', $start, $end);
-			echo 'Results: ' . PHP_EOL;
-			print_r($results);
-			$data = array_merge($data, $results);
-				
-			echo "Data: " . PHP_EOL;
-			print_r($data);
-		} catch (Exception $e) {
-			echo 'Error: ' . $e->getMessage() . PHP_EOL;
-		}
-	}
-	
-	/**
 	 * convert_fitbit_to_date_parsed_format
 	 * 
 	 * from:
