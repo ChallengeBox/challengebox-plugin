@@ -3057,13 +3057,13 @@ class CBCmd extends WP_CLI_Command {
 	}
 	
 	/**
-	 * injest_daily_tracking
+	 * ingest_daily_tracking
 	 */
-	public function injest_daily_tracking($args, $assocArgs) {
+	public function ingest_daily_tracking($args, $assocArgs) {
 
 		// make sure required dates are provided
 		if (count($args) < 2) {
-			echo 'wp cb injest_daily_tracking <start date> <end date>';
+			echo 'wp cb ingest_daily_tracking <start date> <end date>';
 			return;
 		}
 		

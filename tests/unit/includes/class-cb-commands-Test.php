@@ -20,9 +20,9 @@ class Test_CBCmd extends TestCase {
 	}
 	
 	/**
-	 * test: injest_daily_tracking successfully
+	 * test: ingest_daily_tracking successfully
 	 */
-	public function testInjestDailyTrackingSuccessfully()
+	public function testIngestDailyTrackingSuccessfully()
 	{
 		// param
 		$startDate = '2016-01-01';
@@ -153,6 +153,6 @@ class Test_CBCmd extends TestCase {
 			->willReturn($aRawTrackingData);
 		
 		// run
-		$classCbCommands->injest_daily_tracking($args, $assocArgs);
+		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
 	}
 }
