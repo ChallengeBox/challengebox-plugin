@@ -82,6 +82,11 @@ class CBCmd extends WP_CLI_Command {
 				global $wpdb;
 				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_order';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
+			} elseif ('subscription' == $this->options->orientation) {
+				WP_CLI::debug("Grabbing subscription ids...");
+				global $wpdb;
+				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_subscription';");
+				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			}
 		}
 		sort($args);
@@ -3706,6 +3711,118 @@ SQL;
 
 		if (sizeof($results))
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+	}
+
+	/**
+	 * Exports subscription event data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<sub_id>...]
+	 * : The subscription id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all subscriptions. (Ignores <sub_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate subscriptions in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> subscriptions out of the list given.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_subscription_events
+	 */
+	function export_subscription_events( $args, $assoc_args ) {
+		global $wpdb;
+		$assoc_args['orientation'] = 'subscription';
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+
+		foreach ($args as $sub_id) {
+			$sub_id = intval($sub_id);
+			$sub = wcs_get_subscription($sub_id);
+			WP_CLI::debug("Subscription $sub_id...");
+			$user_id = $sub->get_user_id();
+
+			$rows = $wpdb->get_results("select * from wp_comments where comment_post_ID = $sub_id");
+			//var_dump($rows);
+
+			$found_initial_state = false;
+			foreach ($rows as $comment) {
+
+				$date = $comment->comment_date_gmt; //new Carbon($comment->comment_date_gmt);	
+				$text = $comment->comment_content;	
+				//var_dump(['date'=>$date, 'text'=>$text]);
+				$matches = array();
+
+				if (preg_match('/Status changed from (.*) to (.*)\.$/', $text, $matches)) {
+					//var_dump($matches);
+					list($_, $old_state, $new_state) = $matches;
+					$old_state = str_replace(' ', '-', strtolower($old_state));
+					$new_state = str_replace(' ', '-', strtolower($new_state));
+					//WP_CLI::debug("Old state $old_state new state $new_state");
+
+					// Attach initial state if we didn't have it already
+					if ($found_initial_state === false) {
+						$found_initial_state = true;
+						$results[] = array(
+							'sub_id' => $sub_id,
+							'user_id' => $user_id,
+							'date' => $sub->post->post_date_gmt,
+							'old_state' => '',
+							'new_state' => $old_state,
+							'comment' => '',
+						);
+					}
+
+					$results[] = array(
+						'sub_id' => $sub_id,
+						'user_id' => $user_id,
+						'date' => $date,
+						'old_state' => $old_state,
+						'new_state' => $new_state,
+						'comment' => '',
+					);
+				}
+				else {
+					$results[] = array(
+						'sub_id' => $sub_id,
+						'user_id' => $user_id,
+						'date' => $date,
+						'old_state' => '',
+						'new_state' => '',
+						'comment' => $text,
+					);
+				}
+			}
+		}
+
+		$columns = array(
+			'sub_id',
+			'user_id',
+			'date',
+			'old_state',
+			'new_state',
+			'comment',
+		);
+
+		if (sizeof($results))
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		
 	}
 
 }
