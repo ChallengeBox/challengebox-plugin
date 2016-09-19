@@ -3648,6 +3648,14 @@ SQL;
 					'metric_level' => $challenge->metric_level,
 					'error' => $e->getMessage(),
 				);
+			} catch (League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
+				$results[] = array(
+					'user_id' =>  $user_id,
+					'joined' =>  $challenge->user_has_joined ? 'true' : 'false',
+					'previous_metric_level' => $challenge->previous_metric_level,
+					'metric_level' => $challenge->metric_level,
+					'error' => $e->getMessage(),
+				);
 			}
 		}
 
