@@ -1,6 +1,8 @@
 <?php
 
 use Carbon\Carbon;
+use Aws\Credentials\CredentialProvider;
+use Aws\S3\S3Client;
 
 /**
  * Commands for managing ChallengeBox.
@@ -9,6 +11,7 @@ class CBCmd extends WP_CLI_Command {
 
 	private $api;
 	private $options;
+	private $s3Client;
 
 	public function __construct() {
 		$this->api = new CBWoo();
@@ -52,6 +55,8 @@ class CBCmd extends WP_CLI_Command {
 			'save' => !empty($assoc_args['save']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 			'channel' => !empty($assoc_args['channel']) ? $assoc_args['channel'] : '@ryan',
+			'save_output' => !empty($assoc_args['save_output']),
+			's3_bucket' => !empty($assoc_args['s3_bucket']) ? $assoc_args['s3_bucket'] : 'challengebox-redshift',
 		);
 
 		// Month option should be pegged to the first day
@@ -108,8 +113,44 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug(var_export($this->options, true));
 		}
 
+		if ($this->options->save_output) {
+			$provider = CredentialProvider::ini('redshift', '/home/www-data/.aws/credentials');
+			$provider = CredentialProvider::memoize($provider);
+			$this->s3Client = new S3Client(array(
+				//'profile' => 'redshift',
+				'region' => 'us-east-1',
+				'version' => 'latest',
+				'credentials' => $provider
+			));
+		}
+
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
 		return array($args, $assoc_args);
+	}
+
+	private function upload_results_to_s3($file_path, $results, $columns, $gzip = true) {
+		$fp = fopen('php://temp', 'rw');
+		WP_CLI\Utils\write_csv($fp, $results, $columns);
+		rewind($fp);
+		if ($gzip) $content = gzencode(stream_get_contents($fp));
+		else $content = stream_get_contents($fp);
+		$result = $this->s3Client->putObject([
+				'Bucket' => $this->options->s3_bucket,
+				'Key'    => "$file_path",
+				'Body'   => $content
+		]);
+		fclose($fp);
+	}
+
+	private function execute_redshift_queries($queries) {
+		WP_CLI::debug("Connecting to redshift...");
+		$db = pg_connect(file_get_contents('/home/www-data/.aws/redshift.string'))
+				or WP_CLI::error(pg_last_error());
+		foreach ($queries as $query) {
+			//if ($this->options->verbose) 
+			WP_CLI::debug("Executing $query");
+			pg_query($query) or WP_CLI::error(pg_last_error());
+		}
 	}
 
 	/**
@@ -3730,6 +3771,9 @@ SQL;
 	 * [--limit=<limit>]
 	 * : Only process <limit> subscriptions out of the list given.
 	 *
+	 * [--save_output]
+	 * : Write results to s3.
+	 *
 	 * [--format=<format>]
 	 * : Output format.
 	 *  ---
@@ -3766,15 +3810,18 @@ SQL;
 
 				$date = $comment->comment_date_gmt; //new Carbon($comment->comment_date_gmt);	
 				$text = $comment->comment_content;	
+				$event = 'other';
+				$old_state = '';
+				$new_state = '';
+
 				//var_dump(['date'=>$date, 'text'=>$text]);
 				$matches = array();
 
 				if (preg_match('/Status changed from (.*) to (.*)\.$/', $text, $matches)) {
-					//var_dump($matches);
+					$event = 'state-change';
 					list($_, $old_state, $new_state) = $matches;
 					$old_state = str_replace(' ', '-', strtolower($old_state));
 					$new_state = str_replace(' ', '-', strtolower($new_state));
-					//WP_CLI::debug("Old state $old_state new state $new_state");
 
 					// Attach initial state if we didn't have it already
 					if ($found_initial_state === false) {
@@ -3782,47 +3829,82 @@ SQL;
 						$results[] = array(
 							'sub_id' => $sub_id,
 							'user_id' => $user_id,
+							'event' => $event,
 							'date' => $sub->post->post_date_gmt,
 							'old_state' => '',
 							'new_state' => $old_state,
-							'comment' => '',
+							'comment' => $text,
 						);
 					}
 
-					$results[] = array(
-						'sub_id' => $sub_id,
-						'user_id' => $user_id,
-						'date' => $date,
-						'old_state' => $old_state,
-						'new_state' => $new_state,
-						'comment' => '',
-					);
+				} elseif (preg_match('/Order (.*) created to record renewal\./', $text, $matches)) {
+					$event = 'order-created';
+				} elseif (preg_match('/Payment received\./', $text, $matches)) {
+					$event = 'payment-received';
+				} elseif (preg_match('/Payment failed\./', $text, $matches)) {
+					$event = 'payment-failed';
+				} elseif (preg_match('/Subscription cancelled by the subscriber from their account page\./', $text, $matches)) {
+					$event = 'user-cancelled';
+				} elseif (preg_match('/Subscription put on hold by the subscriber from their account page\./', $text, $matches)) {
+					$event = 'user-hold';
+				} elseif (preg_match('/Payment method changed from (.*) to (.*) by the subscriber from their account page\./', $text, $matches)) {
+					$event = 'user-card-update';
+				} elseif (preg_match('/Subscription reactivated by the subscriber from their account page\./', $text, $matches)) {
+					$event = 'user-reactivated';
 				}
-				else {
-					$results[] = array(
-						'sub_id' => $sub_id,
-						'user_id' => $user_id,
-						'date' => $date,
-						'old_state' => '',
-						'new_state' => '',
-						'comment' => $text,
-					);
-				}
+
+				$results[] = array(
+					'sub_id' => $sub_id,
+					'user_id' => $user_id,
+					'event' => $event,
+					'date' => $date,
+					'old_state' => $old_state,
+					'new_state' => $new_state,
+					'comment' => $text,
+				);
+
 			}
 		}
 
 		$columns = array(
 			'sub_id',
 			'user_id',
+			'event',
 			'date',
 			'old_state',
 			'new_state',
 			'comment',
 		);
 
-		if (sizeof($results))
-			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
-		
+		if (sizeof($results)) {
+			if ($this->options->save_output) {
+				$this->upload_results_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS sub_events;",
+					"CREATE TABLE sub_events (
+						sub_id INT8 NOT NULL
+						, user_id INT8 NOT NULL
+						, event VARCHAR(32) DEFAULT NULL
+						, date TIMESTAMP NOT NULL
+						, old_state VARCHAR(64) DEFAULT NULL
+						, new_state VARCHAR(64) DEFAULT NULL
+						, comment VARCHAR(1024) DEFAULT NULL
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id,sub_id);",
+					"COPY sub_events FROM 's3://challengebox-redshift/command_results/subscription_events.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV
+						IGNOREHEADER AS 1
+						NULL AS ''
+						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
+						GZIP;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+
 	}
 
 }
