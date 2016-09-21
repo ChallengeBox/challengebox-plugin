@@ -1,6 +1,7 @@
 <?php
 
 use Carbon\Carbon;
+use ChallengeBox\Includes\Utilities\BaseFactory;
 
 /**
  * Commands for managing ChallengeBox.
@@ -2973,54 +2974,6 @@ class CBCmd extends WP_CLI_Command {
 	}
 	
 	/**
-	 * convert_fitbit_to_date_parsed_format
-	 * 
-	 * from:
-	 * {
-	 * 	"activity" : {
-	 * 		"2016-01-01" => 34
-	 *	},
-	 *  "other_activity" : {
-	 *  	"2016-01-01" => 6,
-	 *  	"2016-01-02" => 7 
-	 *  }
-	 * }
-	 * 
-	 * to:
-	 * {
-	 *   "2016-01-01" : {
-	 *      "activity" : 3,
-	 *      "other_activity" : 6
-	 *   },
-	 *   "2016-01-02" : {
-	 *   	"other_activity" : 7
-	 *   }
-	 * }
-	 * 
-	 */
-	private function convert_fitbit_to_date_parsed_format($rawFitbit) {
-		
-		$dateFormat = array();
-		
-		foreach ($rawFitbit as $activity => $activityRecords) {
-			
-			foreach ($activityRecords as $date => $value) {
-				
-				if (!array_key_exists($date, $dateFormat)) {
-					$dateFormat[$date] = array();
-				}
-				if (!array_key_exists($activity, $dateFormat[$date])) {
-					$dateFormat[$date][$activity] = array();
-				}
-				
-				$dateFormat[$date][$activity] = $value;
-			}
-		}
-		
-		return $dateFormat;
-	}
-	
-	/**
 	 * get_up_users
 	 */
 	public function get_wp_users($args = null)
@@ -3046,14 +2999,6 @@ class CBCmd extends WP_CLI_Command {
 			$this->carbon = new Carbon();
 		}
 		return $this->carbon;
-	}
-	
-	/**
-	 * generate_cb_raw_tracking_data
-	 */
-	public function generate_cb_raw_tracking_data($userId, $date, $source, $data)
-	{
-		return new CBRawTrackingData($userId, $date, $source, $data);
 	}
 	
 	/**
@@ -3112,6 +3057,8 @@ class CBCmd extends WP_CLI_Command {
 			'fields' => array('ID')	
 		);
 		
+		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
+		
 		foreach ($this->get_wp_users($userParams) as $user) {
 			
 			// if the user has a fitbit connection
@@ -3130,14 +3077,7 @@ class CBCmd extends WP_CLI_Command {
 						$rawData = array_merge($rawData, array($activity => $results));
 					}
 					
-					// reformat data, separated by date
-					$dateParsed = $this->convert_fitbit_to_date_parsed_format($rawData);
-					
-					// record raw tracking "fitbit" data into table
-					foreach ($dateParsed as $date => $data) {
-						$rawTrackingData = $this->generate_cb_raw_tracking_data($user->ID, $date, 'fitbit-1', $data);
-						$rawTrackingData->save();
-					}
+					$cbRawTrackingData->multiSave($user->ID, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
 					
 				} catch (Exception $e) {
 					echo 'Error: ' . $e->getMessage() . PHP_EOL;

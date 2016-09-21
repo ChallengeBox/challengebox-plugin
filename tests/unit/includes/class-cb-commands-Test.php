@@ -1,24 +1,15 @@
 <?php
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/includes/class-cb-commands.php');
+namespace Tests\Unit\Includes;
 
 use PHPUnit\Framework\TestCase;
 use Carbon\Carbon;
 
-class WP_CLI_Command {};
-class WP_CLI {
-	public static function add_command() {}
-}
+use ChallengeBox\Includes\Utilities\BaseFactory;
+
+use \CBRawTrackingData;
 
 class Test_CBCmd extends TestCase {
 
-	function setUp() {
-		parent::setUp();
-	}
-
-	function tearDown() {
-		parent::tearDown();
-	}
-	
 	/**
 	 * test: ingest_daily_tracking successfully
 	 */
@@ -36,6 +27,11 @@ class Test_CBCmd extends TestCase {
 		);
 		
 		// mock
+		$userId = 343;
+		
+		$user = new \stdClass();
+		$user->ID = $userId;
+		
 		$startDateInCarbon = '2016-01-01';
 		$endDateInCarbon = '2016-01-01';
 		
@@ -51,40 +47,6 @@ class Test_CBCmd extends TestCase {
 			->method('createFromFormat')
 			->with($this->equalTo('Y-m-d'), $this->equalTo($endDate))
 			->willReturn($endDateInCarbon);
-		
-		$fitbit = $this->getMockBuilder('\stdClass')
-			->disableOriginalConstructor()
-			->setMethods(array('get_cached_time_series'))
-			->getMock();
-		$i=0;
-		$activities = array(
-			'caloriesIn', 'water', 'caloriesOut', 'steps', 'distance', 'floors', 'elevation',
-			'minutesSedentary', 'minutesLightlyActive', 'minutesFairlyActive', 'minutesVeryActive',
-			'activityCalories', 'tracker_caloriesOut', 'tracker_steps', 'tracker_distance', 'tracker_floors',
-			'tracker_elevation', 'startTime', 'timeInBed', 'minutesAsleep', 'awakeningsCount', 'minutesAwake',
-			'minutesToFallAsleep', 'minutesAfterWakeup', 'efficiency', 'weight', 'bmi', 'fat', 'activities_steps'
-		);
-		
-		foreach ($activities as $activity) {
-			$fitbit->expects($this->at($i))
-				->method('get_cached_time_series')
-				->with(
-					$this->equalTo($activity),
-					$this->equalTo($startDateInCarbon),
-					$this->equalTo($endDateInCarbon)
-				)
-				->willReturn(array('2016-01-01' => $i));
-			$i++;
-		}
-
-		$userId = 343;
-		
-		$user = new \stdClass();
-		$user->ID = $userId;
-		
-		$users = array(
-			$user
-		);
 		
 		$dateParsedData = array(
 			'2016-01-01' => array(
@@ -120,16 +82,64 @@ class Test_CBCmd extends TestCase {
 			)
 		);
 		
-		$aRawTrackingData = $this->getMockBuilder('CBRawTrackingData')
-			->disableOriginalConstructor()
-			->setMethods(array('save'))
-			->getMock();
-		$aRawTrackingData->expects($this->any())
-			->method('save');
+		$rawData = $dateParsedData;
 		
-		$classCbCommands = $this->getMockBuilder('CBCmd')
+		$cbRawTrackingData = $this->getMockBuilder('CBRawTrackingData')
 			->disableOriginalConstructor()
-			->setMethods(array('get_carbon', 'get_wp_users',  'get_customers_fitbit',  'generate_cb_raw_tracking_data'))
+			->setMethods(array('multiSave'))
+			->getMock();
+		$cbRawTrackingData->expects($this->once())
+			->method('multiSave')
+			->with( 
+				$this->equalTo($user->ID),
+				$this->equalTo(CBRawTrackingData::FITBIT_V1_SOURCE),
+				$this->equalTo($rawData)
+			);
+		
+		$baseFactory = $this->getMockBuilder('ChallengeBox\Includes\Utilities\BaseFactory')
+			->disableOriginalConstructor()
+			->setMethods(array('generate'))
+			->getMock();
+		$baseFactory->expects($this->once())
+			->method('generate')
+			->with($this->equalTo('CBRawTrackingData'))
+			->willReturn($cbRawTrackingData);
+		BaseFactory::setInstance($baseFactory);
+		
+		$fitbit = $this->getMockBuilder('\stdClass')
+			->disableOriginalConstructor()
+			->setMethods(array('get_cached_time_series'))
+			->getMock();
+		$i=0;
+		$activities = array(
+			'caloriesIn', 'water', 'caloriesOut', 'steps', 'distance', 'floors', 'elevation',
+			'minutesSedentary', 'minutesLightlyActive', 'minutesFairlyActive', 'minutesVeryActive',
+			'activityCalories', 'tracker_caloriesOut', 'tracker_steps', 'tracker_distance', 'tracker_floors',
+			'tracker_elevation', 'startTime', 'timeInBed', 'minutesAsleep', 'awakeningsCount', 'minutesAwake',
+			'minutesToFallAsleep', 'minutesAfterWakeup', 'efficiency', 'weight', 'bmi', 'fat', 'activities_steps'
+		);
+		
+		foreach ($activities as $activity) {
+			$fitbit->expects($this->at($i))
+				->method('get_cached_time_series')
+				->with(
+					$this->equalTo($activity),
+					$this->equalTo($startDateInCarbon),
+					$this->equalTo($endDateInCarbon)
+				)
+				->willReturn(array('2016-01-01' => $i));
+			$i++;
+		}
+		
+		$users = array(
+			$user
+		);
+		
+		echo 'is loaded: ' . class_exists('CBCmd') . PHP_EOL;
+		
+		$classCbCommands = $this->getMockBuilder('\CBCmd')
+			->disableOriginalConstructor()
+			->setMethods(array('get_carbon', 'get_wp_users',  'get_customers_fitbit'))
 			->getMock();
 		$classCbCommands->expects($this->at(0))
 			->method('get_carbon')
@@ -142,16 +152,9 @@ class Test_CBCmd extends TestCase {
 			->method('get_customers_fitbit')
 			->with($this->equalTo($userId))
 			->willReturn($fitbit);
-		$classCbCommands->expects($this->at(3))
-			->method('generate_cb_raw_tracking_data')
-			->with(
-				$this->equalTo($userId),
-				$this->equalTo('2016-01-01'),
-				$this->equalTo('fitbit-1'),
-				$this->equalTo($dateParsedData['2016-01-01'])
-			)
-			->willReturn($aRawTrackingData);
 		
+		print_r(get_class_methods($classCbCommands));
+			
 		// run
 		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
 	}

@@ -1,17 +1,8 @@
 <?php
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/includes/class-cb-raw-tracking-data.php');
-
 use PHPUnit\Framework\TestCase;
 
-class Test_CBRawTrackingData extends TestCase {
+class Test_CBRawTrackingData extends BaseTest {
 
-	function setUp() {
-		parent::setUp();
-	}
-
-	function tearDown() {
-		parent::tearDown();
-	}
 	
 	/**
 	 * test: save - inserts if no record previously exists
