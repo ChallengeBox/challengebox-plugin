@@ -251,6 +251,33 @@ class CBWoo {
 			return $this->api->subscriptions->get($id)->subscription;
 		}
 	}
+	public function get_subscription_internal($subscription_id) {
+
+		$subscription      = wcs_get_subscription( $subscription_id );
+		$order_data        = (array) $this->get_order_internal( $subscription_id );
+		$subscription_data = $order_data; //(array) $order_data['order'];
+
+		// Not all order meta relates to a subscription (a subscription doesn't "complete")
+		if ( isset( $subscription_data['completed_at'] ) ) {
+			unset( $subscription_data['completed_at'] );
+		}
+
+		$subscription_data['billing_schedule'] = (object) array(
+			'period'          => $subscription->billing_period,
+			'interval'        => $subscription->billing_interval,
+			'start_at'        => (new Carbon($subscription->start))->format("Y-m-d\TH:i:s\Z"),
+			'trial_end_at'    => (new Carbon($subscription->trial_end))->format("Y-m-d\TH:i:s\Z"),
+			'next_payment_at' => (new Carbon($subscription->next_payment))->format("Y-m-d\TH:i:s\Z"),
+			'end_at'          => (new Carbon($subscription->end))->format("Y-m-d\TH:i:s\Z"),
+		);
+
+		if ( ! empty( $subscription->order ) ) {
+			$subscription_data['parent_order_id'] = $subscription->order->id;
+		} else {
+			$subscription_data['parent_order_id'] = array();
+		}
+		return (object) $subscription_data;
+	}
 	public function get_customer_orders($id) {
 		try {
 			return $this->api->customers->get_orders($id)->orders;
@@ -286,6 +313,22 @@ class CBWoo {
 				$this->api->customers->get_subscriptions($id)->customer_subscriptions
 			);
 		}
+	}
+	public function get_customer_subscriptions_internal($id) { 
+		global $wpdb;
+		$sub_ids = $wpdb->get_col( $wpdb->prepare( "SELECT id
+						FROM $wpdb->posts AS posts
+						LEFT JOIN {$wpdb->postmeta} AS meta on posts.ID = meta.post_id
+						WHERE meta.meta_key = '_customer_user'
+						AND   meta.meta_value = '%s'
+						AND   posts.post_type = 'shop_subscription'
+						AND   posts.post_status IN ( '" . implode( "','", array_keys( wcs_get_subscription_statuses() ) ) . "' )
+					", $id ) );
+		$subs = array();
+		foreach ( $sub_ids as $sub_id ) {
+			$subs[] = $this->get_subscription_internal($sub_id);
+		}
+		return $subs;
 	}
 
 	//

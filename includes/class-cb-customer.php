@@ -181,9 +181,10 @@ class CBCustomer {
 	/**
 	 * Returns the start date of the earliest subscription. Can be used to determine cohort.
 	 */
-	public function earliest_subscription_date() {
+	public function earliest_subscription_date($subscriptions = false) {
 		$earliest = new DateTime();
-		foreach ($this->get_subscriptions() as $sub) {
+		if (!$subscriptions) $subscriptions = $this->get_subscriptions();
+		foreach ($subscriptions as $sub) {
 			if ($sub->created_at) {
 				$created = new DateTime($sub->created_at);
 				if ($created < $earliest) {
@@ -297,7 +298,7 @@ class CBCustomer {
 	 */
 	public function get_orders() {
 		if (empty($this->orders)) {
-			$this->orders = $this->api->get_customer_orders($this->user_id);
+			$this->orders = $this->api->get_customer_orders_internal($this->user_id);
 		}
 		return $this->orders;
 	}
@@ -378,7 +379,7 @@ class CBCustomer {
 	 */
 	public function get_subscriptions() {
 		if (empty($this->subscriptions)) {
-			$this->subscriptions = $this->api->get_customer_subscriptions($this->user_id);
+			$this->subscriptions = $this->api->get_customer_subscriptions_internal($this->user_id);
 		}
 		return $this->subscriptions;
 	}

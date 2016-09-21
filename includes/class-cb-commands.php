@@ -426,6 +426,8 @@ class CBCmd extends WP_CLI_Command {
 
 			WP_CLI::debug("Synchronizing $user_id");
 
+			//var_dump($this->api->get_customer_subscriptions_internal($user_id));
+
 			//
 			// Setup renewal day (depends on user join date unless overridden)
 			//
@@ -3817,6 +3819,7 @@ SQL;
 				//var_dump(['date'=>$date, 'text'=>$text]);
 				$matches = array();
 
+				// Categorize comment into state changes or other events
 				if (preg_match('/Status changed from (.*) to (.*)\.$/', $text, $matches)) {
 					$event = 'state-change';
 					list($_, $old_state, $new_state) = $matches;
