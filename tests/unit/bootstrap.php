@@ -3,6 +3,9 @@ define('CHALLENGEBOX_PLUGIN_DIR', realpath(__dir__ . '/../../'));
 
 
 require_once('./BaseTest.php');
+include_once(CHALLENGEBOX_PLUGIN_DIR . '/vendor/nesbot/carbon/src/Carbon/Carbon.php');
+include_once(CHALLENGEBOX_PLUGIN_DIR . '/vendor/nesbot/carbon/src/Carbon/CarbonInterval.php');
+
 
 function stripNamespaceFromClassName($classname)
 {
@@ -15,8 +18,6 @@ function stripNamespaceFromClassName($classname)
 
 spl_autoload_register(function ($class) {
 
-	echo $class . PHP_EOL;
-	
 	if (!class_exists($class)) {
 		
 		$class = stripNamespaceFromClassName($class);
@@ -32,7 +33,6 @@ spl_autoload_register(function ($class) {
 		$possibleFilename = 'class-' . preg_replace('/cb/', 'cb-', strtolower(preg_replace('/([^A-Z-])([A-Z])/', '$1-$2', $class)), 1);
 		$possibleFilePath = CHALLENGEBOX_PLUGIN_DIR . '/includes/' . $possibleFilename . '.php';
 		
-		echo $possibleFilePath . PHP_EOL;
 		if (file_exists($possibleFilePath)) {
 			require_once($possibleFilePath);
 			return;

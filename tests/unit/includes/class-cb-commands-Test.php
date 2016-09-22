@@ -1,14 +1,14 @@
 <?php
 namespace Tests\Unit\Includes;
 
-use PHPUnit\Framework\TestCase;
+use \BaseTest;
 use Carbon\Carbon;
 
 use ChallengeBox\Includes\Utilities\BaseFactory;
 
 use \CBRawTrackingData;
 
-class Test_CBCmd extends TestCase {
+class Test_CBCmd extends \BaseTest {
 
 	/**
 	 * test: ingest_daily_tracking successfully
@@ -82,7 +82,37 @@ class Test_CBCmd extends TestCase {
 			)
 		);
 		
-		$rawData = $dateParsedData;
+		$rawData = array(
+			'caloriesIn' => array('2016-01-01' => 0), 
+			'water' => array('2016-01-01' => 1), 
+			'caloriesOut' => array('2016-01-01' => 2),
+			'steps' =>  array('2016-01-01' => 3),
+			'distance' =>  array('2016-01-01' => 4),
+			'floors' =>  array('2016-01-01' => 5),
+			'elevation' =>  array('2016-01-01' => 6),
+			'minutesSedentary' =>  array('2016-01-01' => 7),
+			'minutesLightlyActive' =>  array('2016-01-01' => 8),
+			'minutesFairlyActive' => array('2016-01-01' => 9),
+			'minutesVeryActive' => array('2016-01-01' => 10),
+			'activityCalories' => array('2016-01-01' => 11),
+			'tracker_caloriesOut' => array('2016-01-01' => 12),
+			'tracker_steps' => array('2016-01-01' => 13),
+			'tracker_distance' => array('2016-01-01' => 14),
+			'tracker_floors' => array('2016-01-01' => 15),
+			'tracker_elevation' => array('2016-01-01' => 16),
+			'startTime' => array('2016-01-01' => 17),
+			'timeInBed' => array('2016-01-01' => 18),
+			'minutesAsleep' => array('2016-01-01' => 19),
+			'awakeningsCount' => array('2016-01-01' => 20),
+			'minutesAwake' => array('2016-01-01' => 21),
+			'minutesToFallAsleep' => array('2016-01-01' => 22),
+			'minutesAfterWakeup' => array('2016-01-01' => 23),
+			'efficiency' => array('2016-01-01' => 24),
+			'weight' => array('2016-01-01' => 25),
+			'bmi' => array('2016-01-01' => 26),
+			'fat' => array('2016-01-01' => 27),
+			'activities_steps' => array('2016-01-01' => 28),
+		);
 		
 		$cbRawTrackingData = $this->getMockBuilder('CBRawTrackingData')
 			->disableOriginalConstructor()
@@ -135,8 +165,6 @@ class Test_CBCmd extends TestCase {
 			$user
 		);
 		
-		echo 'is loaded: ' . class_exists('CBCmd') . PHP_EOL;
-		
 		$classCbCommands = $this->getMockBuilder('\CBCmd')
 			->disableOriginalConstructor()
 			->setMethods(array('get_carbon', 'get_wp_users',  'get_customers_fitbit'))
@@ -153,8 +181,6 @@ class Test_CBCmd extends TestCase {
 			->with($this->equalTo($userId))
 			->willReturn($fitbit);
 		
-		print_r(get_class_methods($classCbCommands));
-			
 		// run
 		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
 	}

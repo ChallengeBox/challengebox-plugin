@@ -17,21 +17,15 @@ if (!class_exists('WP_CLI')) {
 }
 
 class BaseTest extends TestCase {
-
-	private function mockWpClasses() {
-
-		$cache = $this->getMockBuilder('ChallengeBox\Includes\Utilities\Cache')
-			->disableOriginalConstructor()
-			->setMethods(null)
-			->getMock();
-		
-	}
 	
 	private function mockCache() {
 		$cache = $this->getMockBuilder('ChallengeBox\Includes\Utilities\Cache')
 			->disableOriginalConstructor()
-			->setMethods(null)
+			->setMethods(array('get', 'set', 'clear'))
 			->getMock();
+		$cache->expects($this->any())
+			->method('get')
+			->willReturn(false);
 		Cache::setInstance($cache);
 	}
 	

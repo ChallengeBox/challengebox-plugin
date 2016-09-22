@@ -19,9 +19,9 @@ class BaseSingleton
      * @return AdminUserMapper
      */
     public static function getInstance()
-    {
+    {	
     	$className = get_called_class();
-    	
+
         if (!array_key_exists($className, self::$instance)) {
              self::$instance[$className] = new $className();
         }

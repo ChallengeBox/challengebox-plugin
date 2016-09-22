@@ -1,14 +1,12 @@
 <?php
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/includes/utilities/BaseSingleton.php');
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/includes/utilities/Time.php');
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/vendor/nesbot/carbon/src/Carbon/Carbon.php');
-include_once(CHALLENGEBOX_PLUGIN_DIR . '/vendor/nesbot/carbon/src/Carbon/CarbonInterval.php');
+namespace Tests\Unit\Includes\Utilities;
 
-use PHPUnit\Framework\TestCase;
+use \BaseTest;
+
 use \Carbon\Carbon;
 
 
-class TimeTest extends TestCase {
+class TimeTest extends BaseTest {
 
 	function setUp() {
 		parent::setUp();
