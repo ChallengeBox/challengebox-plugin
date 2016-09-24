@@ -19,6 +19,7 @@
     <filter>
   <whitelist processUncoveredFilesFromWhitelist="true">
     <directory suffix=".php">../../includes/utilities</directory>
+    <file>../../includes/class-cb-aggregate-tracking-data.php</file>
     <file>../../includes/class-cb-commands.php</file>
     <file>../../includes/class-cb-raw-tracking-data.php</file>
   </whitelist>

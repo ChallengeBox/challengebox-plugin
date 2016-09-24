@@ -1,9 +1,7 @@
 <?php
-use ChallengeBox\Includes\Utilities\{
-	BaseFactory,
-	Cache,
-	Time
-};
+use \ChallengeBox\Includes\Utilities\BaseFactory;
+use \ChallengeBox\Includes\Utilities\Cache;
+use \ChallengeBox\Includes\Utilities\Time;
 
 /**
  * CBRawTrackingData
@@ -15,8 +13,8 @@ class CBRawTrackingData extends BaseFactory
 	const DATE_CACHE_KEY = 'date-cache_key-';
 	
 	const FITBIT_V1_SOURCE = 'fitbit-1';
-	const FITBIT_V2_SOURCE = 'fitbit-2';
-	const GARMIN_v1_SOURCE = 'garmin-1';
+	const FITBIT_V2_SOURCE = 'fitbit-2';	// example for versioning, not currently in use (I don't think)
+	const GARMIN_V1_SOURCE = 'garmin-1';
 	
 	private $table_name = 'raw_tracking_data';
 			
@@ -29,8 +27,6 @@ class CBRawTrackingData extends BaseFactory
 	
 	private $create_date;
 	private $last_modified;
-	
-	private $wpdb;
 	
 	/**
 	 * build date cache key
@@ -123,8 +119,8 @@ class CBRawTrackingData extends BaseFactory
 	 * @param unknown $createDate
 	 * @param unknown $lastModified
 	 */
-	public function __construct($userId = null, $date = null, $source = null, $data = null, $createDate = null, $lastModified = null) {
-		
+	public function __construct($userId = null, $date = null, $source = null, $data = null, $createDate = null, $lastModified = null) 
+	{
 		$this->user_id = $userId;
 		$this->date = $date;
 		$this->source = $source;
@@ -183,8 +179,6 @@ class CBRawTrackingData extends BaseFactory
 	
 	/**
 	 * find by user id and dates
-	 * 
-	 * early version: WiP
 	 */
 	public function findByUserIdAndDates($userId, $startDate, $endDate)
 	{
@@ -216,8 +210,8 @@ class CBRawTrackingData extends BaseFactory
 
 			$wpdb = $this->getWpdb();
 			
-			$sql = 'select * from ' . $wpdb->prefix . $this->table_name . ' where user_id = ? and date in ' .
-					'(' . implode(',', array_fill(0, $numberOfUncachedDates, '?')) . ')';
+			$sql = 'select * from ' . $wpdb->prefix . $this->table_name . ' where user_id = %d and date in ' .
+					'(' . implode(',', array_fill(0, $numberOfUncachedDates, '%s')) . ')';
 			
 			$injectedParams = $uncachedDates;
 			array_unshift($injectedParams, $userId);
@@ -244,7 +238,16 @@ class CBRawTrackingData extends BaseFactory
 		}
 		
 		// merge (formerly) uncached data with cached data
-		return array_merge($cachedData, $dateParsedResults);
+		$mergedResults = array_merge($cachedData, $dateParsedResults);
+	
+		$objectResults = array();
+		foreach ($mergedResults as $date => $dateRecords) {
+			foreach ($dateRecords as $record) {
+				$objectResults[$date][] = $this->instantiate($record->user_id, $record->date, $record->source, $record->data, $record->create_date, $record->last_modified);
+			}
+		}
+		
+		return $objectResults;
 	}
 
 	

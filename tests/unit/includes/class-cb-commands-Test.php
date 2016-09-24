@@ -184,4 +184,81 @@ class Test_CBCmd extends \BaseTest {
 		// run
 		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
 	}
+	
+	/**
+	 * test: aggregate_raw_data
+	 */
+	public function testAggregateRawData()
+	{
+		// param
+		$startDate = '2016-01-01';
+		$endDate = '2016-01-04';
+		$assocArgs = array();
+		
+		$args = array(
+			$startDate,
+			$endDate
+		);
+		
+		// mock
+		$userId = 343;
+		
+		$user = new \stdClass();
+		$user->ID = $userId;
+		
+		$users = array(
+			$user
+		);
+		
+		$rawData = 'some_raw_data';
+		
+		$cbRawTrackingData = $this->getMockBuilder('CBRawTrackingData')
+			->disableOriginalConstructor()
+			->setMethods(array('findByUserIdAndDates'))
+			->getMock();
+		$cbRawTrackingData->expects($this->once())
+			->method('findByUserIdAndDates')
+			->with( 
+				$this->equalTo($userId),
+				$this->equalTo($startDate),
+				$this->equalTo($endDate)
+			)
+			->willReturn($rawData);
+		
+
+		$cbAggregateTrackingData = $this->getMockBuilder('CBAggregateTrackingData')
+			->disableOriginalConstructor()
+			->setMethods(array('aggregateAndSave'))
+			->getMock();
+		$cbAggregateTrackingData->expects($this->once())
+			->method('aggregateAndSave')
+			->with($this->equalTo($rawData));
+		
+		$baseFactory = $this->getMockBuilder('ChallengeBox\Includes\Utilities\BaseFactory')
+			->disableOriginalConstructor()
+			->setMethods(array('generate'))
+			->getMock();
+		$baseFactory->expects($this->at(0))
+			->method('generate')
+			->with($this->equalTo('CBRawTrackingData'))
+			->willReturn($cbRawTrackingData);
+		$baseFactory->expects($this->at(1))
+			->method('generate')
+			->with($this->equalTo('CBAggregateTrackingData'))
+			->willReturn($cbAggregateTrackingData);
+		BaseFactory::setInstance($baseFactory);
+		
+		$classCbCommands = $this->getMockBuilder('\CBCmd')
+			->disableOriginalConstructor()
+			->setMethods(array('get_wp_users',  'get_customers_fitbit'))
+			->getMock();
+		$classCbCommands->expects($this->once()) 
+			->method('get_wp_users')
+			->with($this->equalTo(array('fields' => array('ID'))))
+			->willReturn($users);
+		
+		// run
+		$classCbCommands->aggregate_raw_data($args, $assocArgs);
+		
+	}
 }

@@ -3,6 +3,8 @@ namespace ChallengeBox\Includes\Utilities;
 
 class BaseFactory extends BaseSingleton
 {
+	protected $wpdb;
+	
 	/**
 	 * get the global wpdb
 	 */

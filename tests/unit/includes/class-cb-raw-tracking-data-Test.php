@@ -430,13 +430,17 @@ class Test_CBRawTrackingData extends BaseTest
 				'user_id' => $userId,
 				'date' => '2016-01-03',
 				'source' => 'garmin-3',
-				'data' => '{}'
+				'data' => '{}',
+				'create_date' => '2016-01-01 00:00:00',
+				'last_modified' => '2016-01-01 00:00:01'
 			],
 			(object) [
 				'user_id' => $userId,
 				'date' => '2016-01-03',
 				'source' => 'fitbit-2',
-				'data' => '{}'
+				'data' => '{}',
+				'create_date' => '2016-01-01 00:00:00',
+				'last_modified' => '2016-01-01 00:00:01'
 			]
 		);
 		
@@ -465,13 +469,17 @@ class Test_CBRawTrackingData extends BaseTest
 						'user_id' => $userId,
 						'date' => '2016-01-01',
 						'source' => 'garmin-3',
-						'data' => '{}'
+						'data' => '{}',
+						'create_date' => '2016-01-01 00:00:00',
+						'last_modified' => '2016-01-01 00:00:01'
 					],
 					(object) [
 						'user_id' => $userId,
 						'date' => '2016-01-01',
 						'source' => 'fitbit-2',
-						'data' => '{}'
+						'data' => '{}',
+						'create_date' => '2016-01-01 00:00:00',
+						'last_modified' => '2016-01-01 00:00:01'
 					]
 				)),
 				$this->equalTo(Time::ONE_DAY)
@@ -485,14 +493,16 @@ class Test_CBRawTrackingData extends BaseTest
 							'user_id' => $userId,
 							'date' => '2016-01-02',
 							'source' => 'garmin-3',
-							'data' => '{}'
+							'data' => '{}',
+							'create_date' => '2016-01-01 00:00:00',
+							'last_modified' => '2016-01-01 00:00:01'
 					]
 				)),
 				$this->equalTo(Time::ONE_DAY)
 			);
 		Cache::setInstance($cache);
 
-		$expectedSql = 'select * from wp_raw_tracking_data where user_id = ? and date in (?,?)';
+		$expectedSql = 'select * from wp_raw_tracking_data where user_id = %d and date in (%s,%s)';
 		$expectedParameters = array(
 			$userId, '2016-01-01', '2016-01-02'	
 		);
@@ -502,19 +512,25 @@ class Test_CBRawTrackingData extends BaseTest
 					'user_id' => $userId,
 					'date' => '2016-01-01',
 					'source' => 'garmin-3',
-					'data' => '{}'
+					'data' => '{}',
+					'create_date' => '2016-01-01 00:00:00',
+					'last_modified' => '2016-01-01 00:00:01'
 			],
 			(object) [
 					'user_id' => $userId,
 					'date' => '2016-01-02',
 					'source' => 'garmin-3',
-					'data' => '{}'
+					'data' => '{}',
+					'create_date' => '2016-01-01 00:00:00',
+					'last_modified' => '2016-01-01 00:00:01'
 			],
 			(object) [
 					'user_id' => $userId,
 					'date' => '2016-01-01',
 					'source' => 'fitbit-2',
-					'data' => '{}'
+					'data' => '{}',
+					'create_date' => '2016-01-01 00:00:00',
+					'last_modified' => '2016-01-01 00:00:01'
 			],
 		);
 		
@@ -541,47 +557,57 @@ class Test_CBRawTrackingData extends BaseTest
 		$rawTrackingData->expects($this->once())
 			->method('getWpdb')
 			->willReturn($wpdb);
-		
+			
 		// run
 		$results = $rawTrackingData->findByUserIdAndDates($userId, $startDate, $endDate);
 		
 		// post-run assertions
 		$expectedResults = array(
 			'2016-01-01' => array(
-				(object) [
-						'user_id' => $userId,
-						'date' => '2016-01-01',
-						'source' => 'garmin-3',
-						'data' => '{}'
-				],
-				(object) [
-						'user_id' => $userId,
-						'date' => '2016-01-01',
-						'source' => 'fitbit-2',
-						'data' => '{}'
-				]
+				new CBRawTrackingData(
+						$userId,
+						'2016-01-01',
+						'garmin-3',
+						'{}',
+						'2016-01-01 00:00:00',
+						'2016-01-01 00:00:01'
+				),
+				new CBRawTrackingData(
+						$userId,
+						'2016-01-01',
+						'fitbit-2',
+						'{}',
+						'2016-01-01 00:00:00',
+						'2016-01-01 00:00:01'
+				)
 			),
 			'2016-01-02' => array(
-				(object) [
-						'user_id' => $userId,
-						'date' => '2016-01-02',
-						'source' => 'garmin-3',
-						'data' => '{}'
-				]
+					new CBRawTrackingData(
+							$userId,
+							'2016-01-02',
+							'garmin-3',
+							'{}',
+							'2016-01-01 00:00:00',
+							'2016-01-01 00:00:01'
+					)
 			),
 			'2016-01-03' => array(
-				(object) [
-						'user_id' => $userId,
-						'date' => '2016-01-03',
-						'source' => 'garmin-3',
-						'data' => '{}'
-				],
-				(object) [
-						'user_id' => $userId,
-						'date' => '2016-01-03',
-						'source' => 'fitbit-2',
-						'data' => '{}'
-				]
+					new CBRawTrackingData(
+							$userId,
+							'2016-01-03',
+							'garmin-3',
+							'{}',
+							'2016-01-01 00:00:00',
+							'2016-01-01 00:00:01'
+					),
+					new CBRawTrackingData(
+							$userId,
+							'2016-01-03',
+							'fitbit-2',
+							'{}',
+							'2016-01-01 00:00:00',
+							'2016-01-01 00:00:01'
+					)
 			),
 		);
 		$this->assertEquals($expectedResults, $results);

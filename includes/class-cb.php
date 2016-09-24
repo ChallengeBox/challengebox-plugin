@@ -77,6 +77,32 @@ class CB {
 		$this->define_public_hooks();
 
 	}
+	
+	public function autoload_plugin_classes($class)
+	{
+		if (!class_exists($class)) {
+
+			if (preg_match('@\\\\([\w]+)$@', $class, $matches)) {
+				$class = $matches[1];
+			}
+	
+			// utilities?
+			$possibleFilePath = plugin_dir_path(dirname(__FILE__)) . '/includes/utilities/' . $class . '.php';
+			if (file_exists($possibleFilePath)) {
+				require_once($possibleFilePath);
+				return;
+			}
+	
+			// includes "class-cb" files?
+			// (assumes a specific format mapping of class->filename)
+			$possibleFilename = 'class-' . preg_replace('/cb/', 'cb-', strtolower(preg_replace('/([^A-Z-])([A-Z])/', '$1-$2', $class)), 1);
+			$possibleFilePath = plugin_dir_path(dirname(__FILE__)) . '/includes/' . $possibleFilename . '.php';
+			if (file_exists($possibleFilePath)) {
+				require_once($possibleFilePath);
+				return;
+			}
+		}
+	}
 
 	/**
 	 * Load the required dependencies for this plugin.
@@ -95,6 +121,9 @@ class CB {
 	 * @access   private
 	 */
 	private function load_dependencies() {
+		
+		spl_autoload_register('self::autoload_plugin_classes');
+		
 		require_once plugin_dir_path(dirname(__FILE__)).'vendor/autoload.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-loader.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-i18n.php';
@@ -113,6 +142,7 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge-shortcode.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-churn-shortcode.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'public/class-cb-public.php';
+		
  		if (defined( 'WP_CLI' ) && WP_CLI) {
 			require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-commands.php';
 		}

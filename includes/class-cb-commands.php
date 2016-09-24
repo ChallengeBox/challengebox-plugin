@@ -3085,6 +3085,39 @@ class CBCmd extends WP_CLI_Command {
 			}
 		}
 	}
+	
+	/**
+	 * aggregate raw data
+	 */
+	public function aggregate_raw_data($args, $assocArgs)
+	{
+		// make sure required dates are provided
+		if (count($args) < 2) {
+			echo 'wp cb aggregate_raw_data <start date> <end date>';
+			return;
+		}
+		
+		list($startDate, $endDate) = $args;
+		
+		// dependencies
+		$baseFactory = BaseFactory::getInstance();
+		$rawDataObject = $baseFactory->generate('CBRawTrackingData');
+		$aggregateDataObject = $baseFactory->generate('CBAggregateTrackingData');
+		
+		// for each user, get their ID
+		$userParams = array(
+			'fields' => array('ID')
+		);
+
+		foreach ($this->get_wp_users($userParams) as $user) {	
+			// get raw data
+			$rawData = $rawDataObject->findByUserIdAndDates($user->ID, $startDate, $endDate);
+			
+			// aggregate and save the data
+			$aggregateDataObject->aggregateAndSave($rawData);
+		}
+		
+	}
 
 }
 
