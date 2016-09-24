@@ -1,9 +1,7 @@
 <?php
-use ChallengeBox\Includes\Utilities\{
-	BaseFactory,
-	Cache,
-	Time
-};
+use ChallengeBox\Includes\Utilities\BaseFactory;
+use ChallengeBox\Includes\Utilities\Cache;
+use ChallengeBox\Includes\Utilities\Time;
 
 /**
  * CBAggregateTrackingData
