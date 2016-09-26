@@ -6,10 +6,13 @@
 	# System requirements
 	apt-get update
 	apt-get upgrade
-	apt-get installpt-get install htop dstat vim screen git htop dstat vim screen git
-	apt-get install php5-pgsql
+	apt-get installpt-get install htop dstat vim screen git curl htop dstat vim screen git
+	apt-get install php5-cli php5-curl php5-pgsql
 	apt-get install python-pip
 	mysql_secure_installation
+
+	# Composer
+	curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 
 	# AWS cli
 	pip install awscli
@@ -32,8 +35,15 @@
 	ssh-keygen
 	cat ~/.ssh/id_rsa.pub  # Add this to your github account (put a password on it if you're sharing the dev machine)
 	git clone git@github.com:ChallengeBox/challengebox-plugin.git plugin
+	cd plugin
+	composer install
 	
-	# SSL creds
+	# SSL creds (choose one)
+	# 1) Self signed
+	openssl req -config conf/self-sign.conf -new -x509 -sha256 -newkey rsa:2048 -nodes -keyout challengeboxdev_com.key -days 365 -out challengeboxdev_com.crt
+	install -o root -g ssl-cert -m 640 challengeboxdev_com.key /etc/ssl/private/challengeboxdev_com.key && rm challengeboxdev_com.key
+	install -o root -g ssl-cert -m 644 challengeboxdev_com.crt /etc/ssl/certs/challengeboxdev_com.crt && rm challengeboxdev_com.crt
+	# 2) Authority sigend
 	echo "# Paste private SSL key here" > KEY && vim KEY && install -o root -g ssl-cert -m 640 KEY /etc/ssl/private/getchallengebox_com.key && rm KEY
 	echo "# Paste SSL cert here" > CERT && vim CERT && install -o root -g root -m 644 CERT /etc/ssl/certs/getchallengebox_com.crt && rm CERT
 	echo "# Paste SSL trust chain bundle here" > BUNDLE && vim BUNDLE && install -o root -g root -m 644 BUNDLE /etc/ssl/certs/getchallengebox_com.ca-bundle && rm BUNDLE
@@ -48,5 +58,6 @@
 	cp ~/plugin/conf/wp-config.conf .
 
 	# Adjustements to database
+	mysql -u root -p -e "UPDATE dev.wp_options SET option_value = 'https://challengeboxdev.com/' WHERE option_name in ('siteurl', 'home');"
 
 
