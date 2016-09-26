@@ -3141,7 +3141,7 @@ SQL;
 	}
 
 	/**
-	 * Maintains order metadata.
+	 * Exports order data.
 	 *
 	 * ## OPTIONS
 	 *
@@ -3163,24 +3163,28 @@ SQL;
 	 * [--verbose]
 	 * : Print out debugging data.
 	 *
+	 * [--save_output]
+	 * : Write results to s3 -> redshift.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp cb maintain_order --all
 	 */
-	function maintain_order($args, $assoc_args) {
+	function export_orders($args, $assoc_args) {
 		global $wpdb;
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
 		// Schema
 		$columns = array(
 			'id',
-			'order_type',
+			'order_types',
 			'user_id',
 			'parent_id',
 			'status',
 			'created_date',
 			'completed_date',
 			'sku',
+			'box_credits',
 			'box_month',
 			'ship_month',
 			'total',
@@ -3221,6 +3225,9 @@ SQL;
 		}
 
 		$results = array();
+		$boxes = array();
+		$renewals = array();
+		$shops = array();
 
 		foreach ($args as $user_id) {
 			$customer = new CBCustomer($user_id, $interactive = false);
@@ -3286,13 +3293,13 @@ SQL;
 
 				$order_row = array(
 					'id' => $order->id,
-					'order_type' => $order_type,
+					'order_types' => $order_type,
 					'user_id' => $user_id,
 					'parent_id' => $parent_id,
 					'status' => $order->status,
 					'created_date' => $order->created_at,
 					'completed_date' => $order->completed_at,
-					'sku' => $sku,
+					'skus' => $sku,
 					'box_credits' => $parent_credits,
 					'box_month' => $month,
 					'ship_month' => $ship_month,
@@ -3311,7 +3318,7 @@ SQL;
 					'%s',  // status
 					'%s',  // created_date
 					'%s',  // completed_date
-					'%s',  // sku
+					'%s',  // skus
 					'%s',  // box_month
 					'%s',  // ship_month
 					'%f',  // total
@@ -3328,7 +3335,7 @@ SQL;
 					'status' => $order_row['status'],
 					'created_date' => $order_row['created_date'],
 					'completed_date' => $order_row['completed_date'],
-					'sku' => $order_row['sku'],
+					'sku' => $order_row['skus'],
 					'box_month' => $order_row['box_month'],
 					'ship_month' => $order_row['ship_month'],
 					'total' => $order_row['total'],
@@ -3354,6 +3361,22 @@ SQL;
 					'%f',  // revenue_rush
 					'%f',  // refund
 				);
+				$box_columns = array(
+					'id',
+					'user_id',
+					'parent_id',
+					'status',
+					'created_date',
+					'completed_date',
+					'sku',
+					'box_month',
+					'ship_month',
+					'total',
+					'revenue_items',
+					'revenue_ship',
+					'revenue_rush',
+					'refund',
+				);
 
 				$renewal_row = array(
 					'id' => $order_row['id'],
@@ -3361,7 +3384,7 @@ SQL;
 					'status' => $order_row['status'],
 					'created_date' => $order_row['created_date'],
 					'completed_date' => $order_row['completed_date'],
-					'sku' => $order_row['sku'],
+					'sku' => $order_row['skus'],
 					'box_credits' => $order_row['box_credits'],
 					'total' => $order_row['total'],
 					'revenue_items' => $order_row['revenue_items'],
@@ -3383,6 +3406,20 @@ SQL;
 					'%f',  // revenue_rush
 					'%f',  // refund
 				);
+				$renewal_columns = array(
+					'id',
+					'user_id',
+					'status',
+					'created_date',
+					'completed_date',
+					'sku',
+					'box_credits',
+					'total',
+					'revenue_items',
+					'revenue_ship',
+					'revenue_rush',
+					'refund',
+				);
 
 				$shop_row = array(
 					'id' => $order_row['id'],
@@ -3390,7 +3427,7 @@ SQL;
 					'status' => $order_row['status'],
 					'created_date' => $order_row['created_date'],
 					'completed_date' => $order_row['completed_date'],
-					'skus' => $order_row['sku'],
+					'skus' => $order_row['skus'],
 					'total' => $order_row['total'],
 					'revenue_items' => $order_row['revenue_items'],
 					'revenue_ship' => $order_row['revenue_ship'],
@@ -3411,44 +3448,67 @@ SQL;
 					'%f',  // revenue_rush
 					'%f',  // refund
 				);
-
-				$results[] = $order_row;
+				$shop_columns = array(
+					'id',
+					'user_id',
+					'status',
+					'created_date',
+					'completed_date',
+					'skus',
+					'total',
+					'revenue_items',
+					'revenue_ship',
+					'revenue_rush',
+					'refund',
+				);
 
 
 				// Write to database
+				$write_to_mysql = false;
 				$wpdb->show_errors = true;
 				// define( 'WP_DEBUG_LOG', true );
 				// define( 'SAVEQUERIES', true );
 				// var_dump($order_types);
 				if (!$this->options->pretend) {
-					WP_CLI::debug("\t\twriting row to database");
-					if ($this->options->verbose) WP_CLI::debug(var_export($order_row, true));
-					if (false === ($returned = $wpdb->replace('cb_orders', $order_row, $order_format))) {
-						WP_CLI::error($wpdb->last_error);
-					} 
-					if (false !== array_search('box', $order_types)) {
-						WP_CLI::debug("\t\twriting box to database");
-						if ($this->options->verbose) WP_CLI::debug(var_export($box_row, true));
-						if (false === ($returned = $wpdb->replace('cb_box_orders', $box_row, $box_format))) {
+					if ($write_to_mysql) {
+						WP_CLI::debug("\t\twriting row to database");
+						if ($this->options->verbose) WP_CLI::debug(var_export($order_row, true));
+						if (false === ($returned = $wpdb->replace('cb_orders', $order_row, $order_format))) {
 							WP_CLI::error($wpdb->last_error);
 						} 
+					}
+					$results[] = $order_row;
+					if (false !== array_search('box', $order_types)) {
+						$boxes[] = $box_row;
+						if ($write_to_mysql) {
+							WP_CLI::debug("\t\twriting box to database");
+							if ($this->options->verbose) WP_CLI::debug(var_export($box_row, true));
+							if (false === ($returned = $wpdb->replace('cb_box_orders', $box_row, $box_format))) {
+								WP_CLI::error($wpdb->last_error);
+							} 
+						}
 					}
 					if (false !== array_search('renewal', $order_types)) {
-						WP_CLI::debug("\t\twriting renewal to database");
-						if ($this->options->verbose) WP_CLI::debug(var_export($renewal_row, true));
-						if (false === ($returned = $wpdb->replace('cb_renewals', $renewal_row, $renewal_format))) {
-							WP_CLI::error($wpdb->last_error);
-						} 
+						$renewals[] = $renewal_row;
+						if ($write_to_mysql) {
+							WP_CLI::debug("\t\twriting renewal to database");
+							if ($this->options->verbose) WP_CLI::debug(var_export($renewal_row, true));
+							if (false === ($returned = $wpdb->replace('cb_renewals', $renewal_row, $renewal_format))) {
+								WP_CLI::error($wpdb->last_error);
+							} 
+						}
 					}
 					if (false !== array_search('shop', $order_types)) {
-						WP_CLI::debug("\t\twriting shop order to database");
-						if ($this->options->verbose) WP_CLI::debug(var_export($shop_row, true));
-						if (false === ($returned = $wpdb->replace('cb_shop_orders', $shop_row, $shop_format))) {
-							WP_CLI::error($wpdb->last_error);
-						} 
+						$shops[] = $shop_row;
+						if ($write_to_mysql) {
+							WP_CLI::debug("\t\twriting shop order to database");
+							if ($this->options->verbose) WP_CLI::debug(var_export($shop_row, true));
+							if (false === ($returned = $wpdb->replace('cb_shop_orders', $shop_row, $shop_format))) {
+								WP_CLI::error($wpdb->last_error);
+							} 
+						}
 					}
 				}
-
 			}
 
 		}
@@ -3456,7 +3516,123 @@ SQL;
 		//WP_CLI::debug(var_export($wpdb->queries, true));;
 
 		if (sizeof($results)) {
-			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			if ($this->options->save_output) {
+				$this->upload_results_to_s3('command_results/orders.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS orders;",
+					"CREATE TABLE orders (
+						  id INT8 NOT NULL
+						, order_types VARCHAR(16) NOT NULL
+						, user_id INT8 NOT NULL
+						, parent_id INT8 DEFAULT NULL
+						, status VARCHAR(16) DEFAULT NULL
+						, created_date TIMESTAMP NOT NULL
+						, completed_date TIMESTAMP NOT NULL
+						, skus VARCHAR(1024) DEFAULT NULL
+						, box_credits INT8 DEFAULT NULL
+						, box_month VARCHAR(16) DEFAULT NULL
+						, sku_month VARCHAR(16) DEFAULT NULL
+						, total DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
+						, refund DECIMAL(10,2) DEFAULT '0.0'
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id,id);",
+					"COPY orders FROM 's3://challengebox-redshift/command_results/orders.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV
+						IGNOREHEADER AS 1
+						NULL AS ''
+						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
+						GZIP;",
+				));
+				$this->upload_results_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS box_orders;",
+					"CREATE TABLE box_orders (
+						  id INT8 NOT NULL
+						, user_id INT8 NOT NULL
+						, parent_id INT8 DEFAULT NULL
+						, status VARCHAR(16) DEFAULT NULL
+						, created_date TIMESTAMP NOT NULL
+						, completed_date TIMESTAMP NOT NULL
+						, sku VARCHAR(1024) DEFAULT NULL
+						, box_month VARCHAR(16) DEFAULT NULL
+						, sku_month VARCHAR(16) DEFAULT NULL
+						, total DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
+						, refund DECIMAL(10,2) DEFAULT '0.0'
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id,id);",
+					"COPY box_orders FROM 's3://challengebox-redshift/command_results/box_orders.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV
+						IGNOREHEADER AS 1
+						NULL AS ''
+						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
+						GZIP;",
+				));
+				$this->upload_results_to_s3('command_results/renewal_orders.csv.gz', $renewals, $renewal_columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS renewal_orders;",
+					"CREATE TABLE renewal_orders (
+						  id INT8 NOT NULL
+						, user_id INT8 NOT NULL
+						, status VARCHAR(16) DEFAULT NULL
+						, created_date TIMESTAMP NOT NULL
+						, completed_date TIMESTAMP NOT NULL
+						, sku VARCHAR(1024) DEFAULT NULL
+						, box_credits INT8 NOT NULL
+						, total DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
+						, refund DECIMAL(10,2) DEFAULT '0.0'
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id,id);",
+					"COPY renewal_orders FROM 's3://challengebox-redshift/command_results/renewal_orders.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV
+						IGNOREHEADER AS 1
+						NULL AS ''
+						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
+						GZIP;",
+				));
+				$this->upload_results_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS shop_orders;",
+					"CREATE TABLE shop_orders (
+						  id INT8 NOT NULL
+						, user_id INT8 NOT NULL
+						, status VARCHAR(16) DEFAULT NULL
+						, created_date TIMESTAMP NOT NULL
+						, completed_date TIMESTAMP NOT NULL
+						, skus VARCHAR(1024) DEFAULT NULL
+						, total DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
+						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
+						, refund DECIMAL(10,2) DEFAULT '0.0'
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id,id);",
+					"COPY shop_orders FROM 's3://challengebox-redshift/command_results/shop_orders.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV
+						IGNOREHEADER AS 1
+						NULL AS ''
+						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
+						GZIP;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
 		}
 	}
 
@@ -3774,7 +3950,7 @@ SQL;
 	 * : Only process <limit> subscriptions out of the list given.
 	 *
 	 * [--save_output]
-	 * : Write results to s3.
+	 * : Write results to s3 -> redshift.
 	 *
 	 * [--format=<format>]
 	 * : Output format.
