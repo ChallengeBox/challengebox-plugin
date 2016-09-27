@@ -74,6 +74,7 @@
 	service apache2 restart
 	open https://YOURNAME.challengeboxdev.com/
 
+
 	# Add WP Client
 	cd
 	curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar

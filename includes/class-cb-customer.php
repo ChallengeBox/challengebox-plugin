@@ -181,9 +181,10 @@ class CBCustomer {
 	/**
 	 * Returns the start date of the earliest subscription. Can be used to determine cohort.
 	 */
-	public function earliest_subscription_date() {
+	public function earliest_subscription_date($subscriptions = false) {
 		$earliest = new DateTime();
-		foreach ($this->get_subscriptions() as $sub) {
+		if (!$subscriptions) $subscriptions = $this->get_subscriptions();
+		foreach ($subscriptions as $sub) {
 			if ($sub->created_at) {
 				$created = new DateTime($sub->created_at);
 				if ($created < $earliest) {
@@ -297,7 +298,7 @@ class CBCustomer {
 	 */
 	public function get_orders() {
 		if (empty($this->orders)) {
-			$this->orders = $this->api->get_customer_orders($this->user_id);
+			$this->orders = $this->api->get_customer_orders_internal($this->user_id);
 		}
 		return $this->orders;
 	}
@@ -378,7 +379,7 @@ class CBCustomer {
 	 */
 	public function get_subscriptions() {
 		if (empty($this->subscriptions)) {
-			$this->subscriptions = $this->api->get_customer_subscriptions($this->user_id);
+			$this->subscriptions = $this->api->get_customer_subscriptions_internal($this->user_id);
 		}
 		return $this->subscriptions;
 	}
@@ -860,6 +861,7 @@ class CBCustomer {
 		return $data;
 	}
 
+
 	/**
 	 * Counts up box credits in all orders, taking into account adjustments.
 	 */
@@ -872,43 +874,9 @@ class CBCustomer {
 			if ('refunded' !== $order->status && 'processing' !== $order->status && 'completed' !== $order->status) continue;
 			// Skip non-rush orders in rush mode
 			if ($rush && !CBWoo::order_is_rush($order)) continue;
-			foreach ($order->line_items as $line) {
-				if ($line->sku) {
-					$parsed = CBWoo::parse_box_sku($line->sku);
-					if ($parsed->credits > 0) {
-						if ($parsed->credit_only_with_total) {
-							if ($order->subtotal > 0) {
-								$totals['credits'] += $parsed->credits;
-								$totals['revenue'] += $order->total;
-								if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
-							} else {
-								if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . 0 . ' amount ' . $order->total);
-							}
-						} else {
-							$totals['credits'] += $parsed->credits;
-							$totals['revenue'] += $order->total;
-							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
-						}
-					} elseif (0 === $parsed->credits) {
-						if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit ' . $parsed->credits . ' amount ' . $order->total);
-					} else {
-						// We need to calculate credits in another way
-						if ($order->total > 100) {
-							$totals['credits'] += 12;
-							$totals['revenue'] += $order->total;
-							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 12 amount ' . $order->total);
-						} elseif ($order->total > 50) {
-							$totals['credits'] += 3;
-							$totals['revenue'] += $order->total;
-							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 3 amount ' . $order->total);
-						} else {
-							$totals['credits'] += 1;
-							$totals['revenue'] += $order->total;
-							if ($verbose) WP_CLI::debug("\t".'sku ' . $line->sku . ' credit 1 amount ' . $order->total);
-						}
-					}
-				}
-			}
+			$box_totals = CBWoo::calculate_box_credit($order, $verbose);
+			$totals['credits'] += $box_totals['credits'];
+			$totals['revenue'] += $box_totals['revenue'];
 		}
 		return $totals;
 	}

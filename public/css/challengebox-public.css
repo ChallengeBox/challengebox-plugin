@@ -66,3 +66,6 @@
 	-moz-box-sizing: content-box;
 	box-sizing: content-box;
 }
+
+
+.table .table-sm th, .table .table-sm td { font-size: 10px; }
