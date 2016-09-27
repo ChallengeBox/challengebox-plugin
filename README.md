@@ -6,7 +6,7 @@
 	# System requirements
 	apt-get update
 	apt-get upgrade -y
-	apt-get install -y apache2 php5-mysql mysql-server libapache2-mod-php5 php5-mcrypt php5-gd php5-curl # LAMP
+	apt-get install -y apache2 php5-mysql mysql-server libapache2-mod-php5 php5-mcrypt php5-gd php5-curl php5-oauth # LAMP
 	apt-get install -y htop dstat vim screen git curl htop dstat vim screen git # dev stuff
 	apt-get install -y php5-cli php5-curl php5-pgsql # redshift reqs
 	apt-get install -y python-pip # python required for aws cli
@@ -62,7 +62,7 @@
 	# Adjustments to code
 	cd /var/www/dev
 	cp wp-config-sample.php wp-config.php
-	vim wp-config.php # setup database variables
+	vim wp-config.php # setup database variables, set define('WP_DEBUG', true); etc.
 
 	# Adjustements to database
 	mysql -u root -p -e "UPDATE dev.wp_options SET option_value = 'https://YOURNAME.challengeboxdev.com/' WHERE option_name in ('siteurl', 'home');"
