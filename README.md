@@ -24,21 +24,20 @@
 	aws configure
 
 	# Restore wordpress install
-	aws s3 ls challengebox-backup  # locate the newest file, or the one you want to restore
-	aws s3 cp s3://challengebox-backup/ARCHIVE.tgz .
-	tar --force-local -zxvf ARCHIVE.tgz
-	mv var/www/box /var/www/YOUR_DEV_SITE_NAME
+	aws s3 ls s3://challengebox-backup/clean_  # locate the newest file, or the one you want to restore
+	aws s3 cp s3://challengebox-backup/clean_ARCHIVE.tgz .
+	tar --force-local -zxvf clean_ARCHIVE.tgz
+	mv var/www/box /var/www/dev
 	rmdir var/www; rmdir var
 
 	# Restore database
-	aws s3 cp s3://challengebox-backup/SQL_ARCHIVE.sql.gz .
-	echo create database fit_box; grant access mysql -u root -p 
-	mysql -u root -p -e "create database dev; GRANT ALL PRIVILEGES ON dev.* TO dev@localhost IDENTIFIED BY '63YUevJAnNjuAKAPBTd'"
-	zcat SQL_ARCHIVE.sql.gz | mysql -u root -p dev
+	aws s3 cp s3://challengebox-backup/clean_SQL_ARCHIVE.sql.gz .
+	mysql -u root -p -e "create database dev; GRANT ALL PRIVILEGES ON dev.* TO dev@localhost IDENTIFIED BY 'SOME_PASSWORD'"
+	zcat clean_SQL_ARCHIVE.sql.gz | mysql -u root -p dev
 
 	# Git repo
-	ssh-keygen
-	cat ~/.ssh/id_rsa.pub  # Add this to your github account (put a password on it if you're sharing the dev machine)
+	ssh-keygen # USE A PASSWORD IF YOU ARE SHARING THE MACHINE
+	cat ~/.ssh/id_rsa.pub  # Add this to your github account at https://github.com/settings/ssh
 	git clone git@github.com:ChallengeBox/challengebox-plugin.git plugin
 	cd plugin
 	composer install
@@ -54,15 +53,20 @@
 	echo "# Paste SSL trust chain bundle here" > BUNDLE && vim BUNDLE && install -o root -g root -m 644 BUNDLE /etc/ssl/certs/getchallengebox_com.ca-bundle && rm BUNDLE
 
 	# Apache config
-	cp ~/plugin/conf/apache.conf /etc/apache2/sites-available/YOUR_DEV_SITE_NAME.conf
-	vim /etc/apache2/sites-available/YOUR_DEV_SITE_NAME.conf # Edit path, ports, etc.
-	a2ensite YOUR_DEV_SITE_NAME
+	cp ~/plugin/conf/apache.conf /etc/apache2/sites-available/dev.conf
+	vim /etc/apache2/sites-available/dev.conf # replace challengeboxdev.com with YOURNAME.challengeboxdev.com
+	a2ensite dev
 
 	# Adjustments to code
-	cd /var/www/YOUR_DEV_SITE_NAME
-	cp ~/plugin/conf/wp-config.conf .
+	cd /var/www/dev
+	cp wp-config-sample.php wp-config.php
+	vim wp-config.php # setup database variables
 
 	# Adjustements to database
-	mysql -u root -p -e "UPDATE dev.wp_options SET option_value = 'https://challengeboxdev.com/' WHERE option_name in ('siteurl', 'home');"
+	mysql -u root -p -e "UPDATE dev.wp_options SET option_value = 'https://YOURNAME.challengeboxdev.com/' WHERE option_name in ('siteurl', 'home');"
+	
+	# Try it out!
+	service apache2 restart
+	open https://YOURNAME.challengebox.com/
 
 
