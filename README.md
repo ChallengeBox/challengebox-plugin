@@ -56,6 +56,7 @@
 	cp ~/plugin/conf/apache.conf /etc/apache2/sites-available/dev.conf
 	vim /etc/apache2/sites-available/dev.conf # replace challengeboxdev.com with YOURNAME.challengeboxdev.com
 	a2enmod ssl
+	a2enmod rewrite
 	a2dissite 000-default
 	a2ensite dev
 
@@ -63,6 +64,8 @@
 	cd /var/www/dev
 	cp wp-config-sample.php wp-config.php
 	vim wp-config.php # setup database variables, set define('WP_DEBUG', true); etc.
+	rm -rf /var/www/dev/wp-content/plugins/challengebox
+	cp -r /root/plugin /var/www/dev/wp-content/plugins/challengebox
 
 	# Adjustements to database
 	mysql -u root -p -e "UPDATE dev.wp_options SET option_value = 'https://YOURNAME.challengeboxdev.com/' WHERE option_name in ('siteurl', 'home');"
