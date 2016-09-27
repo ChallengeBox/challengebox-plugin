@@ -1,15 +1,20 @@
 
 # Development Setup
 
-	# Start Wordpress DigitalOcean droplet (Ubuntu 14.04)
+	# Start DigitalOcean droplet (Ubuntu 14.04 x64)
 
 	# System requirements
 	apt-get update
-	apt-get upgrade
-	apt-get installpt-get install htop dstat vim screen git curl htop dstat vim screen git
-	apt-get install php5-cli php5-curl php5-pgsql
-	apt-get install python-pip
+	apt-get upgrade -y
+	apt-get install -y apache2 php5-mysql mysql-server libapache2-mod-php5 php5-mcrypt php5-gd php5-curl # LAMP
+	apt-get install -y htop dstat vim screen git curl htop dstat vim screen git # dev stuff
+	apt-get install -y php5-cli php5-curl php5-pgsql # redshift reqs
+	apt-get install -y python-pip # python required for aws cli
 	mysql_secure_installation
+	
+	# Finish setting up LAMP stack
+	sed -i -e "s/index.html index.cgi index.pl index.php/index.php index.html index.cgi index.pl/" /etc/apache2/mods-enabled/dir.conf
+	service apache2 restart
 
 	# Composer
 	curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
