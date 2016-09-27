@@ -23,11 +23,11 @@ class Test_AggregatedTrackingData extends \BaseTest
 		
 		$rawTrackingDataSet = array(
 			$date => array(
-				new CBRawTrackingData($userId, $date, 'fitbit-1', '{"water":30,"caloriesIn":40,"distance":3,"steps":100,"minutesVeryActive":50,"minutesFairlyActive":30,"minutesLightlyActive":100}'),
+				new CBRawTrackingData($userId, $date, CBRawTrackingData::FITBIT_V1_SOURCE, '{"water":30,"caloriesIn":40,"distance":3,"steps":100,"minutesVeryActive":50,"minutesFairlyActive":30,"minutesLightlyActive":100}'),
 				new CBRawTrackingData($userId, $date, 'garmin-1', '{"water":50,"caloriesIn":20,"steps":200,"minutesVeryActive":150,"minutesFairlyActive":130,"minutesLightlyActive":200}'),
 			),
 			$secondDate => array(
-				new CBRawTrackingData($userId, $secondDate, 'fitbit-1', '{"water":50,"caloriesIn":20,"steps":200,"minutesVeryActive":150,"minutesFairlyActive":130,"minutesLightlyActive":200}'),
+				new CBRawTrackingData($userId, $secondDate, CBRawTrackingData::FITBIT_V1_SOURCE, '{"water":50,"caloriesIn":20,"steps":200,"minutesVeryActive":150,"minutesFairlyActive":130,"minutesLightlyActive":200}'),
 			)
 		);
 		
@@ -51,7 +51,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 					'lightly_active' => 300,
 					'any_activity' => 660,
 					'medium_activity' => 360,
-					'heavy_activity' => 200
+					'heavy_activity' => 200,
+					'light_30' => true,
+					'light_60' => true,
+					'light_90' => true,
+					'moderate_10' => true,
+					'moderate_30' => true,
+					'moderate_45' => true,
+					'moderate_60' => true,
+					'moderate_90' => true,
+					'heavy_10' => true,
+					'heavy_30' => true,
+					'heavy_45' => true,
+					'heavy_60' => true,
+					'heavy_90' => true,
+					'water_days' => true,
+					'food_days' => true,
+					'food_or_water_days' => true,
+					'distance_1' => true,
+					'distance_2' => true,
+					'distance_3' => true,
+					'distance_4' => false,
+					'distance_5' => false,
+					'distance_6' => false,
+					'distance_8' => false,
+					'distance_10' => false,
+					'distance_15' => false,
+					'steps_8k' => false,
+					'steps_10k' => false,
+					'steps_12k' => false,
+					'steps_15k' => false,
+					'wearing_fitbit' => true
 				)),
 				$secondDate => new CBAggregateTrackingData(array(
 					'user_id' => $userId,
@@ -65,7 +95,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 					'lightly_active' => 200,
 					'any_activity' => 480,
 					'medium_activity' => 280,
-					'heavy_activity' => 150
+					'heavy_activity' => 150,
+					'light_30' => true,
+					'light_60' => true,
+					'light_90' => true,
+					'moderate_10' => true,
+					'moderate_30' => true,
+					'moderate_45' => true,
+					'moderate_60' => true,
+					'moderate_90' => true,
+					'heavy_10' => true,
+					'heavy_30' => true,
+					'heavy_45' => true,
+					'heavy_60' => true,
+					'heavy_90' => true,
+					'water_days' => true,
+					'food_days' => true,
+					'food_or_water_days' => true,
+					'distance_1' => false,
+					'distance_2' => false,
+					'distance_3' => false,
+					'distance_4' => false,
+					'distance_5' => false,
+					'distance_6' => false,
+					'distance_8' => false,
+					'distance_10' => false,
+					'distance_15' => false,
+					'steps_8k' => false,
+					'steps_10k' => false,
+					'steps_12k' => false,
+					'steps_15k' => false,
+					'wearing_fitbit' => true
 				))
 			)
 		);
@@ -157,6 +217,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$mediumActivity = 90;
 		$heavyActivity = 50;
 		
+		$light30 = true;
+		$light60 = true;
+		$light90 = true;
+		$moderate10 = true;
+		$moderate30 = true;
+		$moderate45 = true;
+		$moderate60 = true;
+		$moderate90 = true;
+		$heavy10 = true;
+		$heavy30 = true;
+		$heavy45 = true;
+		$heavy60 = false;
+		$heavy90 = false;
+		$waterDays = true;
+		$foodDays = true;
+		$foodOrWaterDays = true;
+		$distance1 = true;
+		$distance2 = true;
+		$distance3 = true;
+		$distance4 = true;
+		$distance5 = true;
+		$distance6 = true;
+		$distance8 = true;
+		$distance10 = true;
+		$distance15 = false;
+		$steps8k = false;
+		$steps10k = false;
+		$steps12k = false;
+		$steps15k = false;
+		$wearingFitbit = true;
+		
 		$preparedStatement = 'a_prepared_statement_object';
 		$wordpressPrefix = 'wp_';
 		
@@ -194,7 +285,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 					'lightly_active' => $lightlyActive,
 					'any_activity' => $anyActivity,
 					'medium_activity' => $mediumActivity,
-					'heavy_activity' => $heavyActivity
+					'heavy_activity' => $heavyActivity,
+					'light_30' => $light30,
+					'light_60' => $light60,
+					'light_90' => $light90,
+					'moderate_10' => $moderate10,
+					'moderate_30' => $moderate30,
+					'moderate_45' => $moderate45,
+					'moderate_60' => $moderate60,
+					'moderate_90' => $moderate90,
+					'heavy_10' => $heavy10,
+					'heavy_30' => $heavy30,
+					'heavy_45' => $heavy45,
+					'heavy_60' => $heavy60,
+					'heavy_90' => $heavy90,
+					'water_days' => $waterDays,
+					'food_days' => $foodDays,
+					'food_or_water_days' => $foodOrWaterDays,
+					'distance_1' => $distance1,
+					'distance_2' => $distance2,
+					'distance_3' => $distance3,
+					'distance_4' => $distance4,
+					'distance_5' => $distance5,
+					'distance_6' => $distance6,
+					'distance_8' => $distance8,
+					'distance_10' => $distance10,
+					'distance_15' => $distance15,
+					'steps_8k' => $steps8k,
+					'steps_10k' => $steps10k,
+					'steps_12k' => $steps12k,
+					'steps_15k' => $steps15k,
+					'wearing_fitbit' => $wearingFitbit
 				))	
 			);
 		$wpdb->expects($this->never())
@@ -214,7 +335,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 				'steps' => $steps,
 				'very_active' => $veryActive,
 				'fairly_active' => $fairlyActive,
-				'lightly_active' => $lightlyActive
+				'lightly_active' => $lightlyActive,
+				'light_30' => $light30,
+				'light_60' => $light60,
+				'light_90' => $light90,
+				'moderate_10' => $moderate10,
+				'moderate_30' => $moderate30,
+				'moderate_45' => $moderate45,
+				'moderate_60' => $moderate60,
+				'moderate_90' => $moderate90,
+				'heavy_10' => $heavy10,
+				'heavy_30' => $heavy30,
+				'heavy_45' => $heavy45,
+				'heavy_60' => $heavy60,
+				'heavy_90' => $heavy90,
+				'water_days' => $waterDays,
+				'food_days' => $foodDays,
+				'food_or_water_days' => $foodOrWaterDays,
+				'distance_1' => $distance1,
+				'distance_2' => $distance2,
+				'distance_3' => $distance3,
+				'distance_4' => $distance4,
+				'distance_5' => $distance5,
+				'distance_6' => $distance6,
+				'distance_8' => $distance8,
+				'distance_10' => $distance10,
+				'distance_15' => $distance15,
+				'steps_8k' => $steps8k,
+				'steps_10k' => $steps10k,
+				'steps_12k' => $steps12k,
+				'steps_15k' => $steps15k,
+				'wearing_fitbit' => $wearingFitbit
 			)))
 			->setMethods(array('getWpdb'))
 			->getMock();
@@ -245,6 +396,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$anyActivity = 110;
 		$mediumActivity = 90;
 		$heavyActivity = 50;
+		
+		$light30 = true;
+		$light60 = true;
+		$light90 = true;
+		$moderate10 = true;
+		$moderate30 = true;
+		$moderate45 = true;
+		$moderate60 = true;
+		$moderate90 = true;
+		$heavy10 = true;
+		$heavy30 = true;
+		$heavy45 = true;
+		$heavy60 = false;
+		$heavy90 = false;
+		$waterDays = true;
+		$foodDays = true;
+		$foodOrWaterDays = true;
+		$distance1 = true;
+		$distance2 = true;
+		$distance3 = true;
+		$distance4 = true;
+		$distance5 = true;
+		$distance6 = true;
+		$distance8 = true;
+		$distance10 = true;
+		$distance15 = false;
+		$steps8k = false;
+		$steps10k = false;
+		$steps12k = false;
+		$steps15k = false;
+		$wearingFitbit = true;
 		
 		
 		$preparedStatement = 'a_prepared_statement_object';
@@ -284,7 +466,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 					'steps' => $steps,
 					'very_active' => $veryActive,
 					'fairly_active' => $fairlyActive,
-					'lightly_active' => $lightlyActive
+					'lightly_active' => $lightlyActive,
+				'light_30' => $light30,
+				'light_60' => $light60,
+				'light_90' => $light90,
+				'moderate_10' => $moderate10,
+				'moderate_30' => $moderate30,
+				'moderate_45' => $moderate45,
+				'moderate_60' => $moderate60,
+				'moderate_90' => $moderate90,
+				'heavy_10' => $heavy10,
+				'heavy_30' => $heavy30,
+				'heavy_45' => $heavy45,
+				'heavy_60' => $heavy60,
+				'heavy_90' => $heavy90,
+				'water_days' => $waterDays,
+				'food_days' => $foodDays,
+				'food_or_water_days' => $foodOrWaterDays,
+				'distance_1' => $distance1,
+				'distance_2' => $distance2,
+				'distance_3' => $distance3,
+				'distance_4' => $distance4,
+				'distance_5' => $distance5,
+				'distance_6' => $distance6,
+				'distance_8' => $distance8,
+				'distance_10' => $distance10,
+				'distance_15' => $distance15,
+				'steps_8k' => $steps8k,
+				'steps_10k' => $steps10k,
+				'steps_12k' => $steps12k,
+				'steps_15k' => $steps15k,
+				'wearing_fitbit' => $wearingFitbit
 				)),
 				$this->equalTo(array(
 					'user_id' => $userId,
@@ -309,7 +521,37 @@ class Test_AggregatedTrackingData extends \BaseTest
 				'steps' => $steps,
 				'very_active' => $veryActive,
 				'fairly_active' => $fairlyActive,
-				'lightly_active' => $lightlyActive
+				'lightly_active' => $lightlyActive,
+					'light_30' => $light30,
+					'light_60' => $light60,
+					'light_90' => $light90,
+					'moderate_10' => $moderate10,
+					'moderate_30' => $moderate30,
+					'moderate_45' => $moderate45,
+					'moderate_60' => $moderate60,
+					'moderate_90' => $moderate90,
+					'heavy_10' => $heavy10,
+					'heavy_30' => $heavy30,
+					'heavy_45' => $heavy45,
+					'heavy_60' => $heavy60,
+					'heavy_90' => $heavy90,
+					'water_days' => $waterDays,
+					'food_days' => $foodDays,
+					'food_or_water_days' => $foodOrWaterDays,
+					'distance_1' => $distance1,
+					'distance_2' => $distance2,
+					'distance_3' => $distance3,
+					'distance_4' => $distance4,
+					'distance_5' => $distance5,
+					'distance_6' => $distance6,
+					'distance_8' => $distance8,
+					'distance_10' => $distance10,
+					'distance_15' => $distance15,
+					'steps_8k' => $steps8k,
+					'steps_10k' => $steps10k,
+					'steps_12k' => $steps12k,
+					'steps_15k' => $steps15k,
+					'wearing_fitbit' => $wearingFitbit
 			)))
 			->setMethods(array('getWpdb'))
 			->getMock();
