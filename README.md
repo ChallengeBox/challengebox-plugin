@@ -55,6 +55,8 @@
 	# Apache config
 	cp ~/plugin/conf/apache.conf /etc/apache2/sites-available/dev.conf
 	vim /etc/apache2/sites-available/dev.conf # replace challengeboxdev.com with YOURNAME.challengeboxdev.com
+	a2enmod ssl
+	a2dissite 000-default
 	a2ensite dev
 
 	# Adjustments to code
