@@ -3637,7 +3637,7 @@ SQL;
 	}
 
 	/**
-	 * Exports order data.
+	 * Exports order data (old, keep it around for old analytics page).
 	 *
 	 * ## OPTIONS
 	 *
@@ -3753,6 +3753,102 @@ SQL;
 			WP_CLI::debug("Boxes");
 			$columns = array('id', 'created_cohort', 'shipped_cohort', 'status', 'customer', 'sku', 'month', 'gender', 't-shirt', 'sku_version', 'ship_month', 'ship_month_guess');
 			WP_CLI\Utils\format_items($this->options->format, $boxes, $columns);
+		}
+	}
+
+	/**
+	 * Exports user data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't write anything, just show what we would do.
+	 *
+	 * [--verbose]
+	 * : Print out debugging data.
+	 *
+	 * [--save_output]
+	 * : Write results to s3 -> redshift.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_users --all
+	 */
+	function export_users($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$columns = array(
+			'user_id',
+			'registration_date',
+			'clothing_gender',
+			'tshirt_size',
+			'pant_size',
+			'glove_size',
+			'sock_size',
+			'challenge_points',
+			'fitbit_oauth_status',
+			'fitness_goal',
+			'special_segment',
+			'has_rush_order',
+			'has_failed_order',
+		);
+		$results = array();
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id, $interactive = false);
+			$user = get_user_by('ID', $customer->get_user_id());
+			WP_CLI::debug("User $user_id...");
+			$data = array(
+				'user_id' => $customer->get_user_id(),
+				'email' => $user->user_email,
+				'first_name' => $user->user_firstname,
+				'last_name' => $user->user_lastname,
+				'registration_date' => $user->user_registered,
+			);
+			$results[] = array_merge($data, $customer->get_segment_data());
+		}
+
+		if (sizeof($results)) {
+			if ($this->options->save_output) {
+				$this->upload_results_to_s3('command_results/users.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					"DROP TABLE IF EXISTS users;",
+					"CREATE TABLE users (
+						  user_id INT8 NOT NULL
+						, registration_date TIMESTAMP NOT NULL
+						, clothing_gender VARCHAR(6) DEFAULT NULL
+						, tshirt_size VARCHAR(16) DEFAULT NULL
+						, pant_size VARCHAR(16) DEFAULT NULL
+						, glove_size VARCHAR(16) DEFAULT NULL
+						, sock_size VARCHAR(16) DEFAULT NULL
+						, challenge_points INT8 NOT NULL
+						, fitbit_oauth_status VARCHAR(16) DEFAULT NULL
+						, fitness_goal VARCHAR(16) DEFAULT NULL
+						, special_segment VARCHAR(64) DEFAULT NULL
+						, has_rush_order INT8 DEFAULT NULL
+						, has_failed_order INT8 DEFAULT NULL
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id);",
+					"COPY users FROM 's3://challengebox-redshift/command_results/users.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
 		}
 	}
 
