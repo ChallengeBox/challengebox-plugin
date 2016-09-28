@@ -55,7 +55,7 @@ class CBCmd extends WP_CLI_Command {
 			'save' => !empty($assoc_args['save']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 			'channel' => !empty($assoc_args['channel']) ? $assoc_args['channel'] : '@ryan',
-			'save_output' => !empty($assoc_args['save_output']),
+			'redshift' => !empty($assoc_args['redshift']),
 			's3_bucket' => !empty($assoc_args['s3_bucket']) ? $assoc_args['s3_bucket'] : 'challengebox-redshift',
 		);
 
@@ -113,7 +113,7 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug(var_export($this->options, true));
 		}
 
-		if ($this->options->save_output) {
+		if ($this->options->redshift) {
 			$provider = CredentialProvider::ini('redshift', '/home/www-data/.aws/credentials');
 			$provider = CredentialProvider::memoize($provider);
 			$this->s3Client = new S3Client(array(
@@ -142,14 +142,29 @@ class CBCmd extends WP_CLI_Command {
 		fclose($fp);
 	}
 
-	private function execute_redshift_queries($queries) {
+	private function execute_redshift_queries($queries, $transaction=true) {
 		WP_CLI::debug("Connecting to redshift...");
 		$db = pg_connect(file_get_contents('/home/www-data/.aws/redshift.string'))
 				or WP_CLI::error(pg_last_error());
+		if ($transaction) {
+			WP_CLI::debug("BEGIN; -- transaction");
+			pg_query("BEGIN;") or WP_CLI::error(pg_last_error());
+		}
 		foreach ($queries as $query) {
 			//if ($this->options->verbose) 
 			WP_CLI::debug("Executing $query");
-			pg_query($query) or WP_CLI::error(pg_last_error());
+			if(pg_query($query)) {
+			} else {
+				if ($transaction) {
+					WP_CLI::debug("ROLLBACK; -- transaction");
+					pg_query("ROLLBACK;") or WP_CLI::error(pg_last_error());
+				}
+				WP_CLI::error(pg_last_error());
+			}
+		}
+		if ($transaction) {
+			WP_CLI::debug("COMMIT; -- transaction");
+			pg_query("COMMIT;") or WP_CLI::error(pg_last_error());
 		}
 	}
 
@@ -3163,7 +3178,7 @@ SQL;
 	 * [--verbose]
 	 * : Print out debugging data.
 	 *
-	 * [--save_output]
+	 * [--redshift]
 	 * : Write results to s3 -> redshift.
 	 *
 	 * ## EXAMPLES
@@ -3516,10 +3531,10 @@ SQL;
 		//WP_CLI::debug(var_export($wpdb->queries, true));;
 
 		if (sizeof($results)) {
-			if ($this->options->save_output) {
+			if ($this->options->redshift) {
 				$this->upload_results_to_s3('command_results/orders.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS orders;",
+					"ALTER TABLE orders RENAME TO orders_old;",
 					"CREATE TABLE orders (
 						  id INT8 NOT NULL
 						, order_types VARCHAR(16) NOT NULL
@@ -3537,20 +3552,19 @@ SQL;
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
+						, primary key(id)
+						, foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
 					"COPY orders FROM 's3://challengebox-redshift/command_results/orders.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS orders_old;",
 				));
 				$this->upload_results_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS box_orders;",
+					"ALTER TABLE box_orders RENAME TO box_orders_old;",
 					"CREATE TABLE box_orders (
 						  id INT8 NOT NULL
 						, user_id INT8 NOT NULL
@@ -3566,20 +3580,19 @@ SQL;
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
+						, primary key(id)
+						, foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
 					"COPY box_orders FROM 's3://challengebox-redshift/command_results/box_orders.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS box_orders_old;",
 				));
 				$this->upload_results_to_s3('command_results/renewal_orders.csv.gz', $renewals, $renewal_columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS renewal_orders;",
+					"ALTER TABLE renewal_orders RENAME TO renewal_orders_old;",
 					"CREATE TABLE renewal_orders (
 						  id INT8 NOT NULL
 						, user_id INT8 NOT NULL
@@ -3593,20 +3606,19 @@ SQL;
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
+						, primary key(id)
+						, foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
 					"COPY renewal_orders FROM 's3://challengebox-redshift/command_results/renewal_orders.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS renewal_orders_old;",
 				));
 				$this->upload_results_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS shop_orders;",
+					"ALTER TABLE shop_orders RENAME TO shop_orders_old;",
 					"CREATE TABLE shop_orders (
 						  id INT8 NOT NULL
 						, user_id INT8 NOT NULL
@@ -3619,16 +3631,15 @@ SQL;
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
+						, primary key(id)
+						, foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
 					"COPY shop_orders FROM 's3://challengebox-redshift/command_results/shop_orders.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS shop_orders_old;",
 				));
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -3779,7 +3790,7 @@ SQL;
 	 * [--verbose]
 	 * : Print out debugging data.
 	 *
-	 * [--save_output]
+	 * [--redshift]
 	 * : Write results to s3 -> redshift.
 	 *
 	 * ## EXAMPLES
@@ -3792,6 +3803,8 @@ SQL;
 		$columns = array(
 			'user_id',
 			'registration_date',
+			'subscription_status',
+			'subscription_type',
 			'clothing_gender',
 			'tshirt_size',
 			'pant_size',
@@ -3821,13 +3834,15 @@ SQL;
 		}
 
 		if (sizeof($results)) {
-			if ($this->options->save_output) {
+			if ($this->options->redshift) {
 				$this->upload_results_to_s3('command_results/users.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS users;",
+					"ALTER TABLE users RENAME TO users_old;",
 					"CREATE TABLE users (
-						  user_id INT8 NOT NULL
+						  id INT8 NOT NULL
 						, registration_date TIMESTAMP NOT NULL
+						, subscription_status VARCHAR(16) DEFAULT NULL
+						, subscription_type VARCHAR(16) DEFAULT NULL
 						, clothing_gender VARCHAR(6) DEFAULT NULL
 						, tshirt_size VARCHAR(16) DEFAULT NULL
 						, pant_size VARCHAR(16) DEFAULT NULL
@@ -3839,12 +3854,14 @@ SQL;
 						, special_segment VARCHAR(64) DEFAULT NULL
 						, has_rush_order INT8 DEFAULT NULL
 						, has_failed_order INT8 DEFAULT NULL
+						, primary key(id)
 						)
-						DISTKEY(user_id)
-						SORTKEY(user_id);",
+						DISTKEY(id)
+						SORTKEY(id);",
 					"COPY users FROM 's3://challengebox-redshift/command_results/users.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
 						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS users_old;",
 				));
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -4045,7 +4062,7 @@ SQL;
 	 * [--limit=<limit>]
 	 * : Only process <limit> subscriptions out of the list given.
 	 *
-	 * [--save_output]
+	 * [--redshift]
 	 * : Write results to s3 -> redshift.
 	 *
 	 * [--format=<format>]
@@ -4152,28 +4169,27 @@ SQL;
 		);
 
 		if (sizeof($results)) {
-			if ($this->options->save_output) {
+			if ($this->options->redshift) {
 				$this->upload_results_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS sub_events;",
+					"ALTER TABLE sub_events RENAME TO sub_events_old;",
 					"CREATE TABLE sub_events (
-						sub_id INT8 NOT NULL
+						  sub_id INT8 NOT NULL
 						, user_id INT8 NOT NULL
 						, event VARCHAR(32) DEFAULT NULL
 						, date TIMESTAMP NOT NULL
 						, old_state VARCHAR(64) DEFAULT NULL
 						, new_state VARCHAR(64) DEFAULT NULL
 						, comment VARCHAR(1024) DEFAULT NULL
+						--, foreign key(sub_id) references subscriptions(id)
+						, foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,sub_id);",
 					"COPY sub_events FROM 's3://challengebox-redshift/command_results/subscription_events.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS sub_events_old;",
 				));
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
