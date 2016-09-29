@@ -23,6 +23,11 @@ class BaseFactory extends BaseSingleton
 	 */
 	public function generate($className, $params = array())
 	{
-		return new $className(... $params);
+		// php 7
+		//return new $className(... $params);
+		
+		// php 5
+		$reflect = new ReflectionClass($className);
+		return $reflect->newInstanceArgs($params);
 	}
 }
