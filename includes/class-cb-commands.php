@@ -4175,13 +4175,13 @@ SQL;
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
 		
 		foreach ($this->get_wp_users($userParams) as $user) {
-			
-			// if the user has a fitbit connection
-			$fitbit = $this->get_customers_fitbit($user->ID);
-			
-			if (!is_null($fitbit)) {
+
+			try {
+					
+				// if the user has a fitbit connection
+				$fitbit = $this->get_customers_fitbit($user->ID);
 				
-				try {
+				if (!is_null($fitbit)) {
 					
 					// get fitbit data
 					$rawData = array();
@@ -4193,10 +4193,10 @@ SQL;
 					}
 					
 					$cbRawTrackingData->multiSave($user->ID, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
-					
-				} catch (Exception $e) {
-					echo 'Error: ' . $e->getMessage() . PHP_EOL;
 				}
+
+			} catch (Exception $e) {
+				echo 'Error: ' . $e->getMessage() . PHP_EOL;
 			}
 		}
 	}
