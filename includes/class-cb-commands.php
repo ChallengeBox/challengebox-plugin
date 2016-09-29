@@ -4099,9 +4099,9 @@ SQL;
 	/**
 	 * Get customers fitbit
 	 */
-	public function get_customers_fitbit($userId)
+	public function get_customers_fitbit($userId, $interactive = false)
 	{
-		$customer = new CBCustomer($userId);
+		$customer = new CBCustomer($userId, $interactive);
 		return $customer->fitbit();
 	}
 	
