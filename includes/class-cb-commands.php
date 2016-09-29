@@ -4193,6 +4193,8 @@ SQL;
 					}
 					
 					$cbRawTrackingData->multiSave($user->ID, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
+				} else {
+					echo 'Error: User ID - ' . $user->ID . ', Not fitbit connection available.' . PHP_EOL;
 				}
 
 			} catch (Exception $e) {
