@@ -4196,7 +4196,7 @@ SQL;
 				}
 
 			} catch (Exception $e) {
-				echo 'Error: User ID' . $user->ID . ', Message: ' . $e->getMessage() . PHP_EOL;
+				echo 'Error: User ID - ' . $user->ID . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
 		}
 	}
