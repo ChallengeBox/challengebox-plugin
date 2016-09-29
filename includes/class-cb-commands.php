@@ -13,6 +13,7 @@ class CBCmd extends WP_CLI_Command {
 	private $api;
 	private $options;
 	private $s3Client;
+	private $carbon;
 
 	public function __construct() {
 		$this->api = new CBWoo();
