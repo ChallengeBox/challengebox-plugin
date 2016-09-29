@@ -3207,8 +3207,8 @@ SQL;
 			'revenue_items',
 			'revenue_ship',
 			'revenue_rush',
-//			'stripe_fee',
-			'refund',
+			//'stripe_fee',
+			//'refund',
 		);
 
 		/**
@@ -3294,26 +3294,27 @@ SQL;
 					$box_debits = 0;
 				}
 				try {
-					$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
-					$stripe_total = $stripe_charge->amount / 100.0;
-					$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
+					//$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
+					//$stripe_total = $stripe_charge->amount / 100.0;
+					$stripe_total = $order->total;
+					//$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
 					//$stripe_fee = $stripe_charge->fee / 100.0;
 				} catch (InvalidArgumentException $e) {
 					$stripe_total = 0.0;
-					$stripe_refunded = 0.0;
-					$stripe_fee = 0.0;
+					//$stripe_refunded = 0.0;
+					//$stripe_fee = 0.0;
 				}
 				$line_item_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->line_items));
 				$shipping_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->shipping_lines));
 				$fee_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->fee_lines));
 				$total = $stripe_total;
-				$refunded = $stripe_refunded;
+				//$refunded = $stripe_refunded;
 				if (false !== array_search('box', $order_types) && $parent_credits > 0) {
 					$total /= $parent_credits;
 					$line_item_total /= $parent_credits;
 					$shipping_total /= $parent_credits;
 					$fee_total /= $parent_credits;
-					$refunded /= $parent_credits;
+					//$refunded /= $parent_credits;
 				}
 
 				$order_row = array(
@@ -3334,7 +3335,7 @@ SQL;
 					'revenue_ship' => $shipping_total,
 					'revenue_rush' => $fee_total,
 					//'stripe_fee' => $stripe_fee,
-					'refund' => $refunded,
+					//'refund' => $refunded,
 				);
 				$order_format = array(
 					'%d',  // id
@@ -3351,7 +3352,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 
 				$box_row = array(
@@ -3369,7 +3370,7 @@ SQL;
 					'revenue_ship' => $order_row['revenue_ship'],
 					'revenue_rush' => $order_row['revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$box_format = array(
 					'%d',  // id
@@ -3385,7 +3386,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$box_columns = array(
 					'id',
@@ -3401,7 +3402,7 @@ SQL;
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 				$renewal_row = array(
@@ -3417,7 +3418,7 @@ SQL;
 					'revenue_ship' => $order_row['revenue_ship'],
 					'revenue_rush' => $order_row['revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$renewal_format = array(
 					'%d',  // id
@@ -3430,7 +3431,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$renewal_columns = array(
 					'id',
@@ -3444,7 +3445,7 @@ SQL;
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 				$shop_row = array(
@@ -3459,7 +3460,7 @@ SQL;
 					'revenue_ship' => $order_row['revenue_ship'],
 					'revenue_rush' => $order_row['revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$shop_format = array(
 					'%d',  // id
@@ -3472,7 +3473,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$shop_columns = array(
 					'id',
@@ -3485,7 +3486,7 @@ SQL;
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 
@@ -3543,7 +3544,7 @@ SQL;
 
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
-				$this->upload_results_to_s3('command_results/orders.csv.gz', $results, $columns);
+				/*$this->upload_results_to_s3('command_results/orders.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
 					"ALTER TABLE orders RENAME TO orders_old;",
 					"CREATE TABLE orders (
@@ -3562,7 +3563,7 @@ SQL;
 						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
+						-- , refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
 						-- , foreign key(user_id) references users(id)
 						)
@@ -3572,7 +3573,7 @@ SQL;
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
 						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
 					"DROP TABLE IF EXISTS orders_old;",
-				));
+				));*/
 				$this->upload_results_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
 				$this->execute_redshift_queries(array(
 					"ALTER TABLE box_orders RENAME TO box_orders_old;",
@@ -3590,7 +3591,7 @@ SQL;
 						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
+						-- , refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
 						-- , foreign key(user_id) references users(id)
 						)
@@ -3616,7 +3617,7 @@ SQL;
 						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
+						-- , refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
 						-- , foreign key(user_id) references users(id)
 						)
@@ -3641,9 +3642,9 @@ SQL;
 						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
+						-- , refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
-						-  , foreign key(user_id) references users(id)
+						--  , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
