@@ -85,12 +85,12 @@ class CBCmd extends WP_CLI_Command {
 			} elseif ('order' == $this->options->orientation) {
 				WP_CLI::debug("Grabbing order ids...");
 				global $wpdb;
-				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_order';");
+				$rows = $wpdb->get_results("select ID from {$wpdb->prefix}posts where post_type = 'shop_order';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			} elseif ('subscription' == $this->options->orientation) {
 				WP_CLI::debug("Grabbing subscription ids...");
 				global $wpdb;
-				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_subscription';");
+				$rows = $wpdb->get_results("select ID from{$wpdb->prefix}posts where post_type = 'shop_subscription';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			}
 		}
@@ -3198,8 +3198,9 @@ SQL;
 			'status',
 			'created_date',
 			'completed_date',
-			'sku',
+			'skus',
 			'box_credits',
+			'box_debits',
 			'box_month',
 			'ship_month',
 			'total',
@@ -3274,14 +3275,23 @@ SQL;
 
 				$parent = find_credit_parent($order, $orders);
 				$parent_credits = CBWoo::calculate_box_credit($parent)['credits'];
+				$my_credits = CBWoo::calculate_box_credit($order)['credits'];
+				if ($parent) {
+					$box_credits = $parent_credits;
+				} else {
+					$box_credits = $my_credits;
+				}
 
 				if (false !== array_search('box', $order_types)) {
 					$find_charge_on = $parent;
 					$parent_id = $parent->id;
+					$box_credits = 0;
+					$box_debits = 1;
 				} else {
 					$find_charge_on = $order;
 					$parent_id = null;
 					$parent_credits = 0;
+					$box_debits = 0;
 				}
 				try {
 					$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
@@ -3315,7 +3325,8 @@ SQL;
 					'created_date' => $order->created_at,
 					'completed_date' => $order->completed_at,
 					'skus' => $sku,
-					'box_credits' => $parent_credits,
+					'box_credits' => $box_credits,
+					'box_debits' => $box_debits,
 					'box_month' => $month,
 					'ship_month' => $ship_month,
 					'total' => $total,
@@ -3553,7 +3564,7 @@ SQL;
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
-						, foreign key(user_id) references users(id)
+						-- , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
@@ -3581,7 +3592,7 @@ SQL;
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
-						, foreign key(user_id) references users(id)
+						-- , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
@@ -3607,7 +3618,7 @@ SQL;
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
-						, foreign key(user_id) references users(id)
+						-- , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
@@ -3632,7 +3643,7 @@ SQL;
 						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
 						, refund DECIMAL(10,2) DEFAULT '0.0'
 						, primary key(id)
-						, foreign key(user_id) references users(id)
+						-  , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,id);",
@@ -4181,8 +4192,8 @@ SQL;
 						, old_state VARCHAR(64) DEFAULT NULL
 						, new_state VARCHAR(64) DEFAULT NULL
 						, comment VARCHAR(1024) DEFAULT NULL
-						--, foreign key(sub_id) references subscriptions(id)
-						, foreign key(user_id) references users(id)
+						-- , foreign key(sub_id) references subscriptions(id)
+						-- , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
 						SORTKEY(user_id,sub_id);",
