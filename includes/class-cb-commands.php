@@ -4101,7 +4101,7 @@ SQL;
 	 */
 	public function get_customers_fitbit($userId)
 	{
-		$customer = new CBCustomer($user->ID);
+		$customer = new CBCustomer($userId);
 		return $customer->fitbit();
 	}
 	
