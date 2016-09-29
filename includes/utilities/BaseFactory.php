@@ -27,7 +27,7 @@ class BaseFactory extends BaseSingleton
 		//return new $className(... $params);
 		
 		// php 5
-		$reflect = new ReflectionClass($className);
+		$reflect = new \ReflectionClass($className);
 		return $reflect->newInstanceArgs($params);
 	}
 }

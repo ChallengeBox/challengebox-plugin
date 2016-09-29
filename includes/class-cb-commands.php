@@ -1,6 +1,6 @@
 <?php
 
-use Carbon\Carbon;
+use \Carbon\Carbon;
 use ChallengeBox\Includes\Utilities\BaseFactory;
 use Aws\Credentials\CredentialProvider;
 use Aws\S3\S3Client;
