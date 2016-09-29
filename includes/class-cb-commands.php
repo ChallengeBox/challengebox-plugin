@@ -3779,6 +3779,138 @@ SQL;
 	}
 
 	/**
+	 * Exports refund data from stripe.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't write anything, just show what we would do.
+	 *
+	 * [--verbose]
+	 * : Print out debugging data.
+	 *
+	 * [--redshift]
+	 * : Write results to s3 -> redshift.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_refunds --all
+	 */
+	function export_refunds($args, $assoc_args) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'order_id',
+			'user_id',
+			'refund_date',
+			'amount',
+			'charge_id',
+			'reason',
+			'receipt_number',
+			'status',
+		);
+
+		$limit = 100;
+		$has_more = true;
+		$starting_after = false;
+
+		// Grab raw refunds
+		while ($has_more) {
+			WP_CLI::debug("GETing $limit refunds starting after $starting_after...");
+			$result = CBStripe::get_refunds($limit, $starting_after);
+			$has_more = $result->has_more;
+			foreach ($result->data as $refund) {
+				$results[] = array(
+					'id' => $refund['id'],
+					'order_id' => NULL,
+					'refund_date' => Carbon::createFromTimestamp($refund['created'])->toDateTimeString(),
+					'amount' => $refund['amount']/100.0,
+					'charge_id' => $refund['charge'],
+					'reason' => $refund['reason'],
+					'receipt_number' => $refund['receipt_number'],
+					'status' => $refund['status'],
+				);
+			 	$starting_after = $refund->id;
+			}
+		}
+
+		//
+		// Populate order_id
+		//
+		WP_CLI::debug("Mapping refunds to orders...");
+		global $wpdb;
+		$charge_ids = array_column($results, 'charge_id');
+		$in_template = implode(',', array_map(function () { return "'%s'"; }, $charge_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as charge_id from {$wpdb->prefix}postmeta where meta_key = '_stripe_charge_id' and meta_value IN ($in_template);", $charge_ids);
+		$rows = $wpdb->get_results($prepared);
+		// Create map of charges to orders
+		$charge2order = array();
+		foreach ($rows as $row) {
+			$charge2order[$row->charge_id] = intval($row->order_id);
+		}
+		// Use the map to fill in order ids
+		foreach ($results as $index => $refund) {
+			$results[$index]['order_id'] = $charge2order[$refund['charge_id']];
+		}
+
+		//
+		// Populate user_id
+		//
+		WP_CLI::debug("Mapping orders to users...");
+		$order_ids = array_column($results, 'order_id');
+		$in_template = implode(',', array_map(function () { return "'%d'"; }, $order_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as user_id from {$wpdb->prefix}postmeta where meta_key = '_customer_user' and post_id IN ($in_template);", $order_ids);
+		$rows = $wpdb->get_results($prepared);
+		$order2user = array();
+		foreach ($rows as $r) $order2user[$r->order_id] = intval($r->user_id);
+		var_dump($order2user);
+		foreach ($results as $i => $r) $results[$i]['user_id'] = $order2user[$r['order_id']];
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->upload_results_to_s3('command_results/refunds.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					"ALTER TABLE refunds RENAME TO refunds_old;",
+					"CREATE TABLE refunds (
+						  id VARCHAR(32) NOT NULL
+						, order_id INT8 DEFAULT NULL
+						, user_id INT8 DEFAULT NULL
+						, refund_date TIMESTAMP NOT NULL
+						, amount DECIMAL(10,2) DEFAULT '0.0'
+						, charge_id VARCHAR(32) NOT NULL
+						, reason VARCHAR(1024) DEFAULT NULL
+						, receipt_number VARCHAR(32) DEFAULT NULL
+						, status VARCHAR(16) NOT NULL
+						, primary key(id)
+						)
+						DISTKEY(user_id)
+						SORTKEY(refund_date);",
+					"COPY refunds FROM 's3://challengebox-redshift/command_results/refunds.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS refunds_old;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+	}
+
+	/**
 	 * Exports user data.
 	 *
 	 * ## OPTIONS
