@@ -4146,6 +4146,8 @@ SQL;
 			
 			echo '------------------' . PHP_EOL;
 			echo 'Memory (before): ' . memory_get_usage() . PHP_EOL;
+
+			$output = array();
 			
 			exec('wp cb ingest_daily_tracking_for_user ' . $user->ID . ' ' . $startDate . ' ' . $endDate . ' --allow-root --path="' . get_home_path() . '"', $output, $status);
 		
