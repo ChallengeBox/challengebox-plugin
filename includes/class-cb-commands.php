@@ -4254,6 +4254,9 @@ SQL;
 
 					$cbRawTrackingData->multiSave($userId, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
 
+					echo 'Success: User ID - ' . $userId . PHP_EOL;
+					$successfullyProcessedUsers++;
+				
 				} else {
 					echo 'Error: User ID - ' . $userId . ', Not fitbit connection available.' . PHP_EOL;
 				}
@@ -4261,9 +4264,6 @@ SQL;
 			} catch (Exception $e) {
 				echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
-			
-			echo 'Success: User ID - ' . $userId . PHP_EOL;
-			$successfullyProcessedUsers++;
 		}
 		
 		return $successfullyProcessedUsers;
