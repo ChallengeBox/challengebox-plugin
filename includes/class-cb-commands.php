@@ -90,7 +90,7 @@ class CBCmd extends WP_CLI_Command {
 			} elseif ('subscription' == $this->options->orientation) {
 				WP_CLI::debug("Grabbing subscription ids...");
 				global $wpdb;
-				$rows = $wpdb->get_results("select ID from{$wpdb->prefix}posts where post_type = 'shop_subscription';");
+				$rows = $wpdb->get_results("select ID from {$wpdb->prefix}posts where post_type = 'shop_subscription';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			}
 		}
@@ -3878,7 +3878,6 @@ SQL;
 		$rows = $wpdb->get_results($prepared);
 		$order2user = array();
 		foreach ($rows as $r) $order2user[$r->order_id] = intval($r->user_id);
-		var_dump($order2user);
 		foreach ($results as $i => $r) $results[$i]['user_id'] = $order2user[$r['order_id']];
 
 		if (sizeof($results)) {
@@ -4316,9 +4315,9 @@ SQL;
 			if ($this->options->redshift) {
 				$this->upload_results_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
-					"ALTER TABLE sub_events RENAME TO sub_events_old;",
-					"CREATE TABLE sub_events (
-						  sub_id INT8 NOT NULL
+					"ALTER TABLE subscription_events RENAME TO subscription_events_old;",
+					"CREATE TABLE subscription_events (
+						  subscription_id INT8 NOT NULL
 						, user_id INT8 NOT NULL
 						, event VARCHAR(32) DEFAULT NULL
 						, date TIMESTAMP NOT NULL
@@ -4329,11 +4328,11 @@ SQL;
 						-- , foreign key(user_id) references users(id)
 						)
 						DISTKEY(user_id)
-						SORTKEY(user_id,sub_id);",
-					"COPY sub_events FROM 's3://challengebox-redshift/command_results/subscription_events.csv.gz' 
+						SORTKEY(user_id, subscription_id);",
+					"COPY subscription_events FROM 's3://challengebox-redshift/command_results/subscription_events.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
 						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
-					"DROP TABLE IF EXISTS sub_events_old;",
+					"DROP TABLE IF EXISTS subscription_events_old;",
 				));
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
