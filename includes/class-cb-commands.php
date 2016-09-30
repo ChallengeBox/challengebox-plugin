@@ -146,6 +146,7 @@ class CBCmd extends WP_CLI_Command {
 		WP_CLI::debug("Connecting to redshift...");
 		$db = pg_connect(file_get_contents('/home/www-data/.aws/redshift.string'))
 				or WP_CLI::error(pg_last_error());
+		$results = array();
 		if ($transaction) {
 			WP_CLI::debug("BEGIN; -- transaction");
 			pg_query("BEGIN;") or WP_CLI::error(pg_last_error());
@@ -153,7 +154,8 @@ class CBCmd extends WP_CLI_Command {
 		foreach ($queries as $query) {
 			//if ($this->options->verbose) 
 			WP_CLI::debug("Executing $query");
-			if(pg_query($query)) {
+			if($result = pg_query($query)) {
+				$results[] = pg_fetch_all($result);
 			} else {
 				if ($transaction) {
 					WP_CLI::debug("ROLLBACK; -- transaction");
@@ -166,6 +168,7 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug("COMMIT; -- transaction");
 			pg_query("COMMIT;") or WP_CLI::error(pg_last_error());
 		}
+		return $results;
 	}
 
 	/**
@@ -4544,6 +4547,85 @@ SQL;
 
 	}
 
+	/**
+	 * Prints out a comparison of where the database and code differ on sku box credits.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb debug_box_credits
+	 */
+	function debug_box_credits( $args, $assoc_args ) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$query = <<<SQL
+WITH base AS (SELECT
+  id
+, sku
+, status
+, total
+, box_credits AS box_credits_code
+, CASE
+    WHEN sku = '#livefit' THEN (CASE
+        WHEN box_credits > 0 THEN box_credits
+        ELSE (CASE
+            WHEN total > 0 THEN (CASE WHEN round(total/30.0) > 0 THEN round(total/30.0) ELSE 1 end)
+            ELSE 0
+        END)
+    END)
+    WHEN sku = 'subscription_monthly' THEN 1
+    WHEN sku = 'subscription_3month' THEN 3
+    WHEN sku = 'subscription_12month' THEN 12
+    WHEN sku = 'subscription_monthly-v2' THEN 1
+    WHEN sku = 'subscription_3month-v2' THEN 3
+    WHEN sku = 'subscription_12month-v2' THEN 12
+    WHEN sku = 'subscription_single_box' THEN 1
+    WHEN sku = 'sbox' THEN 1
+    WHEN substring(sku, 1, 5) = 'sbox_' THEN 1
+    WHEN substring(sku, 1, 3) = 'cb_' THEN (CASE
+        WHEN substring(sku, length(sku)-2, 3) = '_3m' THEN 3 
+        WHEN substring(sku, length(sku)-3, 4) = '_12m' THEN 12
+        ELSE 1 
+    END)
+    ELSE 0
+  END::INTEGER AS box_credits_database
+FROM
+    renewal_orders
+)
+
+SELECT
+      sku
+    , count(sku) AS num
+    , box_credits_code
+    , box_credits_database
+FROM
+    base
+WHERE
+    box_credits_code <> box_credits_database
+    OR box_credits_database = 0
+GROUP BY
+    sku, box_credits_code, box_credits_database
+ORDER BY
+    num desc;
+SQL;
+
+		$results = $this->execute_redshift_queries([$query])[0];
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
 }
 
 WP_CLI::add_command( 'cb', 'CBCmd' );
