@@ -3780,27 +3780,230 @@ SQL;
 	}
 
 	/**
+	 * Exports charge data from stripe.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Iterate through all charges (on by default).
+	 *
+	 * [--redshift]
+	 * : Write results to s3 -> redshift.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_charges --all
+	 */
+	function export_charges($args, $assoc_args) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'order_id',
+			'user_id',
+			'customer_id',
+			'charge_date',
+			'status',
+			'description',
+			'paid',
+			'captured',
+			'refunded',
+			'disputed',
+			'amount',
+			'amount_refunded',
+			'failure_code',
+			'failure_message',
+			'has_fraud_details',
+			'receipt_email',
+			'receipt_number',
+		);
+
+/*
+ "id": "ch_18zRW7Cyl4sgnYVYhez8riel",
+      "object": "charge",
+      "amount": 3198,
+      "amount_refunded": 0,
+      "application_fee": null,
+      "balance_transaction": "txn_18zRW8Cyl4sgnYVYybeZvmqL",
+      "captured": true,
+      "created": 1475243855,
+      "currency": "usd",
+      "customer": "cus_8vWeXaSJs06Yuh",
+      "description": "ChallengeBox - Fun 30 Day Fitness Challenges for Fitbit - Order 66063",
+      "destination": null,
+      "dispute": null,
+      "failure_code": null,
+      "failure_message": null,
+      "fraud_details": {},
+      "invoice": null,
+      "livemode": true,
+      "metadata": {
+        "payment_type": "initial"
+      },
+      "order": null,
+      "paid": true,
+      "receipt_email": "rabidc123@hotmail.com",
+      "receipt_number": "1514-4895",
+      "refunded": false,
+      "refunds": {
+        "object": "list",
+        "data": [],
+        "has_more": false,
+        "total_count": 0,
+        "url": "/v1/charges/ch_18zRW7Cyl4sgnYVYhez8riel/refunds"
+      },
+      "shipping": null,
+      "source": {
+        "id": "card_18zRW2Cyl4sgnYVYlr6vNwYP",
+        "object": "card",
+        "address_city": "Pardeeville",
+        "address_country": "US",
+        "address_line1": "113 Sanborn St",
+        "address_line1_check": "pass",
+        "address_line2": "Apt 2",
+        "address_state": "WI",
+        "address_zip": "53954",
+        "address_zip_check": "pass",
+        "brand": "Visa",
+        "country": "US",
+        "customer": "cus_8vWeXaSJs06Yuh",
+        "cvc_check": "pass",
+        "dynamic_last4": null,
+        "exp_month": 7,
+        "exp_year": 2019,
+        "fingerprint": "YJb14mR5K0LbU1bg",
+        "funding": "credit",
+        "last4": "8626",
+        "metadata": {},
+        "name": "Charity Miller",
+        "tokenization_method": null
+      },
+      "source_transfer": null,
+      "statement_descriptor": null,
+      "status": "succeeded"
+
+*/
+		$limit = 100;
+		$has_more = true;
+		$starting_after = false;
+		function boolize($thing) { return (bool) is_null($thing) ? 1 : ($thing ? 1 : 0); }
+
+		// Grab raw charges
+		while ($has_more) {
+			WP_CLI::debug("GETing $limit charges starting after $starting_after...");
+			$result = CBStripe::get_charges($limit, $starting_after);
+			$has_more = $result->has_more;
+			foreach ($result->data as $charge) {
+				$results[] = array(
+					'id' => $charge['id'],
+					'order_id' => NULL,
+					'user_id' => NULL,
+					'customer_id' => $charge['customer'],
+					'charge_date' => Carbon::createFromTimestamp($charge['created'])->toDateTimeString(),
+					'status' => $charge['status'],
+					'description' => $charge['description'],
+					'paid' => boolize($charge['paid']),
+					'captured' => boolize($charge['captured']),
+					'refunded' => boolize($charge['refunded']),
+					'disputed' => boolize(is_object($charge['dispute'])),
+					'amount' => $charge['amount']/100.0,
+					'amount_refunded' => $charge['amount_refunded']/100.0,
+					'failure_code' => $charge['failure_code'],
+					'failure_message' => $charge['failure_message'],
+					'has_fraud_details' => boolize($charge['fraud_details']),
+					'receipt_email' => $charge['receipt_email'],
+					'receipt_number' => $charge['receipt_number'],
+				);
+			 	$starting_after = $charge->id;
+			}
+		}
+
+		//
+		// Populate order_id
+		//
+		WP_CLI::debug("Mapping charges to orders...");
+		global $wpdb;
+		$charge_ids = array_column($results, 'id');
+		$in_template = implode(',', array_map(function () { return "'%s'"; }, $charge_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as charge_id from {$wpdb->prefix}postmeta where meta_key = '_stripe_charge_id' and meta_value IN ($in_template);", $charge_ids);
+		$rows = $wpdb->get_results($prepared);
+		// Create map of charges to orders
+		$charge2order = array();
+		foreach ($rows as $row) {
+			$charge2order[$row->charge_id] = intval($row->order_id);
+		}
+		// Use the map to fill in order ids
+		foreach ($results as $index => $charge) {
+			if (isset($charge2order[$charge['id']])) {
+				$results[$index]['order_id'] = $charge2order[$charge['id']];
+			} else {
+				// Use the description if we didn't have a database match
+				$matches = array();
+				if (preg_match('/Order (\d+)/', $charge['description'], $matches)) {
+					$results[$index]['order_id'] = intval($matches[1]);
+				}
+			}
+		}
+
+		//
+		// Populate user_id
+		//
+		WP_CLI::debug("Mapping orders to users...");
+		$order_ids = array_column($results, 'order_id');
+		$in_template = implode(',', array_map(function () { return "'%d'"; }, $order_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as user_id from {$wpdb->prefix}postmeta where meta_key = '_customer_user' and post_id IN ($in_template);", $order_ids);
+		$rows = $wpdb->get_results($prepared);
+		$order2user = array();
+		foreach ($rows as $r) $order2user[$r->order_id] = intval($r->user_id);
+		foreach ($results as $i => $r) $results[$i]['user_id'] = $order2user[$r['order_id']];
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->upload_results_to_s3('command_results/charges.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					"ALTER TABLE charges RENAME TO charges_old;",
+					"CREATE TABLE charges (
+						  id VARCHAR(32) NOT NULL
+						, order_id INT8 DEFAULT NULL
+						, user_id INT8 DEFAULT NULL
+						, customer_id VARCHAR(32) NOT NULL
+						, charge_date TIMESTAMP NOT NULL
+						, status VARCHAR(16) NOT NULL
+						, description VARCHAR(1024) DEFAULT NULL
+						, paid INT2 NOT NULL DEFAULT 0
+						, captured INT2 NOT NULL DEFAULT 0
+						, refunded INT2 NOT NULL DEFAULT 0
+						, disputed INT2 NOT NULL DEFAULT 0
+						, amount DECIMAL(10,2) DEFAULT '0.0'
+						, amount_refunded DECIMAL(10,2) DEFAULT '0.0'
+						, failure_code VARCHAR(32) DEFAULT NULL
+						, failure_message VARCHAR(1024) DEFAULT NULL
+						, has_fraud_details INT2 NOT NULL DEFAULT 0
+						, receipt_email VARCHAR(1024) DEFAULT NULL
+						, receipt_number VARCHAR(16) DEFAULT NULL
+						, primary key(id)
+						)
+						DISTKEY(user_id)
+						SORTKEY(charge_date);",
+					"COPY charges FROM 's3://challengebox-redshift/command_results/charges.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS charges_old;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+	}
+
+	/**
 	 * Exports refund data from stripe.
 	 *
 	 * ## OPTIONS
 	 *
-	 * [<user_id>...]
-	 * : The user id(s) to check.
-	 *
 	 * [--all]
-	 * : Iterate through all users. (Ignores <user_id>... if found).
-	 *
-	 * [--reverse]
-	 * : Iterate users in reverse order.
-	 *
-	 * [--limit=<limit>]
-	 * : Only process <limit> users out of the list given.
-	 *
-	 * [--pretend]
-	 * : Don't write anything, just show what we would do.
-	 *
-	 * [--verbose]
-	 * : Print out debugging data.
+	 * : Iterate through all refunds (on by default).
 	 *
 	 * [--redshift]
 	 * : Write results to s3 -> redshift.

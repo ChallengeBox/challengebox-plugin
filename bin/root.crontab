@@ -14,4 +14,5 @@
 13 7 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_users --all --redshift)
 13 9 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_subscription_events --all --redshift)
 13 11 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_orders --all --redshift)
-13 15 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_refunds --all --redshift)
+13 15 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_refunds --redshift)
+13 17 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_charges --redshift)

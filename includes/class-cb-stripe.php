@@ -33,6 +33,15 @@ class CBStripe {
 			return \Stripe\Refund::all(array('limit' => $limit));
 		}
 	}
+
+	public static function get_charges($limit=10, $starting_after=false) {
+		\Stripe\Stripe::setApiKey(get_option('woocommerce_stripe_settings')['secret_key']);
+		if ($starting_after) {
+			return \Stripe\Charge::all(array('limit' => $limit, 'starting_after' => $starting_after));
+		} else {
+			return \Stripe\Charge::all(array('limit' => $limit));
+		}
+	}
 }
 
 
