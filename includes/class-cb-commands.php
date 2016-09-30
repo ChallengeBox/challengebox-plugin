@@ -4130,14 +4130,14 @@ SQL;
 
 		// make sure required dates are provided
 		if (count($args) < 2) {
-			echo 'wp cb ingest_daily_tracking <start date> <end date>';
+			echo 'wp cb ingest_daily_tracking <start date> <end date> [<block_size>]';
 			return;
 		}
 		
-		list($startDate, $endDate) = $args;
+		$blockSize = (isset($args[2])) ? $args[2] : 100;
+		echo 'Block Size: ' . $blockSize . PHP_EOL;
 		
-		$blockSize = 100;
-
+		list($startDate, $endDate) = $args;
 
 		// for each user, get their ID
 		$userParams = array(
