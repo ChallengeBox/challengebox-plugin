@@ -33,7 +33,7 @@ class Test_CBCmd extends \BaseTest {
 		
 		$homePath = '\some\path';
 		
-		$execStatement = 'wp cb ingest_daily_tracking_for_user_block 2016-01-01 2016-01-05 343 --allow-root --debug --path="\some\path" ';
+		$execStatement = 'wp cb ingest_daily_tracking_for_user_block 2016-01-01 2016-01-05 343 --allow-root  --path="\some\path" ';
 		
 		$classCbCommands = $this->getMockBuilder('\CBCmd')
 			->disableOriginalConstructor()

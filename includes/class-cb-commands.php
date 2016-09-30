@@ -4159,6 +4159,7 @@ SQL;
 		}
 
 		$debug = (isset($assocArgs['debug']) && $assocArgs['debug'] == 1);
+		$debugClause = ($debug) ? '--debug' : '';
 		$homePath = $this->getHomePath();
 		
 		$blockSize = (isset($args[2])) ? $args[2] : 100;
@@ -4184,7 +4185,7 @@ SQL;
 			$output = array();
 			
 			$userList = implode(' ', $userBlock);
-			$this->exec('wp cb ingest_daily_tracking_for_user_block ' . $startDate . ' ' . $endDate . ' ' . $userList . ' --allow-root --debug --path="' . $homePath . '" ', $output, $numberOfSuccessfulUsers);
+			$this->exec('wp cb ingest_daily_tracking_for_user_block ' . $startDate . ' ' . $endDate . ' ' . $userList . ' --allow-root ' . $debugClause . ' --path="' . $homePath . '" ', $output, $numberOfSuccessfulUsers);
 		
 			if ($debug) {
 				foreach ($output as $line) {
