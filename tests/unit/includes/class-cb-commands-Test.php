@@ -21,20 +21,61 @@ class Test_CBCmd extends \BaseTest {
 		$args = array(
 			$startDate, $endDate	
 		);
-		$debug = 1;
+		$debug = 0;
 		$assocArgs = array(
 			'debug' => $debug	
 		);
 		
 		// mock
 		$userId = 343;
+
+		$userIds = array($userId);
 		
-		$user = new \stdClass();
-		$user->ID = $userId;
+		$homePath = '\some\path';
+		
+		$execStatement = 'wp cb ingest_daily_tracking_for_user_block 2016-01-01 2016-01-05 343 --allow-root --debug --path="\some\path" ';
+		
+		$classCbCommands = $this->getMockBuilder('\CBCmd')
+			->disableOriginalConstructor()
+			->setMethods(array('get_carbon', 'getUserIds', 'getHomePath',  'exec'))
+			->getMock();
+		$classCbCommands->expects($this->at(0))
+			->method('getHomePath')
+			->willReturn($homePath);
+		$classCbCommands->expects($this->at(1)) 
+			->method('getUserIds')
+			->willReturn($userIds);
+		$classCbCommands->expects($this->at(2))
+			->method('exec')
+			->with($this->equalTo($execStatement));
+		
+		// run
+		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
+	}
+
+	/**
+	 * test: ingest_daily_tracking_for_user_block
+	 */
+	public function testIngestDailyTracking_for_user_block()
+	{
+		// param
+		$startDate = '2016-01-01';
+		$endDate = '2016-01-05';
+		$userId = 343;
+		$args = array(
+			$startDate, $endDate, $userId	
+		);
+		$debug = 0;
+		$assocArgs = array(
+			'debug' => $debug	
+		);
+		
+		// mock
+		$userIds = array($userId);
 		
 		$startDateInCarbon = '2016-01-01';
 		$endDateInCarbon = '2016-01-01';
-		
+	
 		$carbon = $this->getMockBuilder('Carbon')
 			->disableOriginalConstructor()
 			->setMethods(array('createFromFormat'))
@@ -47,7 +88,7 @@ class Test_CBCmd extends \BaseTest {
 			->method('createFromFormat')
 			->with($this->equalTo('Y-m-d'), $this->equalTo($endDate))
 			->willReturn($endDateInCarbon);
-		
+	
 		$dateParsedData = array(
 			'2016-01-01' => array(
 				'caloriesIn' => 0, 
@@ -121,11 +162,11 @@ class Test_CBCmd extends \BaseTest {
 		$cbRawTrackingData->expects($this->once())
 			->method('multiSave')
 			->with( 
-				$this->equalTo($user->ID),
+				$this->equalTo($userId),
 				$this->equalTo(CBRawTrackingData::FITBIT_V1_SOURCE),
 				$this->equalTo($rawData)
 			);
-		
+	
 		$baseFactory = $this->getMockBuilder('ChallengeBox\Includes\Utilities\BaseFactory')
 			->disableOriginalConstructor()
 			->setMethods(array('generate'))
@@ -161,28 +202,20 @@ class Test_CBCmd extends \BaseTest {
 			$i++;
 		}
 		
-		$users = array(
-			$user
-		);
-		
 		$classCbCommands = $this->getMockBuilder('\CBCmd')
 			->disableOriginalConstructor()
-			->setMethods(array('get_carbon', 'get_wp_users',  'get_customers_fitbit'))
+			->setMethods(array('get_carbon', 'get_customers_fitbit'))
 			->getMock();
-		$classCbCommands->expects($this->at(0))
+		$classCbCommands->expects($this->once())
 			->method('get_carbon')
 			->willReturn($carbon);
-		$classCbCommands->expects($this->at(1)) 
-			->method('get_wp_users')
-			->with($this->equalTo(array('fields' => array('ID'))))
-			->willReturn($users);
-		$classCbCommands->expects($this->at(2))
+		$classCbCommands->expects($this->any())
 			->method('get_customers_fitbit')
 			->with($this->equalTo($userId))
 			->willReturn($fitbit);
 		
 		// run
-		$classCbCommands->ingest_daily_tracking($args, $assocArgs);
+		$classCbCommands->ingest_daily_tracking_for_user_block($args, $assocArgs);
 	}
 	
 	/**
@@ -206,8 +239,8 @@ class Test_CBCmd extends \BaseTest {
 		$user = new \stdClass();
 		$user->ID = $userId;
 		
-		$users = array(
-			$user
+		$userIds = array(
+			$userId
 		);
 		
 		$rawData = 'some_raw_data';
@@ -250,12 +283,11 @@ class Test_CBCmd extends \BaseTest {
 		
 		$classCbCommands = $this->getMockBuilder('\CBCmd')
 			->disableOriginalConstructor()
-			->setMethods(array('get_wp_users',  'get_customers_fitbit'))
+			->setMethods(array('getUserIds',  'get_customers_fitbit'))
 			->getMock();
 		$classCbCommands->expects($this->once()) 
-			->method('get_wp_users')
-			->with($this->equalTo(array('fields' => array('ID'))))
-			->willReturn($users);
+			->method('getUserIds')
+			->willReturn($userIds);
 		
 		// run
 		$classCbCommands->aggregate_raw_data($args, $assocArgs);
