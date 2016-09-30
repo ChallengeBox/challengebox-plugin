@@ -4129,10 +4129,56 @@ SQL;
 		
 		list($startDate, $endDate) = $args;
 
-		// get starts into Carbon format
-		$carbon = $this->get_carbon();
-		$start = $carbon->createFromFormat('Y-m-d', $startDate);
-		$end = $carbon->createFromFormat('Y-m-d', $endDate);
+
+		// for each user, get their ID
+		$userParams = array(
+			'fields' => array('ID')	
+		);
+		
+		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
+		
+		$users = $this->get_wp_users($userParams);
+		
+		$numberOfUsers = count($users);
+		
+		$successfulUsers = 0;
+		foreach ($users as $user) {
+			
+			echo '------------------' . PHP_EOL;
+			echo 'Memory (before): ' . memory_get_usage() . PHP_EOL;
+			
+			exec('wp cb ingest_daily_tracking_for_user ' . $user->ID . ' ' . $startDate . ' ' . $endDate . ' --path="' . get_home_path() . '"', $output, $returnValue);
+		
+			foreach ($output as $line) {
+				echo $line . PHP_EOL;
+			}
+			
+			if ($status == 1) {
+				$successfulUsers++;
+			}
+			echo 'Memory (after): ' . memory_get_usage() . PHP_EOL;
+		}
+
+		echo '------------------' . PHP_EOL;
+		echo 'Total Users: ' . $numberOfUsers . PHP_EOL;
+		echo 'Successful Users: ' . $successfulUsers . PHP_EOL;
+		echo 'Unsuccessful Users: ' . ($numberOfUsers - $successfulUsers) . PHP_EOL;
+	}
+	
+	/**
+	 * ingest_daily_tracking_for_user
+	 */
+	public function ingest_daily_tracking_for_user($args, $assocArgs) 
+	{
+		// make sure required dates are provided
+		if (count($args) < 3) {
+			echo 'wp cb ingest_daily_tracking <user_id> <start date> <end date>';
+			return;
+		}
+
+		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');
+		
+		list($userId, $startDate, $endDate) = $args;
 
 		// build list of all fitbit activities to be included
 		$activities = array(
@@ -4167,51 +4213,43 @@ SQL;
 				'activities_steps' 
 		);
 
-		// for each user, get their ID
-		$userParams = array(
-			'fields' => array('ID')	
-		);
-		
-		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
-		
-		$users = $this->get_wp_users($userParams);
-		
-		$numberOfUsers = count($users);
-		
-		$successfulUsers = 0;
-		foreach ($users as $user) {
-
-			try {
-					
-				// if the user has a fitbit connection
-				$fitbit = $this->get_customers_fitbit($user->ID);
+		// get starts into Carbon format
+		$carbon = $this->get_carbon();
+		$start = $carbon->createFromFormat('Y-m-d', $startDate);
+		$end = $carbon->createFromFormat('Y-m-d', $endDate);
 				
-				if (!is_null($fitbit)) {
+		
+		try {
+				
+			// if the user has a fitbit connection
+			$fitbit = $this->get_customers_fitbit($userId);
+		
+			if (!is_null($fitbit)) {
 					
-					// get fitbit data
-					$rawData = array();
-					foreach ($activities as $activity) {
-						
-						$results = $fitbit->get_cached_time_series($activity, $start, $end);
-						
-						$rawData = array_merge($rawData, array($activity => $results));
-					}
-					
-					$cbRawTrackingData->multiSave($user->ID, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
-					$successfulUsers++;
-				} else {
-					echo 'Error: User ID - ' . $user->ID . ', Not fitbit connection available.' . PHP_EOL;
+				// get fitbit data
+				$rawData = array();
+				foreach ($activities as $activity) {
+		
+					$results = $fitbit->get_cached_time_series($activity, $start, $end);
+		
+					$rawData = array_merge($rawData, array($activity => $results));
 				}
+					
+				$cbRawTrackingData->multiSave($userId, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
 
-			} catch (Exception $e) {
-				echo 'Error: User ID - ' . $user->ID . ', Message - ' . $e->getMessage() . PHP_EOL;
+			} else {
+				echo 'Error: User ID - ' . $userId . ', Not fitbit connection available.' . PHP_EOL;
+				return 0;
 			}
+
+		} catch (Exception $e) {
+			echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
+			return 0;
 		}
 		
-		echo 'Total Users: ' . $numberOfUsers . PHP_EOL;
-		echo 'Successful Users: ' . $successfulUsers . PHP_EOL;
-		echo 'Unsuccessful Users: ' . ($numberOfUsers - $successfulUsers) . PHP_EOL;
+		return 1;
 	}
+	
 	
 	/**
 	 * aggregate raw data
