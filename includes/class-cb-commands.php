@@ -4156,7 +4156,7 @@ SQL;
 		foreach ($userBlocks as $userBlock) {
 			
 			echo '------------------' . PHP_EOL;
-			echo 'Memory (before): ' . memory_get_usage() . PHP_EOL;
+			echo 'Memory (before block processing): ' . memory_get_usage() . PHP_EOL;
 
 			$output = array();
 			
@@ -4169,7 +4169,7 @@ SQL;
 			
 			$successfulUsers += $numberOfSuccessfulUsers;
 
-			echo 'Memory (after): ' . memory_get_usage() . PHP_EOL;
+			echo 'Memory (after block processing): ' . memory_get_usage() . PHP_EOL;
 		}
 
 		echo '------------------' . PHP_EOL;
@@ -4262,6 +4262,7 @@ SQL;
 				echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
 			
+			echo 'Success: User ID - ' . $userId . PHP_EOL;
 			$successfullyProcessedUsers++;
 		}
 		
