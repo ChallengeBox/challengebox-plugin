@@ -39,6 +39,7 @@ class CBCmd extends WP_CLI_Command {
 			'sku_version' => !empty($assoc_args['sku_version']) ? $assoc_args['sku_version'] : 'v3',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
+			'offset' => !empty($assoc_args['offset']) ? intval($assoc_args['offset']) : false,
 			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'no_points' => !empty($assoc_args['no_points']),
@@ -4621,6 +4622,124 @@ ORDER BY
 SQL;
 
 		$results = $this->execute_redshift_queries([$query])[0];
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Prints out the box credit ledger for given users(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to grab the ledger for.
+	 *
+	 * [--all]
+	 * : Print out ledger for all users.
+	 *
+	 * [--limit=<limit>]
+	 * : Limit query results to <limit> rows.
+	 *
+	 * [--offset=<offset>]
+	 * : Offset query results by <offset> rows.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb ledger 167
+	 */
+	function ledger( $args, $assoc_args ) {
+		$all = FALSE; if (!empty($assoc_args['all'])) { $all = TRUE; unset($assoc_args['all']); }
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		if ($all) $this->options->all = TRUE;
+
+		$results = array();
+
+		$ledger = new CBLedger();
+		if ($this->options->all) {
+			WP_CLI::debug("Grabbing data for all users...");
+			$results = $ledger->get_ledger($this->options->limit, $this->options->offset);
+		} else {
+			foreach ($args as $user_id) {
+				WP_CLI::debug("Grabbing data for user $user_id...");
+				$results = array_merge($results, $ledger->get_ledger_for_user($user_id));
+			}
+		}
+
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Prints out the box credit ledger summary for given users(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to grab the ledger summary for.
+	 *
+	 * [--all]
+	 * : Print out ledger summary for all users.
+	 *
+	 * [--limit=<limit>]
+	 * : Limit query results to <limit> rows.
+	 *
+	 * [--offset=<offset>]
+	 * : Offset query results by <offset> rows.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb ledger_summary 167
+	 */
+	function ledger_summary( $args, $assoc_args ) {
+		$all = FALSE; if (!empty($assoc_args['all'])) { $all = TRUE; unset($assoc_args['all']); }
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		if ($all) $this->options->all = TRUE;
+
+		$results = array();
+
+		$ledger = new CBLedger();
+		if ($this->options->all) {
+			WP_CLI::debug("Grabbing data for all users...");
+			$results = $ledger->get_summary($this->options->limit, $this->options->offset);
+		} else {
+			foreach ($args as $user_id) {
+				WP_CLI::debug("Grabbing data for user $user_id...");
+				$results = array_merge($results, $ledger->get_summary_for_user($user_id));
+			}
+		}
+
 		if (sizeof($results)) {
 			$columns = array_keys($results[0]);
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
