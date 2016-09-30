@@ -4174,7 +4174,12 @@ SQL;
 		
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
 		
-		foreach ($this->get_wp_users($userParams) as $user) {
+		$users = $this->get_wp_users($userParams);
+		
+		$numberOfUsers = count($users);
+		
+		$successfulUsers = 0;
+		foreach ($users as $user) {
 
 			try {
 					
@@ -4193,14 +4198,22 @@ SQL;
 					}
 					
 					$cbRawTrackingData->multiSave($user->ID, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
+					$successfulUsers++;
 				} else {
 					echo 'Error: User ID - ' . $user->ID . ', Not fitbit connection available.' . PHP_EOL;
 				}
 
 			} catch (Exception $e) {
+				if (isset($fitbit)) {
+					$fitbit->closeApis();
+				}
 				echo 'Error: User ID - ' . $user->ID . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
 		}
+		
+		echo 'Total Users: ' . $numberOfUsers . PHP_EOL;
+		echo 'Successful Users: ' . $successfulUsers . PHP_EOL;
+		echo 'Unsuccessful Users: ' . ($numberOfUsers - $successfulUsers) . PHP_EOL;
 	}
 	
 	/**

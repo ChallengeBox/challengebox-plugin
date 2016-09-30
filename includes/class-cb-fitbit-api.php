@@ -356,6 +356,13 @@ class CBFitbitAPI {
 		unset($this->v2_token);
 		unset($this->v2_owner);
 	}
+	
+	public function closeApis()
+	{
+		unset($this->api1);
+		unset($this->api2);
+		unset($this->v2_token);
+	}
 
 	/*
 	 * Internal logic for sending a user out to fitbit's authorization page
