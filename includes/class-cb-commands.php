@@ -4089,11 +4089,18 @@ SQL;
 	}
 	
 	/**
-	 * get_up_users
+	 * getUserIds
 	 */
-	public function get_wp_users($args = null)
+	public function getUserIds($args = null)
 	{
-		return get_users($args);
+		$users = get_users($args);
+		
+		$userIds = array();
+		foreach ($users as $user) {
+			$userIds[] = $user->ID;
+		}
+		
+		return $userIds;
 	}
 	
 	/**
@@ -4128,36 +4135,40 @@ SQL;
 		}
 		
 		list($startDate, $endDate) = $args;
+		
+		$blockSize = 100;
 
 
 		// for each user, get their ID
 		$userParams = array(
 			'fields' => array('ID')	
 		);
-		
+
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
 		
-		$users = $this->get_wp_users($userParams);
+		$users = $this->getUserIds($userParams);
+		
+		$userBlocks = array_chunk($users, $blockSize);
 		
 		$numberOfUsers = count($users);
 		
 		$successfulUsers = 0;
-		foreach ($users as $user) {
+		foreach ($userBlocks as $userBlock) {
 			
 			echo '------------------' . PHP_EOL;
 			echo 'Memory (before): ' . memory_get_usage() . PHP_EOL;
 
 			$output = array();
 			
-			exec('wp cb ingest_daily_tracking_for_user ' . $user->ID . ' ' . $startDate . ' ' . $endDate . ' --allow-root --path="' . get_home_path() . '"', $output, $status);
+			$userList = implode(' ', $userBlock);
+			exec('wp cb ingest_daily_tracking_for_user_block ' . $startDate . ' ' . $endDate . ' ' . $userList . ' --allow-root --path="' . get_home_path() . '" ', $output, $numberOfSuccessfulUsers);
 		
 			foreach ($output as $line) {
 				echo $line . PHP_EOL;
 			}
 			
-			if ($status == 1) {
-				$successfulUsers++;
-			}
+			$successfulUsers += $numberOfSuccessfulUsers;
+
 			echo 'Memory (after): ' . memory_get_usage() . PHP_EOL;
 		}
 
@@ -4168,19 +4179,23 @@ SQL;
 	}
 	
 	/**
-	 * ingest_daily_tracking_for_user
+	 * ingest_daily_tracking_for_user_block
 	 */
-	public function ingest_daily_tracking_for_user($args, $assocArgs) 
+	public function ingest_daily_tracking_for_user_block($args, $assocArgs) 
 	{
 		// make sure required dates are provided
 		if (count($args) < 3) {
-			echo 'wp cb ingest_daily_tracking <user_id> <start date> <end date>';
+			echo 'wp cb ingest_daily_tracking <start date> <end date> <user_id1> [<user_id2> ... <user_id3>]';
 			return;
 		}
 
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');
 		
-		list($userId, $startDate, $endDate) = $args;
+		$startDate = $args[0];
+		$endDate = $args[1];
+		$userIds = array_slice($args, 2);
+		
+		list($startDate, $endDate) = $args;
 
 		// build list of all fitbit activities to be included
 		$activities = array(
@@ -4221,35 +4236,36 @@ SQL;
 		$end = $carbon->createFromFormat('Y-m-d', $endDate);
 				
 		
-		try {
-				
-			// if the user has a fitbit connection
-			$fitbit = $this->get_customers_fitbit($userId);
-		
-			if (!is_null($fitbit)) {
+		$successfullyProcessedUsers = 0;
+		foreach ($userIds as $userId) {
+			try {
 					
-				// get fitbit data
-				$rawData = array();
-				foreach ($activities as $activity) {
-		
-					$results = $fitbit->get_cached_time_series($activity, $start, $end);
-		
-					$rawData = array_merge($rawData, array($activity => $results));
+				// if the user has a fitbit connection
+				$fitbit = $this->get_customers_fitbit($userId);
+			
+				if (!is_null($fitbit)) {
+						
+					// get fitbit data
+					$rawData = array();
+					foreach ($activities as $activity) {
+						$results = $fitbit->get_cached_time_series($activity, $start, $end);
+						$rawData = array_merge($rawData, array($activity => $results));
+					}
+
+					$cbRawTrackingData->multiSave($userId, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
+
+				} else {
+					echo 'Error: User ID - ' . $userId . ', Not fitbit connection available.' . PHP_EOL;
 				}
-					
-				$cbRawTrackingData->multiSave($userId, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
-
-			} else {
-				echo 'Error: User ID - ' . $userId . ', Not fitbit connection available.' . PHP_EOL;
-				return 0;
+	
+			} catch (Exception $e) {
+				echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
-
-		} catch (Exception $e) {
-			echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
-			return 0;
+			
+			$successfullyProcessedUsers++;
 		}
 		
-		return 1;
+		return $successfullyProcessedUsers;
 	}
 	
 	
@@ -4276,9 +4292,9 @@ SQL;
 			'fields' => array('ID')
 		);
 
-		foreach ($this->get_wp_users($userParams) as $user) {	
+		foreach ($this->getUserIds($userParams) as $userId) {	
 			// get raw data
-			$rawData = $rawDataObject->findByUserIdAndDates($user->ID, $startDate, $endDate);
+			$rawData = $rawDataObject->findByUserIdAndDates($userId, $startDate, $endDate);
 			
 			// aggregate and save the data
 			$aggregateDataObject->aggregateAndSave($rawData);
