@@ -4204,9 +4204,6 @@ SQL;
 				}
 
 			} catch (Exception $e) {
-				if (isset($fitbit)) {
-					$fitbit->closeApis();
-				}
 				echo 'Error: User ID - ' . $user->ID . ', Message - ' . $e->getMessage() . PHP_EOL;
 			}
 		}

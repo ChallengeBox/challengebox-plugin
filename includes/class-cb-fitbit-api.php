@@ -357,11 +357,12 @@ class CBFitbitAPI {
 		unset($this->v2_owner);
 	}
 	
-	public function closeApis()
+	public function __destruct()
 	{
 		unset($this->api1);
 		unset($this->api2);
 		unset($this->v2_token);
+		unset($this->v2_owner);
 	}
 
 	/*
