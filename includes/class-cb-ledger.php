@@ -6,69 +6,84 @@
 
 class CBLedger {
 
-	public function __construct() {
-		$this->db = pg_connect(file_get_contents('/home/www-data/.aws/redshift.string'));
+	private $db;
+	private $schema;
+
+	public function __construct($string=false, $schema=false) {
+		$string_file = '/home/www-data/.aws/redshift.string';
+		$string = $string ? $string : file_get_contents($string_file);
+		$this->db = pg_connect($string);
+		$default_schema = WP_DEBUG ? 'dev' : 'production';
+		$this->schema = $schema ? $schema : $default_schema;
 		if (!$this->db) throw new Exception(pg_last_error());
 	}
 
 	public function get_ledger($limit = false, $offset = false, $sort_column = false, $sort_direction = false) {
-		$query = $this->get_credit_ledger_sql();
+		$query = $this->sql_credit_ledger();
 		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
 		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
+		if (WP_DEBUG) var_dump($query);
 		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
 	}
 
 	public function get_ledger_count() {
-		$result = pg_query($this->credit_ledger_count);
+		$query = $this->sql_credit_ledger_count();
+		if (WP_DEBUG) var_dump($query);
+		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result)[0]['n'];
 	}
 
 	public function get_ledger_for_user($user_id) {
 		global $wpdb;
-		$prepared = $wpdb->prepare(str_replace('-- WHERE', "WHERE\n\tuser_id = %d", $this->get_credit_ledger_sql()), $user_id);
-		$result = pg_query($prepared);
+		$query = $wpdb->prepare(str_replace('-- WHERE', "WHERE\n\tuser_id = %d", $this->sql_credit_ledger()), $user_id);
+		if (WP_DEBUG) var_dump($query);
+		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
 	}
 
 	public function get_ledger_count_for_user($user_id) {
 		global $wpdb;
-		$prepared = str_replace('-- WHERE', "WHERE\n\tid = $user_id", $this->credit_ledger_count);
-		$result = pg_query($prepared);
+		$query = str_replace('-- WHERE', "WHERE\n\tid = $user_id", $this->sql_credit_ledger_count());
+		if (WP_DEBUG) var_dump($query);
+		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result)[0]['n'];
 	}
 
 
 	public function get_summary($limit=false, $offset=false, $orderby='user_id', $order='asc') {
-		$query = $this->get_credit_summary_sql($orderby, $order);
+		$query = $this->sql_credit_summary($orderby, $order);
 		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
 		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
+		if (WP_DEBUG) var_dump($query);
 		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
 	}
 
 	public function get_summary_count() {
-		$result = pg_query($this->summary_count);
+		$query = $this->sql_summary_count();
+		if (WP_DEBUG) var_dump($query);
+		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result)[0]['n'];
 	}
 
 	public function get_summary_for_user($user_id) {
 		global $wpdb;
-		$prepared = $wpdb->prepare(str_replace('-- AND', "AND\n\tuser_id = %d", $this->get_credit_summary_sql()), $user_id);
-		$result = pg_query($prepared);
+		$query = $wpdb->prepare(str_replace('-- AND', "AND\n\tuser_id = %d", $this->sql_credit_summary()), $user_id);
+		if (WP_DEBUG) var_dump($query);
+		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
 	}
 
-	private $db;
-
-	private $box_orders_base = <<<SQL
+	private function sql_box_base() {
+		return <<<SQL
 SELECT
 		  box_orders.id::varchar(32)
 		, user_id
@@ -78,14 +93,22 @@ SELECT
 		, sku
 		, 0 AS box_credits
 		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 END AS box_debits
+		, 0 as box_credits_old
+		, box_debits as box_debits_old
 		, total
 		, 0 as revenue
 		, registration_date
 FROM
-		box_orders JOIN users ON box_orders.user_id = users.id
+		$this->schema.box_orders
+JOIN
+		$this->schema.users
+ON
+		$this->schema.box_orders.user_id = $this->schema.users.id
 SQL;
+	}
 
-	private $renewal_orders_base = <<<SQL
+	private function sql_renewal_base() {
+		return <<<SQL
 SELECT
 		  renewal_orders.id::varchar(32)
 		, user_id
@@ -121,14 +144,22 @@ SELECT
 				ELSE 0
 			END::INTEGER AS box_credits
 		, 0 AS box_debits
+		, box_credits as box_credits_old
+		, 0 as box_debits_old
 		, total
 		, 0 as revenue
 		, registration_date
 FROM
-		renewal_orders JOIN users ON renewal_orders.user_id = users.id
+		$this->schema.renewal_orders
+JOIN
+		$this->schema.users
+ON
+		$this->schema.renewal_orders.user_id = $this->schema.users.id
 SQL;
+	}
 
-	private $payment_base = <<<SQL
+	private function sql_payment_base() {
+		return <<<SQL
 SELECT
 		  charges.id
 		, user_id
@@ -138,14 +169,22 @@ SELECT
 		, NULL AS sku
 		, 0 AS box_credits
 		, 0 AS box_debits
+		, 0 as box_credits_old
+		, 0 as box_debits_old
 		, amount AS total
 		, CASE WHEN status = 'succeeded' THEN amount ELSE 0 END AS revenue
 		, registration_date
 FROM
-		charges JOIN users ON charges.user_id = users.id
+		$this->schema.charges
+JOIN
+		$this->schema.users
+ON
+		$this->schema.charges.user_id = $this->schema.users.id
 SQL;
+	}
 
-	private $refund_base = <<<SQL
+	private function sql_refund_base() {
+		return <<<SQL
 SELECT
 		  refunds.id
 		, user_id
@@ -155,31 +194,41 @@ SELECT
 		, NULL AS sku
 		, 0 AS box_credits
 		, 0 AS box_debits
+		, 0 as box_credits_old
+		, 0 as box_debits_old
 		, -amount AS total
 		, CASE WHEN status = 'succeeded' THEN -amount ELSE 0 END AS revenue
 		, registration_date
 FROM
-		refunds JOIN users ON refunds.user_id = users.id
+		$this->schema.refunds
+JOIN
+		$this->schema.users
+ON
+		$this->schema.refunds.user_id = $this->schema.users.id
 SQL;
+	}
 
-	private $credit_ledger_count = <<<SQL
+	private function sql_credit_ledger_count() {
+		return <<<SQL
 		SELECT sum(n) as n FROM
 		( 
-			SELECT count(id) as n FROM box_orders
+			SELECT count(id) as n FROM $this->schema.box_orders
 			-- WHERE
 				UNION
-			SELECT count(id) as n FROM renewal_orders
+			SELECT count(id) as n FROM $this->schema.renewal_orders
 			-- WHERE
 				UNION
-			SELECT count(id) as n FROM charges
+			SELECT count(id) as n FROM $this->schema.charges
 			-- WHERE
 				UNION
-			SELECT count(id) as n FROM refunds
+			SELECT count(id) as n FROM $this->schema.refunds
 			-- WHERE
 		)
 SQL;
+	}
 
-	private $credit_ledger_base = <<<SQL
+	private function sql_credit_ledger_base() {
+		return <<<SQL
 SELECT
 		  id
 		, datediff('months', registration_date, created_date) AS months_since_join
@@ -192,24 +241,43 @@ SELECT
 		, total
 		, revenue
 		, box_credits
+		, box_credits_old
 		, box_debits
+		, box_debits_old
 		, sum(box_credits) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits
 		, sum(box_debits) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits
+		, sum(box_credits_old) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits_old
+		, sum(box_debits_old) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits_old
 		, sum(revenue) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_revenue
 FROM
 		(SELECT * FROM box_orders_base UNION SELECT * FROM renewal_orders_base UNION SELECT * FROM refund_base UNION SELECT * FROM payment_base)
 ORDER BY
 		user_id, created_date, kind DESC
 SQL;
+	}
 
-	public function get_credit_ledger_sql() {
+	public function sql_credit_ledger() {
+		list(
+			$renewals,
+			$boxes,
+			$payments,
+			$refunds,
+			$credit_ledger_base,
+		) = array(
+			$this->sql_renewal_base(),
+			$this->sql_box_base(),
+			$this->sql_payment_base(),
+			$this->sql_refund_base(),
+			$this->sql_credit_ledger_base(),
+		);
+			
 		return <<<SQL
 WITH 
-	renewal_orders_base AS ($this->renewal_orders_base), 
-	box_orders_base AS ($this->box_orders_base), 
-	payment_base AS ($this->payment_base), 
-	refund_base AS ($this->refund_base), 
-	credit_ledger_base AS ($this->credit_ledger_base)
+	renewal_orders_base AS ($renewals), 
+	box_orders_base AS ($boxes), 
+	payment_base AS ($payments), 
+	refund_base AS ($refunds), 
+	credit_ledger_base AS ($credit_ledger_base)
 SELECT 
 		  id
 		, user_id
@@ -221,13 +289,20 @@ SELECT
 		, revenue
 		, total_revenue
 		, box_credits
+		, box_credits_old
 		, total_credits
+		, total_credits_old
 		, box_debits
+		, box_debits_old
 		, total_debits
+		, total_debits_old
 		, months_since_join
 		, total_credits - total_debits AS box_balance
+		, total_credits_old - total_debits_old AS box_balance_old
 		, months_since_join - total_debits AS boxes_behind
+		, months_since_join - total_debits_old AS boxes_behind_old
 		, CASE WHEN total_credits > 0 THEN (total_revenue / total_credits)::DECIMAL(10,2) ELSE 0 END as rev_per_box
+		, CASE WHEN total_credits_old > 0 THEN (total_revenue / total_credits_old)::DECIMAL(10,2) ELSE 0 END as rev_per_box_old
 FROM
 	credit_ledger_base
 -- WHERE
@@ -236,18 +311,34 @@ ORDER BY
 SQL;
 	}
 
-	private $summary_count = <<<SQL
-		SELECT count(id) as n FROM users
+	private function sql_summary_count() {
+		return <<<SQL
+		SELECT count(id) as n FROM $this->schema.users
 SQL;
+	}
 
-	public function get_credit_summary_sql($orderby='user_id',$order='asc') {
+	public function sql_credit_summary($orderby='user_id', $order='asc') {
+		list(
+			$renewals,
+			$boxes,
+			$payments,
+			$refunds,
+			$credit_ledger_base,
+		) = array(
+			$this->sql_renewal_base(),
+			$this->sql_box_base(),
+			$this->sql_payment_base(),
+			$this->sql_refund_base(),
+			$this->sql_credit_ledger_base(),
+		);
+			
 		return <<<SQL
 WITH 
-	renewal_orders_base AS ($this->renewal_orders_base), 
-	box_orders_base AS ($this->box_orders_base), 
-	payment_base AS ($this->payment_base), 
-	refund_base AS ($this->refund_base), 
-	credit_ledger_base AS ($this->credit_ledger_base)
+	renewal_orders_base AS ($renewals), 
+	box_orders_base AS ($boxes), 
+	payment_base AS ($payments), 
+	refund_base AS ($refunds), 
+	credit_ledger_base AS ($credit_ledger_base)
 SELECT 
 		  user_id
 		, subscription_status
@@ -262,9 +353,9 @@ SELECT
 FROM
 	credit_ledger_base
 JOIN
-	users
+	$this->schema.users
 ON
-	credit_ledger_base.user_id = users.id
+	credit_ledger_base.user_id = $this->schema.users.id
 WHERE
 	next_user_id is NULL
 -- AND

@@ -848,6 +848,7 @@ class CBWoo {
 	}
 
 	public static function order_counts_as_box_credit($order) {
+		return CBWoo::calculate_box_credit($order)['credits'] > 0;
 		foreach ($order->line_items as $line_item) {
 			if (!empty($line_item->sku)) {
 				if (CBWoo::parse_box_sku($line_item->sku)->is_sub) {

@@ -233,11 +233,16 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 			'subscription_type' => 'Subscription Type',
 			'total_revenue' => 'Total Revenue',
 			'total_credits' => 'Box Credits',
+			'total_credits_old' => 'Box Credits (old)',
 			'total_debits' => 'Box Debits',
+			'total_debits_old' => 'Box Debits (old)',
 			'months_since_join' => 'Months Since Joined',
 			'box_balance' => 'Credit Balance',
+			'box_balance_old' => 'Credit Balance (old)',
 			'boxes_behind' => 'Boxes Behind',
+			'boxes_behind_old' => 'Boxes Behind (old)',
 			'rev_per_box' => 'Revenue Per Box',
+			'rev_per_box_old' => 'Revenue Per Box (old)',
 		);
 		if ($this->user_id) unset($columns['user_id']);
 		return $columns;
