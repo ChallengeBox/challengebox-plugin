@@ -11,7 +11,7 @@ class CBLedger {
 		if (!$this->db) throw new Exception(pg_last_error());
 	}
 
-	public function get_ledger($limit = false, $offset = false) {
+	public function get_ledger($limit = false, $offset = false, $sort_column = false, $sort_direction = false) {
 		$query = $this->get_credit_ledger_sql();
 		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
 		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
@@ -20,13 +20,10 @@ class CBLedger {
 		return pg_fetch_all($result);
 	}
 
-	public function get_summary($limit = false, $offset = false) {
-		$query = $this->get_credit_summary_sql();
-		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
-		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
-		$result = pg_query($query);
+	public function get_ledger_count() {
+		$result = pg_query($this->credit_ledger_count);
 		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result);
+		return pg_fetch_all($result)[0]['n'];
 	}
 
 	public function get_ledger_for_user($user_id) {
@@ -35,6 +32,30 @@ class CBLedger {
 		$result = pg_query($prepared);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
+	}
+
+	public function get_ledger_count_for_user($user_id) {
+		global $wpdb;
+		$prepared = str_replace('-- WHERE', "WHERE\n\tid = $user_id", $this->credit_ledger_count);
+		$result = pg_query($prepared);
+		if (!$result) throw new Exception(pg_last_error());
+		return pg_fetch_all($result)[0]['n'];
+	}
+
+
+	public function get_summary($limit=false, $offset=false, $orderby='user_id', $order='asc') {
+		$query = $this->get_credit_summary_sql($orderby, $order);
+		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
+		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
+		$result = pg_query($query);
+		if (!$result) throw new Exception(pg_last_error());
+		return pg_fetch_all($result);
+	}
+
+	public function get_summary_count() {
+		$result = pg_query($this->summary_count);
+		if (!$result) throw new Exception(pg_last_error());
+		return pg_fetch_all($result)[0]['n'];
 	}
 
 	public function get_summary_for_user($user_id) {
@@ -49,7 +70,7 @@ class CBLedger {
 
 	private $box_orders_base = <<<SQL
 SELECT
-			box_orders.id
+		  box_orders.id::varchar(32)
 		, user_id
 		, 'box' AS kind
 		, status
@@ -66,7 +87,7 @@ SQL;
 
 	private $renewal_orders_base = <<<SQL
 SELECT
-			renewal_orders.id
+		  renewal_orders.id::varchar(32)
 		, user_id
 		, 'renewal' AS kind
 		, status
@@ -109,7 +130,7 @@ SQL;
 
 	private $payment_base = <<<SQL
 SELECT
-			order_id AS id
+		  charges.id
 		, user_id
 		, 'payment' AS kind
 		, status
@@ -126,7 +147,7 @@ SQL;
 
 	private $refund_base = <<<SQL
 SELECT
-			order_id AS id
+		  refunds.id
 		, user_id
 		, 'refund' AS kind
 		, status
@@ -141,9 +162,26 @@ FROM
 		refunds JOIN users ON refunds.user_id = users.id
 SQL;
 
+	private $credit_ledger_count = <<<SQL
+		SELECT sum(n) as n FROM
+		( 
+			SELECT count(id) as n FROM box_orders
+			-- WHERE
+				UNION
+			SELECT count(id) as n FROM renewal_orders
+			-- WHERE
+				UNION
+			SELECT count(id) as n FROM charges
+			-- WHERE
+				UNION
+			SELECT count(id) as n FROM refunds
+			-- WHERE
+		)
+SQL;
+
 	private $credit_ledger_base = <<<SQL
 SELECT
-			id
+		  id
 		, datediff('months', registration_date, created_date) AS months_since_join
 		, user_id
 		, lead(user_id, 1) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC) as next_user_id
@@ -173,9 +211,9 @@ WITH
 	refund_base AS ($this->refund_base), 
 	credit_ledger_base AS ($this->credit_ledger_base)
 SELECT 
-			id as event_id
+		  id
 		, user_id
-		, to_char(created_date, 'YYYY-MM-DD') AS event_date
+		, to_char(convert_timezone('est', created_date), 'YYYY-MM-DD hh:MM pm') AS event_date
 		, kind as event_type
 		, status
 		, sku
@@ -198,7 +236,11 @@ ORDER BY
 SQL;
 	}
 
-	public function get_credit_summary_sql() {
+	private $summary_count = <<<SQL
+		SELECT count(id) as n FROM users
+SQL;
+
+	public function get_credit_summary_sql($orderby='user_id',$order='asc') {
 		return <<<SQL
 WITH 
 	renewal_orders_base AS ($this->renewal_orders_base), 
@@ -208,6 +250,8 @@ WITH
 	credit_ledger_base AS ($this->credit_ledger_base)
 SELECT 
 		  user_id
+		, subscription_status
+		, subscription_type
 		, total_revenue
 		, total_credits
 		, total_debits
@@ -217,11 +261,14 @@ SELECT
 		, CASE WHEN total_credits > 0 THEN (total_revenue / total_credits)::DECIMAL(10,2) ELSE 0 END as rev_per_box
 FROM
 	credit_ledger_base
+JOIN
+	users
+ON
+	credit_ledger_base.user_id = users.id
 WHERE
 	next_user_id is NULL
 -- AND
-ORDER BY
-		user_id, created_date, kind DESC
+ORDER BY $orderby $order
 SQL;
 	}
 
