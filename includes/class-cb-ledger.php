@@ -92,9 +92,9 @@ SELECT
 		, created_date
 		, sku
 		, 0 AS box_credits
-		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 END AS box_debits
-		, 0 as box_credits_old
-		, box_debits as box_debits_old
+		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN box_debits ELSE 0 END AS box_debits
+		, 0 as box_credits_alt
+		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 END AS box_debits_alt
 		, total
 		, 0 as revenue
 		, registration_date
@@ -116,8 +116,10 @@ SELECT
 		, status
 		, created_date
 		, sku
+		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN box_credits else 0 END as box_credits
+		, 0 AS box_debits
 		, CASE
-				WHEN status IN ('completed', 'refunded') THEN (CASE 
+				WHEN status IN ('completed', 'refunded', 'processing') THEN (CASE 
 						WHEN sku = '#livefit' THEN (CASE
 								WHEN box_credits > 0 THEN box_credits
 								ELSE (CASE
@@ -142,10 +144,8 @@ SELECT
 						ELSE 0
 				END)
 				ELSE 0
-			END::INTEGER AS box_credits
-		, 0 AS box_debits
-		, box_credits as box_credits_old
-		, 0 as box_debits_old
+			END::INTEGER AS box_credits_alt
+		, 0 as box_debits_alt
 		, total
 		, 0 as revenue
 		, registration_date
@@ -169,8 +169,8 @@ SELECT
 		, NULL AS sku
 		, 0 AS box_credits
 		, 0 AS box_debits
-		, 0 as box_credits_old
-		, 0 as box_debits_old
+		, 0 as box_credits_alt
+		, 0 as box_debits_alt
 		, amount AS total
 		, CASE WHEN status = 'succeeded' THEN amount ELSE 0 END AS revenue
 		, registration_date
@@ -194,8 +194,8 @@ SELECT
 		, NULL AS sku
 		, 0 AS box_credits
 		, 0 AS box_debits
-		, 0 as box_credits_old
-		, 0 as box_debits_old
+		, 0 as box_credits_alt
+		, 0 as box_debits_alt
 		, -amount AS total
 		, CASE WHEN status = 'succeeded' THEN -amount ELSE 0 END AS revenue
 		, registration_date
@@ -241,13 +241,13 @@ SELECT
 		, total
 		, revenue
 		, box_credits
-		, box_credits_old
+		, box_credits_alt
 		, box_debits
-		, box_debits_old
+		, box_debits_alt
 		, sum(box_credits) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits
 		, sum(box_debits) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits
-		, sum(box_credits_old) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits_old
-		, sum(box_debits_old) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits_old
+		, sum(box_credits_alt) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits_alt
+		, sum(box_debits_alt) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits_alt
 		, sum(revenue) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_revenue
 FROM
 		(SELECT * FROM box_orders_base UNION SELECT * FROM renewal_orders_base UNION SELECT * FROM refund_base UNION SELECT * FROM payment_base)
@@ -289,20 +289,21 @@ SELECT
 		, revenue
 		, total_revenue
 		, box_credits
-		, box_credits_old
+		, box_credits_alt
 		, total_credits
-		, total_credits_old
+		, total_credits_alt
 		, box_debits
-		, box_debits_old
+		, box_debits_alt
 		, total_debits
-		, total_debits_old
+		, total_debits_alt
 		, months_since_join
 		, total_credits - total_debits AS box_balance
-		, total_credits_old - total_debits_old AS box_balance_old
+		, total_credits_alt - total_debits_alt AS box_balance_alt
 		, months_since_join - total_debits AS boxes_behind
-		, months_since_join - total_debits_old AS boxes_behind_old
+		, months_since_join - total_debits_alt AS boxes_behind_alt
 		, CASE WHEN total_credits > 0 THEN (total_revenue / total_credits)::DECIMAL(10,2) ELSE 0 END as rev_per_box
-		, CASE WHEN total_credits_old > 0 THEN (total_revenue / total_credits_old)::DECIMAL(10,2) ELSE 0 END as rev_per_box_old
+		, CASE WHEN total_credits_alt > 0 THEN (total_revenue / total_credits_alt)::DECIMAL(10,2) ELSE 0 END as rev_per_box_alt
+		, user_id as detail
 FROM
 	credit_ledger_base
 -- WHERE
@@ -350,6 +351,13 @@ SELECT
 		, total_credits - total_debits AS box_balance
 		, months_since_join - total_debits AS boxes_behind
 		, CASE WHEN total_credits > 0 THEN (total_revenue / total_credits)::DECIMAL(10,2) ELSE 0 END as rev_per_box
+		, total_credits_alt
+		, total_debits_alt
+		, total_credits_alt - total_debits_alt AS box_balance_alt
+		, months_since_join - total_debits_alt AS boxes_behind_alt
+		, CASE WHEN total_credits_alt > 0 THEN (total_revenue / total_credits_alt)::DECIMAL(10,2) ELSE 0 END as rev_per_box_alt
+		, user_id as detail
+		, CASE WHEN total_credits <> total_credits_alt OR total_debits <> total_debits_alt THEN 1 ELSE 0 END as mismatch
 FROM
 	credit_ledger_base
 JOIN

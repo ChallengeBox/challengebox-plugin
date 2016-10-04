@@ -108,18 +108,34 @@ class CBLedger_Table extends WP_List_Table  {
 			'box_balance' => 'Credit Balance to Date',
 			'boxes_behind' => 'Boxes Behind',
 			'rev_per_box' => 'Revenue Per Box',
+			'box_credits_alt' => 'Box Credits (alt)',
+			'box_debits_alt' => 'Box Debits (alt)',
+			'total_credits_alt' => 'Box Credits to Date (alt)',
+			'total_debits_alt' => 'Box Debits to Date (alt)',
+			'box_balance_alt' => 'Credit Balance to Date (alt)',
+			'boxes_behind_alt' => 'Boxes Behind (alt)',
+			'rev_per_box_alt' => 'Revenue Per Box (alt)',
 		);
 		if ($this->user_id) unset($columns['user_id']);
 		return $columns;
 	}
 	public function get_hidden_columns() {
-		return array();
+		/*
+		return array(
+			'box_credits_alt',
+			'box_debits_alt',
+			'total_credits_alt',
+			'total_debits_alt',
+			'box_balance_alt',
+			'boxes_behind_alt',
+			'rev_per_box_alt',
+		);
+		*/
 	}
 	public function get_sortable_columns() {
 		//return array('title' => array('title', false));
 		return array();
 	}
-
 	public function column_event($item) {
 		switch($item['event_type']) {
 		case 'renewal':
@@ -147,9 +163,11 @@ class CBLedger_Table extends WP_List_Table  {
 		}
 		return "<nobr>$name</nobr> <a href=\"$url\">$link_text</a>";
 	}
+	/*
 	public function column_sku($item) {
 		return "<nobr>" . $item['sku'] . "</nobr>";
 	}
+	*/
 	public function column_user_id($item) {
 		$user_id = intval($item['user_id']);
 		//$ud = get_userdata($user_id);
@@ -178,41 +196,53 @@ class CBLedger_Table extends WP_List_Table  {
 			case 'rev_per_box':
 			case 'months_since_joined':
 			case 'boxes_behind':
+		/*
 				if (!$this->user_id) {
 					$user_id = intval($item['user_id']);
 					$detail_url = admin_url("admin.php?page=cb-ledger&user_id=$user_id");
 					$val .= " <a href=\"$detail_url\">[&hellip;]</a>";
 				}
+*/
 				break;
 			default:
 				break;
 		};
+
+		// Flag where alt doesn't match regular column
+		if (substr($column_name, strlen($column_name)-4, 4) === '_alt') {
+			$regular_col = substr($column_name, 0, strlen($column_name)-4);
+
+			if ($item[$regular_col] !== $item[$column_name]) {
+				$val = "<span style=\"color:salmon;\">$val</span>";
+			}
+		}
 			
 		return $val;
 	}
-    private function table_data() {
+
+	private function table_data() {
 		$ledger = new CBLedger();
 
-        $limit        = 25;
-        $current_page = $this->get_pagenum();
+		$limit = 25;
+		$current_page = $this->get_pagenum();
 		if ($this->user_id)	{
-			$total_items  = $ledger->get_ledger_count_for_user($this->user_id);
+			$total_items = $ledger->get_ledger_count_for_user($this->user_id);
 		} else {
-			$total_items  = $ledger->get_ledger_count();
+			$total_items = $ledger->get_ledger_count();
 		}
-		$offset       = ($current_page-1) * $limit;
+		$offset= ($current_page-1) * $limit;
 
-        $this->set_pagination_args( array(
-            'total_items' => $total_items,
-            'per_page'    => $limit
-        ));
+		$this->set_pagination_args( array(
+			'total_items' => $total_items,
+			'per_page'    => $limit
+		));
 
 		if ($this->user_id) {
 			return $ledger->get_ledger_for_user($this->user_id, $limit, $offset);
 		} else {
 			return $ledger->get_ledger($limit, $offset);
 		}
-    }
+	}
 }
 
 class CBLedgerSummary_Table extends CBLedger_Table  {
@@ -233,50 +263,64 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 			'subscription_type' => 'Subscription Type',
 			'total_revenue' => 'Total Revenue',
 			'total_credits' => 'Box Credits',
-			'total_credits_old' => 'Box Credits (old)',
 			'total_debits' => 'Box Debits',
-			'total_debits_old' => 'Box Debits (old)',
 			'months_since_join' => 'Months Since Joined',
 			'box_balance' => 'Credit Balance',
-			'box_balance_old' => 'Credit Balance (old)',
 			'boxes_behind' => 'Boxes Behind',
-			'boxes_behind_old' => 'Boxes Behind (old)',
 			'rev_per_box' => 'Revenue Per Box',
-			'rev_per_box_old' => 'Revenue Per Box (old)',
+			'total_credits_alt' => 'Box Credits (alt)',
+			'total_debits_alt' => 'Box Debits (alt)',
+			'box_balance_alt' => 'Credit Balance (alt)',
+			'boxes_behind_alt' => 'Boxes Behind (alt)',
+			'rev_per_box_alt' => 'Revenue Per Box (alt)',
+			'mismatch' => 'Alt Mismatch',
+			'detail' => 'Details',
 		);
 		if ($this->user_id) unset($columns['user_id']);
 		return $columns;
 	}
 
-    public function get_sortable_columns() {
-        return array(
-			'user_id' => array('user_id', true),
-			'subscription_status' => array('subscription_status', false),
-			'subscription_type' => array('subscription_type', false),
-			'total_revenue' => array('total_revenue', false),
-			'total_credits' => array('total_credits', false),
-			'total_debits' => array('total_debits', false),
-			'months_since_join' => array('months_since_join', false),
-			'box_balance' => array('box_balance', false),
-			'boxes_behind' => array('boxes_behind', false),
-			'rev_per_box' => array('rev_per_box', false),
-		);
+	public function get_sortable_columns() {
+		return array(
+				'user_id' => array('user_id', true),
+				'subscription_status' => array('subscription_status', false),
+				'subscription_type' => array('subscription_type', false),
+				'total_revenue' => array('total_revenue', false),
+				'total_credits' => array('total_credits', false),
+				'total_debits' => array('total_debits', false),
+				'months_since_join' => array('months_since_join', false),
+				'box_balance' => array('box_balance', false),
+				'boxes_behind' => array('boxes_behind', false),
+				'rev_per_box' => array('rev_per_box', false),
+				'total_credits_alt' => array('total_credits_alt', false),
+				'total_debits_alt' => array('total_debits_alt', false),
+				'box_balance_alt' => array('box_balance_alt', false),
+				'boxes_behind_alt' => array('boxes_behind_alt', false),
+				'rev_per_box_alt' => array('rev_per_box_alt', false),
+				'mismatch' => array('mismatch', false),
+				);
 		if ($this->user_id) unset($columns['user_id']);
 		return $columns;
-    }
+	}
 
-    private function table_data() {
+	public function column_detail($item) {
+		$user_id = intval($item['user_id']);
+		$detail_url = admin_url("admin.php?page=cb-ledger&user_id=$user_id");
+		return "<a href=\"$detail_url\">[&hellip;]</a>";
+	}
+
+	private function table_data() {
 		$ledger = new CBLedger();
 
-        $limit        = 20;
-        $current_page = $this->get_pagenum();
-        $total_items  = $ledger->get_summary_count();
+		$limit        = 20;
+		$current_page = $this->get_pagenum();
+		$total_items  = $ledger->get_summary_count();
 		$offset       = ($current_page-1) * $limit;
 
-        $this->set_pagination_args( array(
-            'total_items' => $total_items,
-            'per_page'    => $limit
-        ));
+		$this->set_pagination_args( array(
+			'total_items' => $total_items,
+			'per_page'    => $limit
+		));
 
 		if ($this->user_id) {
 			return $ledger->get_summary_for_user($this->user_id, $limit, $offset);
@@ -292,6 +336,6 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 			}
 			return $ledger->get_summary($limit, $offset, $orderby, $order);
 		}
-    }
+	}
 }
 
