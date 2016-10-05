@@ -62,6 +62,7 @@ class CBCmd extends WP_CLI_Command {
 			'redshift' => !empty($assoc_args['redshift']),
 			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : $default_redshift_bucket,
 			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : $default_redshift_schema,
+			'internal' => !empty($assoc_args['internal']),
 		);
 
 		// Month option should be pegged to the first day
@@ -529,13 +530,17 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				$old_renewal = Carbon::instance(CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at));
+				$old_renewal = Carbon::instance(
+					CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at)
+				);
 
 				WP_CLI::debug("\tSubscription $sub->id...");
 
 				//
 				// Calculate correct renewal date from the renewal day
 				//
+				if ($this->options->verbose)
+					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day, 'old_renewal'=>$old_renewal, 'api_date'=> $sub->billing_schedule->next_payment_at), true));
 
 				// Potential renewal date in the same month as original renewal
 				$d_this = $old_renewal->copy()->day($renewal_day);
@@ -544,11 +549,11 @@ class CBCmd extends WP_CLI_Command {
 				$d_next = $old_renewal->copy()->day(1)->addMonths(1)->day($renewal_day);
 				
 				if ($this->options->verbose)
-					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day), true));
+					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day, 'old_renewal'=>$old_renewal), true));
 
 				// Spec: If the customer's renewal date falls before the renewal day,
 				// the renewal should be pushed forward to the renewal day.
-				if ($old_renewal < $d_this) {
+				if ($old_renewal->lt($d_this)) {
 					$new_renewal = $d_this;
 					$reason = 'old renewal before renewal day';
 				} else {
@@ -580,6 +585,13 @@ class CBCmd extends WP_CLI_Command {
 				$now = Carbon::now();
 				$box_credit_renewal = $new_renewal->copy()->year($now->year)->month($now->month)->addMonths($months_before_renewal);
 
+				// XXX: OK, THERE IS A BUG HERE
+				// Turns out, if you run this every day, we sometimes don't know whether
+				// the user is owed a box this month. Or rather, box_this_month should be
+				// changed to return whether or not the user SHOULD be shipped a box this 
+				// month not whether they HAVE. In the meantime, if we run this on the 15th
+				// that should be enough time for all the boxes to have shipped, but billing
+				// not to have started yet.
 
 				// Adopt the box-credit model if it's sooner, but also still in the future
 				if ($box_credit_renewal->lte($new_renewal) && $box_credit_renewal->gt(Carbon::now())) {
@@ -1368,13 +1380,17 @@ class CBCmd extends WP_CLI_Command {
 	 * [--flatten]
 	 * : Display result as array rather than object.
 	 *
+	 * [--internal]
+	 * : Return internal version.
+	 *
 	 * ## EXAMPLES
 	 *     wp cb subscription 6691
 	 */
 	function subscription( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		list( $id ) = $args;
-		$sub = $this->api->get_subscription($id);
+		if ($this->options->internal) $sub = $this->api->get_subscription_internal($id);
+		else $sub = $this->api->get_subscription($id);
 		if ($this->options->flatten) {
 			$result = json_decode(json_encode($sub), true);
 		} else {

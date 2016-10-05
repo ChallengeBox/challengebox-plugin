@@ -265,10 +265,10 @@ class CBWoo {
 		$subscription_data['billing_schedule'] = (object) array(
 			'period'          => $subscription->billing_period,
 			'interval'        => $subscription->billing_interval,
-			'start_at'        => (new Carbon($subscription->start))->format("Y-m-d\TH:i:s\Z"),
-			'trial_end_at'    => (new Carbon($subscription->trial_end))->format("Y-m-d\TH:i:s\Z"),
-			'next_payment_at' => (new Carbon($subscription->next_payment))->format("Y-m-d\TH:i:s\Z"),
-			'end_at'          => (new Carbon($subscription->end))->format("Y-m-d\TH:i:s\Z"),
+			'start_at'        => (new Carbon($subscription->get_date('start')))->format("Y-m-d\TH:i:s\Z"),
+			//'trial_end_at'    => (new Carbon($subscription->get_date('trial_end')))->format("Y-m-d\TH:i:s\Z"),
+			'next_payment_at' => (new Carbon($subscription->get_date('next_payment')))->format("Y-m-d\TH:i:s\Z"),
+			//'end_at'          => (new Carbon($subscription->get_date('end')))->format("Y-m-d\TH:i:s\Z"),
 		);
 
 		if ( ! empty( $subscription->order ) ) {
