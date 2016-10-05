@@ -4394,6 +4394,115 @@ SQL;
 	}
 
 	/**
+	 * Exports subscription data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<sub_id>...]
+	 * : The subscription id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all subscriptions. (Ignores <sub_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate subscriptions in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> subscriptions out of the list given.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_subscription_events
+	 */
+	function export_subscriptions( $args, $assoc_args ) {
+		global $wpdb;
+		$assoc_args['orientation'] = 'subscription';
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'user_id',
+			'status',
+			'period',
+			'interval',
+			'start_date',
+			'end_date',
+			'next_payment_date',
+		);
+
+		foreach ($args as $sub_id) {
+			$sub_id = intval($sub_id);
+			WP_CLI::debug("Subscription $sub_id...");
+			$sub = $this->api->get_subscription_internal($sub_id);
+			$results[] = array(
+				'id' => $sub_id,
+				'user_id' => $sub->customer_id,
+				'status' => $sub->status,
+				'period' => $sub->billing_schedule->period,
+				'interval' => $sub->billing_schedule->interval,
+				'start_date' => $sub->billing_schedule->start_at,
+				'end_date' => $sub->billing_schedule->end_at,
+				'next_payment_date' => $sub->billing_schedule->next_payment_at,
+			);
+		}
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$bucket = $this->options->redshift_bucket;
+				$schema = $this->options->redshift_schema;
+				$this->upload_results_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
+				$this->execute_redshift_queries(array(
+					//"ALTER TABLE $schema.subscriptions RENAME TO subscriptions_old;",
+					"CREATE TABLE $schema.subscriptions (
+						  id INT8 NOT NULL
+						, user_id INT8 NOT NULL
+						, status VARCHAR(32) DEFAULT NULL
+						, period VARCHAR(16) DEFAULT NULL
+						, interval INT8 NOT NULL
+						, start_date TIMESTAMP NOT NULL
+						, end_date TIMESTAMP DEFAULT NULL
+						, next_payment_date TIMESTAMP DEFAULT NULL
+						-- , foreign key(user_id) references $schema.users(id)
+						)
+						DISTKEY(user_id)
+						SORTKEY(user_id, id);",
+					"COPY $schema.subscriptions FROM 's3://$bucket/command_results/subscriptions.csv.gz' 
+						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
+					"DROP TABLE IF EXISTS $schema.subscriptions_old;",
+				));
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+
+	}
+
+	/**
 	 * Exports subscription event data.
 	 *
 	 * ## OPTIONS
