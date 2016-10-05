@@ -17,6 +17,7 @@ class ChallengeBox_Admin {
 		$this->version = $version;
 		add_action('admin_menu', array($this, 'add_admin_pages'));
 		new CBLedger_Admin($this->capability);
+		new CBAnalytics_Admin($this->capability);
 	}
 	
 	public function add_admin_pages() {

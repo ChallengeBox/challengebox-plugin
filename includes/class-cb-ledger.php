@@ -4,54 +4,30 @@
  * Routines for generating a box credit ledger from redshift daa.
  */
 
-class CBLedger {
-
-	private $db;
-	private $schema;
-
-	public function __construct($string=false, $schema=false) {
-		$string_file = '/home/www-data/.aws/redshift.string';
-		$string = $string ? $string : file_get_contents($string_file);
-		$this->db = pg_connect($string);
-		$default_schema = WP_DEBUG ? 'dev' : 'production';
-		$this->schema = $schema ? $schema : $default_schema;
-		if (!$this->db) throw new Exception(pg_last_error());
-	}
+class CBLedger extends CBRedshift {
 
 	public function get_ledger($limit = false, $offset = false, $sort_column = false, $sort_direction = false) {
 		$query = $this->sql_credit_ledger();
 		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
 		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result);
+		return $this->execute_query($query);
 	}
 
 	public function get_ledger_count() {
 		$query = $this->sql_credit_ledger_count();
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result)[0]['n'];
+		return $this->execute_query($query)[0]['n'];
 	}
 
 	public function get_ledger_for_user($user_id) {
 		global $wpdb;
 		$query = $wpdb->prepare(str_replace('-- WHERE', "WHERE\n\tuser_id = %d", $this->sql_credit_ledger()), $user_id);
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result);
+		return $this->execute_query($query);
 	}
 
 	public function get_ledger_count_for_user($user_id) {
 		global $wpdb;
 		$query = str_replace('-- WHERE', "WHERE\n\tid = $user_id", $this->sql_credit_ledger_count());
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result)[0]['n'];
+		return $this->execute_query($query)[0]['n'];
 	}
 
 
@@ -59,27 +35,18 @@ class CBLedger {
 		$query = $this->sql_credit_summary($orderby, $order);
 		if (is_numeric($limit)) $query .= "\nLIMIT $limit";
 		if (is_numeric($offset)) $query .= "\nOFFSET $offset";
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result);
+		return $this->execute_query($query);
 	}
 
 	public function get_summary_count() {
 		$query = $this->sql_summary_count();
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result)[0]['n'];
+		return $this->execute_query($query)[0]['n'];
 	}
 
 	public function get_summary_for_user($user_id) {
 		global $wpdb;
 		$query = $wpdb->prepare(str_replace('-- AND', "AND\n\tuser_id = %d", $this->sql_credit_summary()), $user_id);
-		if (WP_DEBUG) var_dump($query);
-		$result = pg_query($query);
-		if (!$result) throw new Exception(pg_last_error());
-		return pg_fetch_all($result);
+		return $this->execute_query($query);
 	}
 
 	private function sql_box_base() {

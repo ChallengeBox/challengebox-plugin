@@ -92,7 +92,7 @@ class CBLedger_Table extends WP_List_Table  {
 
 	public function get_columns() {
 		$columns = array(
-			'user_id' => 'User',
+			'user_id' => 'User <span class="user_head tips">Customer Message</span>',
 			'event_date' => 'Date',
 			'event' => 'Event',
 			'status' => 'Status',
@@ -131,6 +131,7 @@ class CBLedger_Table extends WP_List_Table  {
 			'rev_per_box_alt',
 		);
 		*/
+		return array();
 	}
 	public function get_sortable_columns() {
 		//return array('title' => array('title', false));
@@ -258,7 +259,7 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 
 	public function get_columns() {
 		$columns = array(
-			'user_id' => 'User',
+			'user_id' => 'User <span class="user_head tips">Customer Message</span>',
 			'subscription_status' => 'Subscription Status',
 			'subscription_type' => 'Subscription Type',
 			'total_revenue' => 'Total Revenue',
