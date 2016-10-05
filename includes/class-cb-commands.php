@@ -4476,7 +4476,7 @@ SQL;
 				$schema = $this->options->redshift_schema;
 				$this->upload_results_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
 				$this->execute_redshift_queries(array(
-					//"ALTER TABLE $schema.subscriptions RENAME TO subscriptions_old;",
+					"ALTER TABLE $schema.subscriptions RENAME TO subscriptions_old;",
 					"CREATE TABLE $schema.subscriptions (
 						  id INT8 NOT NULL
 						, user_id INT8 NOT NULL
