@@ -735,6 +735,17 @@ class CBCmd extends WP_CLI_Command {
 	}
 
 	/**
+	 * Prints out subscription statuses available.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb subscription
+	 */
+	function subscription_statuses( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_subscription_statuses(), true));
+	}
+
+	/**
 	 * Prints out product data.
 	 *
 	 * [<id_or_sku>...]
@@ -4435,7 +4446,7 @@ SQL;
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb export_subscription_events
+	 *     wp cb export_subscriptions
 	 */
 	function export_subscriptions( $args, $assoc_args ) {
 		global $wpdb;
@@ -4563,8 +4574,10 @@ SQL;
 			//var_dump($rows);
 
 			$found_initial_state = false;
+			$comment_id = false;
 			foreach ($rows as $comment) {
 
+				$comment_id = $comment->comment_ID;
 				$date = $comment->comment_date_gmt; //new Carbon($comment->comment_date_gmt);	
 				$text = $comment->comment_content;	
 				$event = 'other';
@@ -4580,18 +4593,21 @@ SQL;
 					list($_, $old_state, $new_state) = $matches;
 					$old_state = str_replace(' ', '-', strtolower($old_state));
 					$new_state = str_replace(' ', '-', strtolower($new_state));
+					$new_state = str_replace('pending-cancellation', 'pending-cancel', strtolower($new_state));
+					$old_state = str_replace('pending-cancellation', 'pending-cancel', strtolower($old_state));
 
 					// Attach initial state if we didn't have it already
 					if ($found_initial_state === false) {
 						$found_initial_state = true;
 						$results[] = array(
+							'id' => null,
 							'sub_id' => $sub_id,
 							'user_id' => $user_id,
-							'event' => $event,
-							'date' => $sub->post->post_date_gmt,
+							'event' => 'initial-state',
+							'event_date' => $sub->post->post_date_gmt,
 							'old_state' => '',
 							'new_state' => $old_state,
-							'comment' => $text,
+							'comment' => 'Initial state.',
 						);
 					}
 
@@ -4612,23 +4628,38 @@ SQL;
 				}
 
 				$results[] = array(
+					'id' => $comment_id,
 					'sub_id' => $sub_id,
 					'user_id' => $user_id,
 					'event' => $event,
-					'date' => $date,
+					'event_date' => $date,
 					'old_state' => $old_state,
 					'new_state' => $new_state,
 					'comment' => $text,
 				);
 
 			}
+
+			// Attach final state
+			$results[] = array(
+				'id' => null,
+				'sub_id' => $sub_id,
+				'user_id' => $user_id,
+				'event' => 'final-state',
+				'event_date' => Carbon::now()->toDateTimeString(),
+				'old_state' => $new_state,
+				'new_state' => $sub->get_status(),
+				'comment' => 'Final state.',
+			);
+
 		}
 
 		$columns = array(
+			'id',
 			'sub_id',
 			'user_id',
 			'event',
-			'date',
+			'event_date',
 			'old_state',
 			'new_state',
 			'comment',
@@ -4642,18 +4673,20 @@ SQL;
 				$this->execute_redshift_queries(array(
 					"ALTER TABLE $schema.subscription_events RENAME TO subscription_events_old;",
 					"CREATE TABLE $schema.subscription_events (
-						  subscription_id INT8 NOT NULL
+						  id INT8 DEFAULT NULL -- some ids are falsely inserted to record initial state
+						, subscription_id INT8 NOT NULL
 						, user_id INT8 NOT NULL
 						, event VARCHAR(32) DEFAULT NULL
-						, date TIMESTAMP NOT NULL
+						, event_date TIMESTAMP NOT NULL
 						, old_state VARCHAR(64) DEFAULT NULL
 						, new_state VARCHAR(64) DEFAULT NULL
 						, comment VARCHAR(1024) DEFAULT NULL
+						-- , primary key(id)
 						-- , foreign key(sub_id) references $schema.subscriptions(id)
 						-- , foreign key(user_id) references $schema.users(id)
 						)
 						DISTKEY(user_id)
-						SORTKEY(user_id, subscription_id);",
+						SORTKEY(user_id, subscription_id, event_date, id);",
 					"COPY $schema.subscription_events FROM 's3://$bucket/command_results/subscription_events.csv.gz' 
 						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
 						CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;",
