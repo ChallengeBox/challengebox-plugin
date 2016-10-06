@@ -119,8 +119,9 @@ class CBMonthly_Table extends WP_List_Table  {
 	}
 
 	private function table_data() {
-		$analytics = new CBAnalytics($string=false, $schema='production');
-		return $analytics->get_monthly_analytics();
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$rs = new CBRedshift($schema);
+		return $rs->execute_query('SELECT * FROM monthly_analytics;');
 	}
 }
 
@@ -159,7 +160,8 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 		return $val;
 	}
 	private function table_data() {
-		$analytics = new CBAnalytics($string=false, $schema='production');
-		return $analytics->get_monthly_ss();
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$rs = new CBRedshift($schema);
+		return $rs->execute_query('SELECT * FROM subscription_status_by_start_month;');
 	}
 }

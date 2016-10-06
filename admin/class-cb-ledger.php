@@ -222,7 +222,8 @@ class CBLedger_Table extends WP_List_Table  {
 	}
 
 	private function table_data() {
-		$ledger = new CBLedger();
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$ledger = new CBLedger($schema);
 
 		$limit = 25;
 		$current_page = $this->get_pagenum();
@@ -311,7 +312,8 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 	}
 
 	private function table_data() {
-		$ledger = new CBLedger();
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$ledger = new CBLedger($schema);
 
 		$limit        = 20;
 		$current_page = $this->get_pagenum();
@@ -335,7 +337,7 @@ class CBLedgerSummary_Table extends CBLedger_Table  {
 			if(!empty($_GET['order']) && ($_GET['order'] == 'asc' || $_GET['order'] == 'desc')) {
 				$order = $_GET['order'];
 			}
-			return $ledger->get_summary($limit, $offset, $orderby, $order);
+			return $ledger->get_summary($limit, $offset, $orderby, $order, $this->get_sortable_columns());
 		}
 	}
 }

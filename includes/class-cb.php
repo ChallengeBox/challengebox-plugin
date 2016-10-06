@@ -104,7 +104,6 @@ class CB {
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-stripe.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-redshift.php';
-		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-analytics.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-ledger.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-weekly-challenge.php';
 		require_once plugin_dir_path(dirname(__FILE__)).'includes/class-cb-user-guesser.php';
@@ -378,6 +377,14 @@ HTML;
 		//else { return do_shortcode('[wppb-login]'); }
 		else { wp_redirect('/my-account/'); exit; }
 	}
+
+	/**
+	 * Replaces any instance of ~ with user's home directory.
+	 */
+	public static function tilde_replace($string) {
+		return str_replace('~', posix_getpwuid(posix_getuid())["dir"], $string);
+	}
+
 }
 
 add_shortcode( 'cb_pref_warning', array( 'CB', 'pref_warning_shortcode' ) );
