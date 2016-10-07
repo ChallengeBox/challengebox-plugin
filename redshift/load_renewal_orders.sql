@@ -22,8 +22,5 @@ DISTKEY(user_id)
 SORTKEY(user_id,id);
 
 COPY renewal_orders FROM 's3://$bucket/command_results/renewal_orders.csv.gz' 
-CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;
-
-DROP TABLE IF EXISTS renewal_orders_old;
-
+	CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+	CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;

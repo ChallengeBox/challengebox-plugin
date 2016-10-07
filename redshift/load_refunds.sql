@@ -8,6 +8,7 @@ CREATE TABLE refunds (
 	, user_id INT8 DEFAULT NULL
 	, refund_date TIMESTAMP NOT NULL
 	, amount DECIMAL(10,2) DEFAULT '0.0'
+	, stripe_fee_refunded DECIMAL(10,2) DEFAULT '0.0'
 	, charge_id VARCHAR(32) NOT NULL
 	, reason VARCHAR(1024) DEFAULT NULL
 	, receipt_number VARCHAR(32) DEFAULT NULL
@@ -18,7 +19,5 @@ DISTKEY(user_id)
 SORTKEY(refund_date);
 
 COPY refunds FROM 's3://$bucket/command_results/refunds.csv.gz' 
-CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;
-
-DROP TABLE IF EXISTS refunds_old;
+	CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+	CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;

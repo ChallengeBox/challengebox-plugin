@@ -116,4 +116,18 @@ class CBRedshift {
 		fclose($fp);
 	}
 
+	public function cleanup_load() {
+		$query = implode("\n", array(
+			$this->load_query('drop_old_views.sql'),
+			$this->load_query('views.box_credit_ledger.sql'),
+			$this->load_query('views.monthly_analytics.sql'),
+			$this->load_query('views.subscription_churn.sql'),
+			$this->load_query('views.subscription_status.sql'),
+		));
+		// Filter out any transactions
+		$query = str_replace('BEGIN;', '', $query);
+		$query = str_replace('COMMIT;', '', $query);
+		// And execute it inside our own transaction
+		$this->execute_query($query);
+	}
 }

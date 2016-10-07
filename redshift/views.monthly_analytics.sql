@@ -58,7 +58,8 @@ CREATE VIEW monthly_analytics_stripe_charges AS
 		  to_char(charge_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 end) AS charges_succeeded
 		, sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 end) AS charges_failed
-		, sum(amount) AS total_amount_charged
+		, sum(CASE WHEN status = 'succeeded' THEN amount ELSE 0 end) AS total_amount_charged
+		, sum(CASE WHEN status = 'succeeded' THEN stripe_fee ELSE 0 end) AS total_stripe_fee
 	FROM
 		charges
 	GROUP BY
@@ -73,7 +74,8 @@ CREATE VIEW monthly_analytics_stripe_refunds AS
 		  to_char(refund_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 end) AS refunds_succeeded
 		, sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 end) AS refunds_failed
-		, sum(CASE WHEN amount > 0 THEN amount ELSE 0 end) AS total_amount_refunded
+		, sum(CASE WHEN status = 'succeeded' AND amount > 0 THEN amount ELSE 0 end) AS total_amount_refunded
+		, sum(CASE WHEN status = 'succeeded' THEN stripe_fee_refunded ELSE 0 end) AS total_stripe_fee_refunded
 	FROM
 		refunds
 	GROUP BY
@@ -121,14 +123,16 @@ SELECT
 		, charges_succeeded
 		, charges_failed
 		, total_amount_charged
+		, total_stripe_fee
 		, refunds_succeeded
 		, refunds_failed
 		, total_amount_refunded
+		, total_stripe_fee_refunded
 		, user_cancelled
 		, user_hold
 		, user_reactivated
 		, new_subscriptions
-		, total_amount_charged - total_amount_refunded AS net_revenue
+		, coalesce(total_amount_charged,0) - coalesce(total_stripe_fee,0) - coalesce(total_amount_refunded,0) + coalesce(total_stripe_fee_refunded,0) AS net_revenue
 	FROM
 		monthly_analytics_boxes_created
 			NATURAL FULL JOIN monthly_analytics_boxes_shipped

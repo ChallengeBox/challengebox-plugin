@@ -58,7 +58,6 @@ CREATE VIEW subscription_churn_base AS
 DROP VIEW IF EXISTS subscription_churn_month_ends CASCADE;
 CREATE VIEW subscription_churn_month_ends AS
     SELECT
-     --   id, user_id, subscription_id, event_date, calendar_month, old_state, current_state, comment
           user_id, subscription_id, calendar_month, current_state
         , CASE WHEN current_state = 'active' THEN 1 END AS active
         , lag(CASE WHEN current_state = 'active' THEN 1 END, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, event_date, id) AS active_lag
@@ -66,8 +65,8 @@ CREATE VIEW subscription_churn_month_ends AS
     FROM
         subscription_churn_base
     WHERE
-     --   subscription_id = 2727
         calendar_month <> calendar_month_next
+        OR calendar_month_next IS NULL
     ORDER BY
         user_id, subscription_id, event_date, id
 
@@ -103,8 +102,8 @@ DROP VIEW IF EXISTS subscription_churn_by_calendar_month CASCADE;
 CREATE VIEW subscription_churn_by_calendar_month AS
     SELECT
           calendar_month
-        , count(user_id) AS number_of_users
-        , count(subscription_id) AS number_of_subs
+        , count(DISTINCT user_id) AS number_of_users
+        , count(DISTINCT subscription_id) AS number_of_subs
         , sum(activated) AS activated
         , sum(active) AS active
         , sum(churned) AS churned

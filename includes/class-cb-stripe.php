@@ -28,22 +28,20 @@ class CBStripe {
 		return \Stripe\Charge::retrieve($charge_id);
 	}
 
-	public static function get_refunds($limit=10, $starting_after=false) {
+	public static function get_refunds($limit=10, $starting_after=false, $expand=false) {
 		CBStripe::setup_api();
-		if ($starting_after) {
-			return \Stripe\Refund::all(array('limit' => $limit, 'starting_after' => $starting_after));
-		} else {
-			return \Stripe\Refund::all(array('limit' => $limit));
-		}
+		$args = array('limit' => $limit);
+		if ($starting_after) $args['starting_after'] = $starting_after;
+		if ($expand) $args['expand'] = $expand;
+		return \Stripe\Refund::all($args);
 	}
 
-	public static function get_charges($limit=10, $starting_after=false) {
+	public static function get_charges($limit=10, $starting_after=false, $expand=false) {
 		CBStripe::setup_api();
-		if ($starting_after) {
-			return \Stripe\Charge::all(array('limit' => $limit, 'starting_after' => $starting_after));
-		} else {
-			return \Stripe\Charge::all(array('limit' => $limit));
-		}
+		$args = array('limit' => $limit);
+		if ($starting_after) $args['starting_after'] = $starting_after;
+		if ($expand) $args['expand'] = $expand;
+		return \Stripe\Charge::all($args);
 	}
 }
 

@@ -3590,6 +3590,7 @@ SQL;
 				$this->rs->execute_file('load_renewal_orders.sql');
 				$this->rs->upload_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
 				$this->rs->execute_file('load_shop_orders.sql');
+				$this->rs->cleanup_load();
 			} else {
 				//WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 				WP_CLI::debug("Boxes:");
@@ -3763,6 +3764,7 @@ SQL;
 			'refunded',
 			'disputed',
 			'amount',
+			'stripe_fee',
 			'amount_refunded',
 			'failure_code',
 			'failure_message',
@@ -3779,7 +3781,7 @@ SQL;
 		// Grab raw charges
 		while ($has_more) {
 			WP_CLI::debug("GETing $limit charges starting after $starting_after...");
-			$result = CBStripe::get_charges($limit, $starting_after);
+			$result = CBStripe::get_charges($limit, $starting_after, ['data.balance_transaction']);
 			$has_more = $result->has_more;
 			foreach ($result->data as $charge) {
 				$results[] = array(
@@ -3795,6 +3797,7 @@ SQL;
 					'refunded' => boolize($charge['refunded']),
 					'disputed' => boolize(is_object($charge['dispute'])),
 					'amount' => $charge['amount']/100.0,
+					'stripe_fee' => $charge['balance_transaction']['fee']/100.0,
 					'amount_refunded' => $charge['amount_refunded']/100.0,
 					'failure_code' => $charge['failure_code'],
 					'failure_message' => $charge['failure_message'],
@@ -3849,6 +3852,7 @@ SQL;
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/charges.csv.gz', $results, $columns);
 				$this->rs->execute_file('load_charges.sql');
+				$this->rs->cleanup_load();
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -3889,6 +3893,7 @@ SQL;
 			'user_id',
 			'refund_date',
 			'amount',
+			'stripe_fee_refunded',
 			'charge_id',
 			'reason',
 			'receipt_number',
@@ -3902,7 +3907,7 @@ SQL;
 		// Grab raw refunds
 		while ($has_more) {
 			WP_CLI::debug("GETing $limit refunds starting after $starting_after...");
-			$result = CBStripe::get_refunds($limit, $starting_after);
+			$result = CBStripe::get_refunds($limit, $starting_after, ['data.balance_transaction']);
 			$has_more = $result->has_more;
 			foreach ($result->data as $refund) {
 				$results[] = array(
@@ -3910,6 +3915,7 @@ SQL;
 					'order_id' => NULL,
 					'refund_date' => Carbon::createFromTimestamp($refund['created'])->toDateTimeString(),
 					'amount' => $refund['amount']/100.0,
+					'stripe_fee_refunded' => abs($charge['balance_transaction']['fee']/100.0),
 					'charge_id' => $refund['charge'],
 					'reason' => $refund['reason'],
 					'receipt_number' => $refund['receipt_number'],
@@ -3956,6 +3962,7 @@ SQL;
 				$schema = $this->options->redshift_schema;
 				$this->rs->upload_to_s3('command_results/refunds.csv.gz', $results, $columns);
 				$this->rs->execute_file('load_refunds.sql');
+				$this->rs->cleanup_load();
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4041,6 +4048,7 @@ SQL;
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/users.csv.gz', $results, $columns);
 				$this->rs->execute_file('load_users.sql');
+				$this->rs->cleanup_load();
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4304,6 +4312,7 @@ SQL;
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
 				$this->rs->execute_file('load_subscriptions.sql');
+				$this->rs->cleanup_load();
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4467,6 +4476,7 @@ SQL;
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
 				$this->rs->execute_file('load_subscription_events.sql');
+				$this->rs->cleanup_load();
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}

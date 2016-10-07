@@ -19,7 +19,5 @@ DISTKEY(user_id)
 SORTKEY(user_id, subscription_id, event_date, id);
 
 COPY subscription_events FROM 's3://$bucket/command_results/subscription_events.csv.gz' 
-CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;
-
-DROP TABLE IF EXISTS subscription_events_old;
+	CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
+	CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;
