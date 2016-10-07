@@ -1,4 +1,7 @@
-CREATE OR REPLACE VIEW months AS
+BEGIN;
+
+DROP VIEW IF EXISTS months CASCADE;
+CREATE VIEW months AS
     SELECT 
           to_char(month_start, 'YYYY-MM') AS calendar_month
         , extract(MONTH FROM month_start) AS month_num
@@ -13,8 +16,8 @@ CREATE OR REPLACE VIEW months AS
         extract(DAY FROM month_start) = 1
 ;
 
-
-CREATE OR REPLACE VIEW subscription_churn_calendar_backdrop AS
+DROP VIEW IF EXISTS subscription_churn_calendar_backdrop CASCADE;
+CREATE VIEW subscription_churn_calendar_backdrop AS
     SELECT
           0::BIGINT AS id
         , id AS subscription_id
@@ -30,7 +33,8 @@ CREATE OR REPLACE VIEW subscription_churn_calendar_backdrop AS
         calendar_month >= start_date
 ;
 
-CREATE OR REPLACE VIEW subscription_churn_base AS
+DROP VIEW IF EXISTS subscription_churn_base CASCADE;
+CREATE VIEW subscription_churn_base AS
     SELECT 
           id
         , user_id
@@ -51,7 +55,8 @@ CREATE OR REPLACE VIEW subscription_churn_base AS
         user_id, subscription_id, event_date, id
 ;
 
-CREATE OR REPLACE VIEW subscription_churn_month_ends AS
+DROP VIEW IF EXISTS subscription_churn_month_ends CASCADE;
+CREATE VIEW subscription_churn_month_ends AS
     SELECT
      --   id, user_id, subscription_id, event_date, calendar_month, old_state, current_state, comment
           user_id, subscription_id, calendar_month, current_state
@@ -68,7 +73,8 @@ CREATE OR REPLACE VIEW subscription_churn_month_ends AS
 
 ;
 
-CREATE OR REPLACE VIEW subscription_churn_stage1 AS
+DROP VIEW IF EXISTS subscription_churn_stage1 CASCADE;
+CREATE VIEW subscription_churn_stage1 AS
     SELECT
           user_id, subscription_id, calendar_month, current_state, active, active_lag, active_lead
         , sum(CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END) ignore nulls OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, calendar_month ROWS BETWEEN unbounded preceding AND CURRENT row) AS activated_count
@@ -77,7 +83,9 @@ CREATE OR REPLACE VIEW subscription_churn_stage1 AS
     FROM
         subscription_churn_month_ends
 ;
-CREATE OR REPLACE VIEW subscription_churn_stage2 AS
+
+DROP VIEW IF EXISTS subscription_churn_stage2 CASCADE;
+CREATE VIEW subscription_churn_stage2 AS
     SELECT
         user_id, subscription_id, calendar_month, activated, active, churned
         , CASE WHEN activated = 1 AND activated_count > 1 THEN 1 END AS reactivated
@@ -91,7 +99,8 @@ CREATE OR REPLACE VIEW subscription_churn_stage2 AS
         subscription_churn_stage1
 ;
 
-CREATE OR REPLACE VIEW subscription_churn_by_calendar_month AS
+DROP VIEW IF EXISTS subscription_churn_by_calendar_month CASCADE;
+CREATE VIEW subscription_churn_by_calendar_month AS
     SELECT
           calendar_month
         , count(user_id) AS number_of_users
@@ -115,7 +124,8 @@ CREATE OR REPLACE VIEW subscription_churn_by_calendar_month AS
         calendar_month
 ;
 
-CREATE OR REPLACE VIEW subscription_churn_by_calendar_month_debug AS
+DROP VIEW IF EXISTS subscription_churn_by_calendar_month_debug CASCADE;
+CREATE VIEW subscription_churn_by_calendar_month_debug AS
 (
     SELECT * FROM subscription_churn_by_calendar_month
 )
@@ -166,3 +176,5 @@ UNION
 ORDER BY
     calendar_month
 ;
+
+COMMIT;

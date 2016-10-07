@@ -1,4 +1,7 @@
-CREATE OR REPLACE VIEW box_credit_box_base AS
+BEGIN;
+
+DROP VIEW IF EXISTS box_credit_box_base CASCADE;
+CREATE VIEW box_credit_box_base AS
 	SELECT
 		  box_orders.id::varchar(32)
 		, user_id
@@ -21,8 +24,8 @@ CREATE OR REPLACE VIEW box_credit_box_base AS
 		box_orders.user_id = users.id
 ;
 
-
-CREATE OR REPLACE VIEW box_credit_renewal_base AS
+DROP VIEW IF EXISTS box_credit_renewal_base CASCADE;
+CREATE VIEW box_credit_renewal_base AS
 	SELECT
 		  renewal_orders.id::varchar(32)
 		, user_id
@@ -71,7 +74,8 @@ CREATE OR REPLACE VIEW box_credit_renewal_base AS
 		renewal_orders.user_id = users.id
 ;
 
-CREATE OR REPLACE VIEW box_credit_payment_base AS
+DROP VIEW IF EXISTS box_credit_payment_base CASCADE;
+CREATE VIEW box_credit_payment_base AS
 	SELECT
 		  charges.id
 		, user_id
@@ -94,7 +98,8 @@ CREATE OR REPLACE VIEW box_credit_payment_base AS
 		charges.user_id = users.id
 ;
 
-CREATE OR REPLACE VIEW box_credit_refund_base AS
+DROP VIEW IF EXISTS box_credit_refund_base CASCADE;
+CREATE VIEW box_credit_refund_base AS
 	SELECT
 		  refunds.id
 		, user_id
@@ -117,7 +122,8 @@ CREATE OR REPLACE VIEW box_credit_refund_base AS
 		refunds.user_id = users.id
 ;
 
-CREATE OR REPLACE VIEW box_credit_joint_ids AS
+DROP VIEW IF EXISTS box_credit_joint_ids CASCADE;
+CREATE VIEW box_credit_joint_ids AS
 	SELECT id::VARCHAR(32), user_id FROM box_orders
 		UNION
 	SELECT id::VARCHAR(32), user_id FROM renewal_orders
@@ -127,7 +133,8 @@ CREATE OR REPLACE VIEW box_credit_joint_ids AS
 	SELECT id, user_id FROM refunds
 ;
 
-CREATE OR REPLACE VIEW box_credit_ledger_base AS
+DROP VIEW IF EXISTS box_credit_ledger_base CASCADE;
+CREATE VIEW box_credit_ledger_base AS
 	SELECT
 		  id
 		, datediff('months', registration_date, created_date) AS months_since_join
@@ -157,8 +164,8 @@ ORDER BY
 		user_id, created_date, kind DESC
 ;
 
-
-CREATE OR REPLACE VIEW box_credit_ledger AS
+DROP VIEW IF EXISTS box_credit_ledger CASCADE;
+CREATE VIEW box_credit_ledger AS
 	SELECT 
 		  id
 		, user_id
@@ -191,8 +198,8 @@ CREATE OR REPLACE VIEW box_credit_ledger AS
 		user_id, created_date, kind DESC
 ;
 
-
-CREATE OR REPLACE VIEW box_credit_summary AS
+DROP VIEW IF EXISTS box_credit_summary CASCADE;
+CREATE VIEW box_credit_summary AS
 	SELECT 
 		  user_id
 		, subscription_status
@@ -221,4 +228,4 @@ CREATE OR REPLACE VIEW box_credit_summary AS
 		next_user_id IS NULL
 ;
 
-
+COMMIT;

@@ -1,5 +1,7 @@
+BEGIN;
 
-CREATE OR REPLACE VIEW monthly_analytics_boxes_shipped AS
+DROP VIEW IF EXISTS monthly_analytics_boxes_shipped CASCADE;
+CREATE VIEW monthly_analytics_boxes_shipped AS
 	SELECT
 		  to_char(completed_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status IN ('completed', 'refunded') THEN 1 ELSE 0 end) AS boxes_shipped
@@ -11,7 +13,8 @@ CREATE OR REPLACE VIEW monthly_analytics_boxes_shipped AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_boxes_created AS
+DROP VIEW IF EXISTS monthly_analytics_boxes_created CASCADE;
+CREATE VIEW monthly_analytics_boxes_created AS
 	SELECT
 		  to_char(created_date, 'YYYY-MM') AS calendar_month
 		, count(id) AS boxes_created
@@ -23,7 +26,8 @@ CREATE OR REPLACE VIEW monthly_analytics_boxes_created AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_shop_orders_created AS
+DROP VIEW IF EXISTS monthly_analytics_shop_orders_created CASCADE;
+CREATE VIEW monthly_analytics_shop_orders_created AS
 	SELECT
 		  to_char(created_date, 'YYYY-MM') AS calendar_month
 		, count(id) AS shop_orders_created
@@ -35,7 +39,8 @@ CREATE OR REPLACE VIEW monthly_analytics_shop_orders_created AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_shop_orders_shipped AS
+DROP VIEW IF EXISTS monthly_analytics_shop_orders_shipped CASCADE;
+CREATE VIEW monthly_analytics_shop_orders_shipped AS
 	SELECT
 		  to_char(completed_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status IN ('completed', 'refunded') THEN 1 ELSE 0 end) AS shop_orders_shipped
@@ -47,7 +52,8 @@ CREATE OR REPLACE VIEW monthly_analytics_shop_orders_shipped AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_stripe_charges AS
+DROP VIEW IF EXISTS monthly_analytics_stripe_charges CASCADE;
+CREATE VIEW monthly_analytics_stripe_charges AS
 	SELECT
 		  to_char(charge_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 end) AS charges_succeeded
@@ -61,7 +67,8 @@ CREATE OR REPLACE VIEW monthly_analytics_stripe_charges AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_stripe_refunds AS
+DROP VIEW IF EXISTS monthly_analytics_stripe_refunds CASCADE;
+CREATE VIEW monthly_analytics_stripe_refunds AS
 	SELECT
 		  to_char(refund_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 end) AS refunds_succeeded
@@ -75,7 +82,8 @@ CREATE OR REPLACE VIEW monthly_analytics_stripe_refunds AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_user_actions AS
+DROP VIEW IF EXISTS monthly_analytics_user_actions CASCADE;
+CREATE VIEW monthly_analytics_user_actions AS
 	SELECT
 		  to_char(event_date, 'YYYY-MM') AS calendar_month
 		, sum(CASE WHEN event = 'user-cancelled' THEN 1 ELSE 0 end) AS user_cancelled
@@ -89,7 +97,8 @@ CREATE OR REPLACE VIEW monthly_analytics_user_actions AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics_subscription_starts AS
+DROP VIEW IF EXISTS monthly_analytics_subscription_starts CASCADE;
+CREATE VIEW monthly_analytics_subscription_starts AS
 	SELECT
 		  to_char(start_date, 'YYYY-MM') AS calendar_month
 		, count(id) AS new_subscriptions
@@ -101,8 +110,9 @@ CREATE OR REPLACE VIEW monthly_analytics_subscription_starts AS
 		calendar_month
 ;
 
-CREATE OR REPLACE VIEW monthly_analytics AS
-	SELECT
+DROP VIEW IF EXISTS monthly_analytics CASCADE;
+CREATE VIEW monthly_analytics AS
+SELECT
 		  calendar_month
 		, boxes_created
 		, boxes_shipped
@@ -118,16 +128,18 @@ CREATE OR REPLACE VIEW monthly_analytics AS
 		, user_hold
 		, user_reactivated
 		, new_subscriptions
-		, total_amount_charged - total_amount_refunded as net_revenue
+		, total_amount_charged - total_amount_refunded AS net_revenue
 	FROM
 		monthly_analytics_boxes_created
-			NATURAL RIGHT JOIN monthly_analytics_boxes_shipped
-			NATURAL RIGHT JOIN monthly_analytics_shop_orders_created
-			NATURAL RIGHT JOIN monthly_analytics_shop_orders_shipped
-			NATURAL RIGHT JOIN monthly_analytics_stripe_charges 
-			NATURAL RIGHT JOIN monthly_analytics_stripe_refunds
-			NATURAL RIGHT JOIN monthly_analytics_subscription_starts
-			NATURAL RIGHT JOIN monthly_analytics_user_actions
+			NATURAL FULL JOIN monthly_analytics_boxes_shipped
+			NATURAL FULL JOIN monthly_analytics_shop_orders_created
+			NATURAL FULL JOIN monthly_analytics_shop_orders_shipped
+			NATURAL FULL JOIN monthly_analytics_stripe_charges 
+			NATURAL FULL JOIN monthly_analytics_stripe_refunds
+			NATURAL FULL JOIN monthly_analytics_subscription_starts
+			NATURAL FULL JOIN monthly_analytics_user_actions
 	ORDER BY
 		calendar_month
 ;
+
+COMMIT;

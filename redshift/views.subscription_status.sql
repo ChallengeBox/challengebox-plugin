@@ -1,5 +1,7 @@
+BEGIN;
 
-CREATE OR REPLACE VIEW subscription_status_by_start_month AS
+DROP VIEW IF EXISTS subscription_status_by_start_month CASCADE;
+CREATE VIEW subscription_status_by_start_month AS
 	SELECT
 		  to_char(start_date, 'YYYY-MM') AS start_month
 		, count(id) AS total
@@ -17,3 +19,5 @@ CREATE OR REPLACE VIEW subscription_status_by_start_month AS
 	ORDER BY
 		to_char(start_date, 'YYYY-MM')
 ;
+
+COMMIT;
