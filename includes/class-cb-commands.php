@@ -55,6 +55,7 @@ class CBCmd extends WP_CLI_Command {
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 			'channel' => !empty($assoc_args['channel']) ? $assoc_args['channel'] : '@ryan',
 			'redshift' => !empty($assoc_args['redshift']),
+			'redshift_upload_only' => !empty($assoc_args['redshift-upload-only']),
 			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : CBRedshift::get_defaults()->bucket,
 			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : CBRedshift::get_defaults()->schema,
 			'internal' => !empty($assoc_args['internal']),
@@ -3585,12 +3586,14 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
-				$this->rs->execute_file('load_box_orders.sql');
 				$this->rs->upload_to_s3('command_results/renewal_orders.csv.gz', $renewals, $renewal_columns);
-				$this->rs->execute_file('load_renewal_orders.sql');
 				$this->rs->upload_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
-				$this->rs->execute_file('load_shop_orders.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_box_orders.sql');
+					$this->rs->execute_file('load_renewal_orders.sql');
+					$this->rs->execute_file('load_shop_orders.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				//WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 				WP_CLI::debug("Boxes:");
@@ -3733,7 +3736,7 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
-
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -3851,8 +3854,10 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/charges.csv.gz', $results, $columns);
-				$this->rs->execute_file('load_charges.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_charges.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -3869,7 +3874,7 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
-
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -3958,11 +3963,11 @@ SQL;
 
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
-				$bucket = $this->options->redshift_bucket;
-				$schema = $this->options->redshift_schema;
 				$this->rs->upload_to_s3('command_results/refunds.csv.gz', $results, $columns);
-				$this->rs->execute_file('load_refunds.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_refunds.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -3994,7 +3999,7 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
-
+	 *
 	 * [--redshift-bucket=<redshift-bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -4047,8 +4052,10 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/users.csv.gz', $results, $columns);
-				$this->rs->execute_file('load_users.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_users.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4250,7 +4257,7 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
-
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -4311,8 +4318,10 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
-				$this->rs->execute_file('load_subscriptions.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_subscriptions.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4339,7 +4348,7 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
-
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -4475,8 +4484,10 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
-				$this->rs->execute_file('load_subscription_events.sql');
-				$this->rs->cleanup_load();
+				if (!$this->options->redshift_upload_only)
+					$this->rs->execute_file('load_subscription_events.sql');
+					$this->rs->cleanup_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4680,6 +4691,30 @@ SQL;
 			$columns = array_keys($results[0]);
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 		}
+	}
+
+	/**
+	 * Loads all redshift data from s3, drops old tables and refreshes views.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb reload_redshift
+	 */
+	function reload_redshift( $args, $assoc_args ) {
+		$this->rs->reload_all();
 	}
 }
 

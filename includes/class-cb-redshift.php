@@ -116,7 +116,26 @@ class CBRedshift {
 		fclose($fp);
 	}
 
-	public function cleanup_load() {
+	/**
+	 * Loads all tables from s3. Old tables renamed to *_old.
+	 */
+	public function get_load_query() {
+		return implode("\n", array(
+			$this->load_query('load_box_orders.sql'),
+			$this->load_query('load_charges.sql'),
+			$this->load_query('load_refunds.sql'),
+			$this->load_query('load_renewal_orders.sql'),
+			$this->load_query('load_shop_orders.sql'),
+			$this->load_query('load_subscription_events.sql'),
+			$this->load_query('load_subscriptions.sql'),
+			$this->load_query('load_users.sql'),
+		));
+	}
+
+	/**
+	 * Query to drop *_old tables and reload views after data has been loaded.
+	 */
+	public function get_cleanup_query() {
 		$query = implode("\n", array(
 			$this->load_query('drop_old_views.sql'),
 			$this->load_query('views.box_credit_ledger.sql'),
@@ -124,10 +143,27 @@ class CBRedshift {
 			$this->load_query('views.subscription_churn.sql'),
 			$this->load_query('views.subscription_status.sql'),
 		));
-		// Filter out any transactions
+		// Filter out any internal transactions
 		$query = str_replace('BEGIN;', '', $query);
 		$query = str_replace('COMMIT;', '', $query);
-		// And execute it inside our own transaction
+		return $query;
+	}
+
+	/**
+	 * Loads all data from s3 and refreshes views.
+	 */
+	public function reload_all() {
+		$query = implode("\n", array(
+			$this->get_load_query(),
+			$this->get_cleanup_query(),
+		));
 		$this->execute_query($query);
+	}
+
+	/**
+	 * Cleans up *_old tabes and refreshes views after data has been loaded.
+	 */
+	public function cleanup_after_load() {
+		$this->execute_query($this->get_cleanup_query());
 	}
 }
