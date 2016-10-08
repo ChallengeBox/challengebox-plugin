@@ -16,6 +16,23 @@ CREATE VIEW months AS
         extract(DAY FROM month_start) = 1
 ;
 
+DROP VIEW IF EXISTS subscription_churn_calendar_frontdrop CASCADE;
+CREATE VIEW subscription_churn_calendar_frontdrop AS
+    SELECT
+          0::BIGINT AS id
+        , id AS subscription_id
+        , user_id
+        , NULL AS event
+        , (last_day((calendar_month||'-01')::DATE)||' 23:59:59')::TIMESTAMP AS event_date
+        , NULL AS old_state
+        , NULL AS new_state
+        , NULL AS comment
+    FROM
+        subscriptions, months
+    WHERE
+        calendar_month >= start_date
+;
+
 DROP VIEW IF EXISTS subscription_churn_calendar_backdrop CASCADE;
 CREATE VIEW subscription_churn_calendar_backdrop AS
     SELECT
@@ -35,47 +52,82 @@ CREATE VIEW subscription_churn_calendar_backdrop AS
 
 DROP VIEW IF EXISTS subscription_churn_base CASCADE;
 CREATE VIEW subscription_churn_base AS
-    SELECT 
+   SELECT 
           id
         , user_id
         , subscription_id
-        , lead(user_id, 1) OVER (ORDER BY user_id, subscription_id, event_date, id) AS user_next
         , event
         , event_date
-        , lag(event_date, 1) OVER (ORDER BY user_id, subscription_id, event_date, id) AS date_previous
-        , to_char(event_date, 'YYYY-MM') AS calendar_month
-        , lead(to_char(event_date, 'YYYY-MM'), 1) OVER (ORDER BY user_id, subscription_id, event_date, id) AS calendar_month_next
+        , lag(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+            AS date_previous
+        , coalesce(lead(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id), sysdate)
+            AS date_next
+        , to_char(event_date, 'YYYY-MM')
+            AS calendar_month
+        , lead(to_char(event_date, 'YYYY-MM'), 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+            AS calendar_month_next
         , old_state
         , new_state
-        , CASE WHEN new_state IS NOT NULL THEN new_state ELSE lag(new_state, 1) ignore nulls OVER (ORDER BY user_id, subscription_id, event_date, id) END AS current_state
+        , CASE
+            WHEN new_state IS NOT NULL THEN new_state
+            ELSE lag(new_state, 1) IGNORE NULLS OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+          END
+            AS current_state
+        , coalesce(datediff('days', event_date, lead(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)), 0)
+            AS days_in_current_state
+        , datediff('days', to_char(event_date, 'YYYY-MM-01')::DATE, last_day(to_char(event_date, 'YYYY-MM-01')::DATE)) AS days_in_month
         , comment
     FROM
-       (SELECT * FROM subscription_events UNION SELECT * FROM subscription_churn_calendar_backdrop)
-    ORDER BY
-        user_id, subscription_id, event_date, id
+       (SELECT * FROM subscription_events UNION SELECT * FROM subscription_churn_calendar_backdrop UNION SELECT * FROM subscription_churn_calendar_frontdrop)
+;
+
+DROP VIEW IF EXISTS subscription_churn_state_setup CASCADE;
+CREATE VIEW subscription_churn_state_setup AS
+    SELECT
+        id, user_id, subscription_id, event, event_date, date_previous, calendar_month, calendar_month_next, old_state, new_state
+        , current_state, days_in_current_state, days_in_month
+        , CASE WHEN current_state = 'active' THEN days_in_current_state ELSE 0 END AS a
+        , CASE WHEN current_state = 'on-hold' THEN days_in_current_state ELSE 0 END AS h
+        , CASE WHEN current_state = 'cancelled' THEN days_in_current_state ELSE 0 END AS c
+        , CASE WHEN current_state = 'pending' THEN days_in_current_state ELSE 0 END AS p
+        , CASE WHEN current_state = 'pending-cancel' THEN days_in_current_state ELSE 0 END AS pc
+    FROM
+        subscription_churn_base
+;
+
+DROP VIEW IF EXISTS subscription_churn_state_sums CASCADE;
+CREATE VIEW subscription_churn_state_sums AS
+    SELECT
+        id, user_id, subscription_id, event, event_date, date_previous, calendar_month, calendar_month_next, old_state, new_state
+        , current_state, days_in_current_state, days_in_month
+        , sum(a) OVER (PARTITION BY subscription_id, calendar_month) AS a
+        , sum(h) OVER (PARTITION BY subscription_id, calendar_month) AS h
+        , sum(c) OVER (PARTITION BY subscription_id, calendar_month) AS c
+        , sum(p) OVER (PARTITION BY subscription_id, calendar_month) AS p
+        , sum(pc) OVER (PARTITION BY subscription_id, calendar_month) AS pc
+    FROM
+        subscription_churn_state_setup
 ;
 
 DROP VIEW IF EXISTS subscription_churn_month_ends CASCADE;
 CREATE VIEW subscription_churn_month_ends AS
     SELECT
-          user_id, subscription_id, calendar_month, current_state
-        , CASE WHEN current_state = 'active' THEN 1 END AS active
-        , lag(CASE WHEN current_state = 'active' THEN 1 END, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, event_date, id) AS active_lag
-        , lead(CASE WHEN current_state = 'active' THEN 1 END, 1)  OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, event_date, id) AS active_lead
+        id, user_id, subscription_id, event, event_date, date_previous, calendar_month, calendar_month_next, old_state, new_state
+        , current_state, days_in_current_state, days_in_month, a, h, c, p, pc
+        , CASE WHEN a > 0 THEN 1 END AS active
+        , lag(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id) AS active_lag
+        , lead(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id) AS active_lead
     FROM
-        subscription_churn_base
+        subscription_churn_state_sums
     WHERE
         calendar_month <> calendar_month_next
         OR calendar_month_next IS NULL
-    ORDER BY
-        user_id, subscription_id, event_date, id
-
 ;
 
 DROP VIEW IF EXISTS subscription_churn_stage1 CASCADE;
 CREATE VIEW subscription_churn_stage1 AS
     SELECT
-          user_id, subscription_id, calendar_month, current_state, active, active_lag, active_lead
+          user_id, subscription_id, calendar_month, current_state, active, active_lag, active_lead, a, h, c, p, pc
         , sum(CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END) ignore nulls OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, calendar_month ROWS BETWEEN unbounded preceding AND CURRENT row) AS activated_count
         , CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END AS activated
         , CASE WHEN active_lag = 1 AND active IS NULL THEN 1 END AS churned
@@ -88,12 +140,14 @@ CREATE VIEW subscription_churn_stage2 AS
     SELECT
         user_id, subscription_id, calendar_month, activated, active, churned
         , CASE WHEN activated = 1 AND activated_count > 1 THEN 1 END AS reactivated
+        /*
         , CASE WHEN churned = 1 AND current_state = 'pending' THEN 1 END AS churned_to_pending
         , CASE WHEN churned = 1 AND current_state = 'on-hold' THEN 1 END AS churned_to_on_hold
         , CASE WHEN churned = 1 AND current_state = 'cancelled' THEN 1 END AS churned_to_cancelled
         , CASE WHEN churned = 1 AND current_state = 'switched' THEN 1 END AS churned_to_switched
         , CASE WHEN churned = 1 AND current_state = 'expired' THEN 1 END AS churned_to_expired
         , CASE WHEN churned = 1 AND current_state = 'pending-cancel' THEN 1 END AS churned_to_pending_cancel
+        */
     FROM
         subscription_churn_stage1
 ;
@@ -109,12 +163,6 @@ CREATE VIEW subscription_churn_by_calendar_month AS
         , sum(churned) AS churned
         , round(100.0 * sum(churned) / sum(active))::INTEGER AS churn_pct
         , sum(reactivated) AS reactivated
-        , sum(churned_to_pending) AS churned_to_pending
-        , sum(churned_to_on_hold) AS churned_to_on_hold
-        , sum(churned_to_cancelled) AS churned_to_cancelled
-        , sum(churned_to_switched) AS churned_to_switched
-        , sum(churned_to_expired) AS churned_to_expired
-        , sum(churned_to_pending_cancel) AS churned_to_pending_cancel
     FROM 
         subscription_churn_stage2
     GROUP BY
@@ -139,12 +187,6 @@ UNION
         , sum(churned) AS churned
         , round(100.0 * sum(churned) / max(number_of_users))::INTEGER AS churn_pct
         , sum(reactivated) AS reactivated
-        , sum(churned_to_pending) AS churned_to_pending
-        , sum(churned_to_on_hold) AS churned_to_on_hold
-        , sum(churned_to_cancelled) AS churned_to_cancelled
-        , sum(churned_to_switched) AS churned_to_switched
-        , sum(churned_to_expired) AS churned_to_expired
-        , sum(churned_to_pending_cancel) AS churned_to_pending_cancel
     FROM
         subscription_churn_by_calendar_month
     GROUP BY
@@ -161,12 +203,6 @@ UNION
         , count(CASE WHEN status <> 'active' THEN 1 end) AS churned
         , round(100.0 * count(CASE WHEN status <> 'active' THEN 1 end) / count(user_id))::INTEGER AS churn_pct
         , NULL AS reactivated
-        , count(CASE WHEN status = 'pending' THEN 1 end) AS churned_to_pending
-        , count(CASE WHEN status = 'on-hold' THEN 1 end) AS churned_to_on_hold
-        , count(CASE WHEN status = 'cancelled' THEN 1 end) AS churned_to_cancelled
-        , count(CASE WHEN status = 'switched' THEN 1 end) AS churned_to_switched
-        , count(CASE WHEN status = 'expired' THEN 1 end) AS churned_to_expired
-        , count(CASE WHEN status = 'pending-cancel' THEN 1 end) AS churned_to_pending_cancel
     FROM
         subscriptions
     GROUP BY
