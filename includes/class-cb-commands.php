@@ -117,7 +117,11 @@ class CBCmd extends WP_CLI_Command {
 		}
 
 		if ($this->options->redshift) {
-			$this->rs = new CBRedshift($this->options->redshift_schema, $this->options->redshift_bucket, null, 'WP_CLI::debug');
+			$this->rs = new CBRedshift(
+				$this->options->redshift_schema, 
+				$this->options->redshift_bucket,
+				null, 'WP_CLI::debug'
+			);
 		}
 
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
@@ -3595,7 +3599,7 @@ SQL;
 					$this->rs->execute_file('load_box_orders.sql');
 					$this->rs->execute_file('load_renewal_orders.sql');
 					$this->rs->execute_file('load_shop_orders.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				//WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -3820,8 +3824,9 @@ SQL;
 				);
 			 	$starting_after = $charge->id;
 				$charge_count++;
-				if ($charge_count >= $this->options->limit) break;
+				if ($this->options->limit && $charge_count >= $this->options->limit) break;
 			}
+			if ($this->options->limit && $charge_count >= $this->options->limit) break;
 		}
 
 		//
@@ -3868,7 +3873,7 @@ SQL;
 				$this->rs->upload_to_s3('command_results/charges.csv.gz', $results, $columns);
 				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_charges.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -3947,8 +3952,9 @@ SQL;
 				);
 			 	$starting_after = $refund->id;
 				$refund_count++;
-				if ($refund_count >= $this->options->limit) break;
+				if ($this->options->limit && $refund_count >= $this->options->limit) break;
 			}
+			if ($this->options->limit && $refund_count >= $this->options->limit) break;
 		}
 
 		//
@@ -3987,7 +3993,7 @@ SQL;
 				$this->rs->upload_to_s3('command_results/refunds.csv.gz', $results, $columns);
 				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_refunds.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -4078,7 +4084,7 @@ SQL;
 				$this->rs->upload_to_s3('command_results/users.csv.gz', $results, $columns);
 				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_users.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -4347,7 +4353,7 @@ SQL;
 				$this->rs->upload_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
 				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_subscriptions.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -4516,7 +4522,7 @@ SQL;
 				$this->rs->upload_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
 				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_subscription_events.sql');
-					$this->rs->cleanup_load();
+					$this->rs->cleanup_after_load();
 				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
@@ -4753,6 +4759,38 @@ SQL;
 		$assoc_args['redshift'] = true;
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 		$this->rs->reload_all();
+	}
+
+	/**
+	 * Cleans up after redshift load, dropping *_old tables and reloading views.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--limit=<limit>]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb cleanup_redshift
+	 */
+	function cleanup_redshift($args, $assoc_args) {
+		$assoc_args['redshift'] = true;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$this->rs->cleanup_after_load();
 	}
 }
 

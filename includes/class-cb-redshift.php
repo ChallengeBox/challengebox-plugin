@@ -47,10 +47,10 @@ class CBRedshift {
 		}
 	}
 
-	public function __construct($schema=null, $bucket=null, $cxn_string=null, $debug_func='var_dump') {
+	public function __construct($schema=null, $bucket=null, $cxn_string=null, $debug=false) {
 		$default = CBRedshift::get_defaults();
-		$this->debug_enabled = $default->debug_enabled;
-		$this->debug_func = $debug_func;
+		$this->debug_enabled = is_callable($debug) ? true : (bool) $debug;
+		$this->debug_func = is_callable($debug) ? $debug : 'var_dump';
 		$this->debug($default);
 
 		$this->schema = isset($schema) ? $schema : $default->schema;
