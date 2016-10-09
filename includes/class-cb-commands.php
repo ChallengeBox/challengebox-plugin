@@ -3192,6 +3192,9 @@ SQL;
 	 * [--redshift]
 	 * : Write results to redshift via s3.
 	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -3734,8 +3737,14 @@ SQL;
 	 * [--all]
 	 * : Iterate through all charges (on by default).
 	 *
+	 * [--limit=<limit>]
+	 * : Stop after processing <limit> charges.
+	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
 	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
@@ -3782,6 +3791,7 @@ SQL;
 		function boolize($thing) { return (bool) is_null($thing) ? 1 : ($thing ? 1 : 0); }
 
 		// Grab raw charges
+		$charge_count = 0;
 		while ($has_more) {
 			WP_CLI::debug("GETing $limit charges starting after $starting_after...");
 			$result = CBStripe::get_charges($limit, $starting_after, ['data.balance_transaction']);
@@ -3809,6 +3819,8 @@ SQL;
 					'receipt_number' => $charge['receipt_number'],
 				);
 			 	$starting_after = $charge->id;
+				$charge_count++;
+				if ($charge_count >= $this->options->limit) break;
 			}
 		}
 
@@ -3872,8 +3884,14 @@ SQL;
 	 * [--all]
 	 * : Iterate through all refunds (on by default).
 	 *
+	 * [--limit=<limit>]
+	 * : Stop after processing <limit> refunds.
+	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
 	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
@@ -3910,6 +3928,7 @@ SQL;
 		$starting_after = false;
 
 		// Grab raw refunds
+		$refund_count = 0;
 		while ($has_more) {
 			WP_CLI::debug("GETing $limit refunds starting after $starting_after...");
 			$result = CBStripe::get_refunds($limit, $starting_after, ['data.balance_transaction']);
@@ -3927,6 +3946,8 @@ SQL;
 					'status' => $refund['status'],
 				);
 			 	$starting_after = $refund->id;
+				$refund_count++;
+				if ($refund_count >= $this->options->limit) break;
 			}
 		}
 
@@ -3999,6 +4020,9 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
 	 *
 	 * [--redshift-bucket=<redshift-bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
@@ -4258,6 +4282,9 @@ SQL;
 	 * [--redshift]
 	 * : Write results to redshift via s3.
 	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
 	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
@@ -4348,6 +4375,9 @@ SQL;
 	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
 	 *
 	 * [--redshift-bucket=<redshift_bucket>]
 	 * : Bucket for loading data into redshift. Defaults to
@@ -4484,7 +4514,7 @@ SQL;
 		if (sizeof($results)) {
 			if ($this->options->redshift) {
 				$this->rs->upload_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
-				if (!$this->options->redshift_upload_only)
+				if (!$this->options->redshift_upload_only) {
 					$this->rs->execute_file('load_subscription_events.sql');
 					$this->rs->cleanup_load();
 				}
@@ -4698,6 +4728,12 @@ SQL;
 	 *
 	 * ## OPTIONS
 	 *
+	 * [--all]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--limit=<limit>]
+	 * : Dummy option, does nothing.
+	 *
 	 * [--format=<format>]
 	 * : Output format.
 	 *  ---
@@ -4713,7 +4749,9 @@ SQL;
 	 *
 	 *     wp cb reload_redshift
 	 */
-	function reload_redshift( $args, $assoc_args ) {
+	function reload_redshift($args, $assoc_args) {
+		$assoc_args['redshift'] = true;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 		$this->rs->reload_all();
 	}
 }
