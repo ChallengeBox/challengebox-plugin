@@ -3939,7 +3939,7 @@ SQL;
 					'order_id' => NULL,
 					'refund_date' => Carbon::createFromTimestamp($refund['created'])->toDateTimeString(),
 					'amount' => $refund['amount']/100.0,
-					'stripe_fee_refunded' => abs($charge['balance_transaction']['fee']/100.0),
+					'stripe_fee_refunded' => abs($refund['balance_transaction']['fee']/100.0),
 					'charge_id' => $refund['charge'],
 					'reason' => $refund['reason'],
 					'receipt_number' => $refund['receipt_number'],
