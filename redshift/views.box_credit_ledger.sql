@@ -15,6 +15,7 @@ CREATE VIEW box_credit_box_base AS
 		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 END AS box_debits_alt
 		, total
 		, 0 AS revenue
+		, 0 AS renewal_revenue
 		, registration_date
 	FROM
 		box_orders
@@ -65,6 +66,7 @@ CREATE VIEW box_credit_renewal_base AS
 		, 0 AS box_debits_alt
 		, total
 		, 0 AS revenue
+		, CASE WHEN status IN ('completed', 'refunded', 'processing') THEN total ELSE 0 END AS renewal_revenue
 		, registration_date
 	FROM
 		renewal_orders
@@ -89,6 +91,7 @@ CREATE VIEW box_credit_payment_base AS
 		, 0 AS box_debits_alt
 		, amount AS total
 		, CASE WHEN status = 'succeeded' THEN amount ELSE 0 END AS revenue
+		, 0 AS renewal_revenue
 		, registration_date
 	FROM
 		charges
@@ -113,6 +116,7 @@ CREATE VIEW box_credit_refund_base AS
 		, 0 AS box_debits_alt
 		, -amount AS total
 		, CASE WHEN status = 'succeeded' THEN -amount ELSE 0 END AS revenue
+		, 0 AS renewal_revenue
 		, registration_date
 	FROM
 		refunds
@@ -133,8 +137,8 @@ CREATE VIEW box_credit_joint_ids AS
 	SELECT id, user_id FROM refunds
 ;
 
-DROP VIEW IF EXISTS box_credit_ledger_base CASCADE;
-CREATE VIEW box_credit_ledger_base AS
+DROP VIEW IF EXISTS box_credit_ledger_stage1 CASCADE;
+CREATE VIEW box_credit_ledger_stage1 AS
 	SELECT
 		  id
 		, datediff('months', registration_date, created_date) AS months_since_join
@@ -146,6 +150,7 @@ CREATE VIEW box_credit_ledger_base AS
 		, sku
 		, total
 		, revenue
+		, renewal_revenue
 		, box_credits
 		, box_credits_alt
 		, box_debits
@@ -155,11 +160,120 @@ CREATE VIEW box_credit_ledger_base AS
 		, sum(box_credits_alt) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_credits_alt
 		, sum(box_debits_alt) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_debits_alt
 		, sum(revenue) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_revenue
+		, sum(renewal_revenue) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_renewal_revenue
+		, max(renewal_revenue) IGNORE NULLS OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last_renewal_revenue
+		, sum(CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 end) OVER (PARTITION by user_id ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS total_boxes
+
 FROM
 		(SELECT * FROM box_credit_box_base 
 			UNION SELECT * FROM box_credit_renewal_base
 			UNION SELECT * FROM box_credit_refund_base
 			UNION SELECT * FROM box_credit_payment_base)
+ORDER BY
+		user_id, created_date, kind DESC
+;
+
+DROP VIEW IF EXISTS box_credit_ledger_stage2 CASCADE;
+CREATE VIEW box_credit_ledger_stage2 AS
+	SELECT
+		  id
+		, months_since_join
+		, user_id
+		, next_user_id
+		, kind
+		, status
+		, created_date
+		, sku
+		, total
+		, revenue
+		, renewal_revenue
+		, box_credits
+		, box_credits_alt
+		, box_debits
+		, box_debits_alt
+		, total_credits
+		, total_debits
+		, total_credits_alt
+		, total_debits_alt
+		, total_revenue
+		, total_renewal_revenue
+		, last_renewal_revenue
+		, total_boxes
+		, sum(CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN 1 ELSE 0 end) OVER (PARTITION by user_id, total_renewal_revenue ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS boxes_since_last_renewal
+FROM
+		box_credit_ledger_stage1
+ORDER BY
+		user_id, created_date, kind DESC
+;
+
+DROP VIEW IF EXISTS box_credit_ledger_stage3 CASCADE;
+CREATE VIEW box_credit_ledger_stage3 AS
+	SELECT
+		  id
+		, months_since_join
+		, user_id
+		, next_user_id
+		, kind
+		, status
+		, created_date
+		, sku
+		, total
+		, revenue
+		, renewal_revenue
+		, box_credits
+		, box_credits_alt
+		, box_debits
+		, box_debits_alt
+		, total_credits
+		, total_debits
+		, total_credits_alt
+		, total_debits_alt
+		, total_revenue
+		, total_renewal_revenue
+		, last_renewal_revenue
+		, total_boxes
+		, boxes_since_last_renewal
+		, max(boxes_since_last_renewal) OVER (PARTITION by user_id, total_renewal_revenue ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS max_boxes_since_last_renewal
+		, max(box_credits) OVER (PARTITION by user_id, total_renewal_revenue ORDER BY user_id, created_date, kind DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS box_credits_since_last_renewal
+FROM
+		box_credit_ledger_stage2
+ORDER BY
+		user_id, created_date, kind DESC
+;
+
+DROP VIEW IF EXISTS box_credit_ledger_base CASCADE;
+CREATE VIEW box_credit_ledger_base AS
+	SELECT
+		  id
+		, months_since_join
+		, user_id
+		, next_user_id
+		, kind
+		, status
+		, created_date
+		, sku
+		, total
+		, revenue
+		, renewal_revenue
+		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_renewal_revenue / max_boxes_since_last_renewal ELSE 0 END AS box_divided_revenue
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_renewal_revenue / box_credits_since_last_renewal ELSE 0 END AS box_ideal_revenue
+		, box_credits
+		, box_credits_alt
+		, box_debits
+		, box_debits_alt
+		, total_credits
+		, total_debits
+		, total_credits_alt
+		, total_debits_alt
+		, total_revenue
+		, total_renewal_revenue
+		, last_renewal_revenue
+		, total_boxes
+		, boxes_since_last_renewal
+		, max_boxes_since_last_renewal
+		, box_credits_since_last_renewal
+FROM
+		box_credit_ledger_stage3
 ORDER BY
 		user_id, created_date, kind DESC
 ;
@@ -175,7 +289,17 @@ CREATE VIEW box_credit_ledger AS
 		, sku
 		, total AS amt
 		, revenue
+		, renewal_revenue
+		, least(box_divided_revenue, box_ideal_revenue) AS box_booked_revenue
+		, box_divided_revenue
+		, box_ideal_revenue
 		, total_revenue
+		, total_renewal_revenue
+		, last_renewal_revenue
+		, total_boxes
+		, boxes_since_last_renewal
+		, max_boxes_since_last_renewal
+		, box_credits_since_last_renewal
 		, box_credits
 		, box_credits_alt
 		, total_credits
