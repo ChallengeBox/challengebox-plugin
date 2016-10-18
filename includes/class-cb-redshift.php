@@ -142,6 +142,7 @@ class CBRedshift {
 			$this->load_query('views.monthly_analytics.sql'),
 			$this->load_query('views.subscription_churn.sql'),
 			$this->load_query('views.subscription_status.sql'),
+			$this->load_query('views.box_churn.sql'),
 		));
 		// Filter out any internal transactions
 		$query = str_replace('BEGIN;', '', $query);
