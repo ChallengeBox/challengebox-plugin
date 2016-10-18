@@ -60,9 +60,18 @@ class CBMonthly_Table extends WP_List_Table  {
 			'total_amount_refunded' => '<span title="Source: Stripe. Method: Sum refund amounts where the refund date is in the given month.">Total Amount Refunded</span>',
 			'net_revenue' => '<span title="Source: Stripe. Method: Total amount charged less total amount refunded.">Net Revenue</span>',
 			'new_subscriptions' => '<span title="Source: WooCommerce. Method: Count unique subscription ids where subscription start date is in the given month.">New Subscriptions</span>',
-			//'user_cancelled' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user cancelled and the comment is in the given month.">User Cancellation</span>',
-			//'user_hold' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user placed subscription on hold and the comment is in the given month.">Subscription Placed on Hold</span>',
-			//'user_reactivated' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user reactivated and the comment is in the given month.">User Reactivated</span>',
+			'user_cancelled' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user cancelled and the comment is in the given month.">User Cancellation</span>',
+			'user_hold' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user placed subscription on hold and the comment is in the given month.">Subscription Placed on Hold</span>',
+			'user_reactivated' => '<span title="Source: WooCommerce. Method: Count subscription comments where the comment indicates the user reactivated and the comment is in the given month.">User Reactivated</span>',
+			'booked_revenue' => '<span title="Source: WooCommerce. Method: Complicated.">Booked Revenue</span>',
+			'box_reactivated' => '<span title="Source: WooCommerce. Method: Complicated.">Box Reactivated</span>',
+			'box_activated' => '<span title="Source: WooCommerce. Method: Complicated.">Box Activated</span>',
+			'box_active' => '<span title="Source: WooCommerce. Method: Complicated.">Box Active</span>',
+			'box_churn' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn</span>',
+			'box_reactivated2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Reactivated (2 month)</span>',
+			'box_activated2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Activated (2 month)</span>',
+			'box_active2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Active (2 month)</span>',
+			'box_churn2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn (2 month)</span>',
 		);
 		return $columns;
 	}
@@ -75,6 +84,12 @@ class CBMonthly_Table extends WP_List_Table  {
 			'box_balance_alt',
 			'boxes_behind_alt',
 			'rev_per_box_alt',
+			'new_subscriptions',
+			'shop_orders_created',
+			'shop_orders_shipped',
+			'user_cancelled',
+			'user_hold',
+			'user_reactivated',
 		);
 	}
 	protected function format_number($val) {
@@ -110,6 +125,10 @@ class CBMonthly_Table extends WP_List_Table  {
 				return $this->format_percent_column($val, $item['charges_succeeded'] + $item['charges_failed']);
 			case 'total_amount_refunded':
 				return $this->format_percent_column($val, $item['total_amount_charged']);
+			case 'box_churn':
+				return $this->format_percent_column($val, $item['box_active']);
+			case 'box_churn2':
+				return $this->format_percent_column($val, $item['box_active2']);
 			default:
 				if (is_numeric($val)) {
 					return '<b>' . $this->format_number($val) . '</b>';
@@ -121,7 +140,7 @@ class CBMonthly_Table extends WP_List_Table  {
 	private function table_data() {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
-		return $rs->execute_query('SELECT * FROM monthly_analytics;');
+		return $rs->execute_query('SELECT * FROM monthly_analytics ORDER BY calendar_month;');
 	}
 }
 

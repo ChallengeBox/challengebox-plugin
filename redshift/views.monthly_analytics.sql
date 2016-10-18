@@ -112,9 +112,41 @@ CREATE VIEW monthly_analytics_subscription_starts AS
 		calendar_month
 ;
 
-DROP VIEW IF EXISTS monthly_analytics CASCADE;
-CREATE VIEW monthly_analytics AS
-SELECT
+DROP TABLE IF EXISTS monthly_analytics_sub_churn CASCADE;
+CREATE TABLE monthly_analytics_sub_churn AS
+	SELECT
+		  calendar_month
+		, reactivated as subs_reactivated
+		, activated as subs_activated
+		, active as subs_active
+		, churned AS subs_churned
+		, churn_pct AS subs_churn_pct
+	FROM
+		subscription_churn_by_calendar_month
+;
+
+DROP TABLE IF EXISTS monthly_analytics_box_churn CASCADE;
+CREATE TABLE monthly_analytics_box_churn AS
+	SELECT
+		  to_char(to_date(sku_month, 'bYYMM'), 'YYYY-MM') AS calendar_month
+		, booked_revenue
+		, reactivated as box_reactivated
+		, activated as box_activated
+		, active as box_active
+		, churned as box_churned
+		, churn_pct as box_churn_pct
+		, reactivated2 as box_reactivated2
+		, activated2 as box_activated2
+		, active2 as box_active2
+		, churned2 as box_churned2
+		, churn_pct2 as box_churn_pct2
+	FROM
+		box_churn_by_sku_month
+;
+
+DROP TABLE IF EXISTS monthly_analytics CASCADE;
+CREATE TABLE monthly_analytics AS
+	SELECT
 		  calendar_month
 		, boxes_created
 		, boxes_shipped
@@ -133,6 +165,22 @@ SELECT
 		, user_reactivated
 		, new_subscriptions
 		, coalesce(total_amount_charged,0) - coalesce(total_stripe_fee,0) - coalesce(total_amount_refunded,0) + coalesce(total_stripe_fee_refunded,0) AS net_revenue
+		, subs_reactivated
+		, subs_activated
+		, subs_active
+		, subs_churned
+		, subs_churn_pct
+		, booked_revenue
+		, box_reactivated
+		, box_activated
+		, box_active
+		, box_churned
+		, box_churn_pct
+		, box_reactivated2
+		, box_activated2
+		, box_active2
+		, box_churned2
+		, box_churn_pct2
 	FROM
 		monthly_analytics_boxes_created
 			NATURAL FULL JOIN monthly_analytics_boxes_shipped
@@ -142,6 +190,8 @@ SELECT
 			NATURAL FULL JOIN monthly_analytics_stripe_refunds
 			NATURAL FULL JOIN monthly_analytics_subscription_starts
 			NATURAL FULL JOIN monthly_analytics_user_actions
+			NATURAL FULL JOIN monthly_analytics_sub_churn
+			NATURAL FULL JOIN monthly_analytics_box_churn
 	ORDER BY
 		calendar_month
 ;
