@@ -67,11 +67,15 @@ class CBMonthly_Table extends WP_List_Table  {
 			'box_reactivated' => '<span title="Source: WooCommerce. Method: Complicated.">Box Reactivated</span>',
 			'box_activated' => '<span title="Source: WooCommerce. Method: Complicated.">Box Activated</span>',
 			'box_active' => '<span title="Source: WooCommerce. Method: Complicated.">Box Active</span>',
-			'box_churn' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn</span>',
+			'box_churned' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn</span>',
 			'box_reactivated2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Reactivated (2 month)</span>',
 			'box_activated2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Activated (2 month)</span>',
 			'box_active2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Active (2 month)</span>',
-			'box_churn2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn (2 month)</span>',
+			'box_churned2' => '<span title="Source: WooCommerce. Method: Complicated.">Box Churn (2 month)</span>',
+			'subs_reactivated' => '<span title="Source: WooCommerce. Method: Complicated.">Sub Reactivated</span>',
+			'subs_activated' => '<span title="Source: WooCommerce. Method: Complicated.">Sub Activated</span>',
+			'subs_active' => '<span title="Source: WooCommerce. Method: Complicated.">Sub Active</span>',
+			'subs_churned' => '<span title="Source: WooCommerce. Method: Complicated.">Sub Churn</span>',
 		);
 		return $columns;
 	}
@@ -79,6 +83,8 @@ class CBMonthly_Table extends WP_List_Table  {
 		return array(
 			'box_credits_alt',
 			'box_debits_alt',
+			'charges_failed',
+			'refunds_failed',
 			'total_credits_alt',
 			'total_debits_alt',
 			'box_balance_alt',
@@ -125,10 +131,12 @@ class CBMonthly_Table extends WP_List_Table  {
 				return $this->format_percent_column($val, $item['charges_succeeded'] + $item['charges_failed']);
 			case 'total_amount_refunded':
 				return $this->format_percent_column($val, $item['total_amount_charged']);
-			case 'box_churn':
+			case 'box_churned':
 				return $this->format_percent_column($val, $item['box_active']);
-			case 'box_churn2':
+			case 'box_churned2':
 				return $this->format_percent_column($val, $item['box_active2']);
+			case 'subs_churned':
+				return $this->format_percent_column($val, $item['subs_active']);
 			default:
 				if (is_numeric($val)) {
 					return '<b>' . $this->format_number($val) . '</b>';
