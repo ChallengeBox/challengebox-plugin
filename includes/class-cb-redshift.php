@@ -139,10 +139,10 @@ class CBRedshift {
 		$query = implode("\n", array(
 			$this->load_query('drop_old_views.sql'),
 			$this->load_query('views.box_credit_ledger.sql'),
-			$this->load_query('views.monthly_analytics.sql'),
 			$this->load_query('views.subscription_churn.sql'),
 			$this->load_query('views.subscription_status.sql'),
 			$this->load_query('views.box_churn.sql'),
+			$this->load_query('views.monthly_analytics.sql'),
 		));
 		// Filter out any internal transactions
 		$query = str_replace('BEGIN;', '', $query);
