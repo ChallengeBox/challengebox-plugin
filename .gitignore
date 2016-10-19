@@ -1,4 +1,4 @@
 *.sw*
 ops-logs/2*
-/vendor/
-/.project
+.project
+vendor

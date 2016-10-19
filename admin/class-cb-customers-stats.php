@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Adds an admin page which has Export Customers to CSV functionality
  * Admin page also shows customer #, and can be extended to show other stats
@@ -32,7 +33,7 @@ class CBCustomersStats {
 	 * @since 0.1
 	 **/
 	public function add_admin_pages() {
-		add_users_page( __( 'Export to CSV', 'export-users-to-csv' ), __( 'Export to CSV', 'export-users-to-csv' ), 'list_users', 'export-users-to-csv', array( $this, 'users_page' ) );
+		add_submenu_page( 'challenge-box', __( 'Export to CSV', 'export-users-to-csv' ), __( 'Export to CSV', 'export-users-to-csv' ), 'cb_export_users', 'export-users-to-csv', array( $this, 'users_page' ) );
 	}
 
 	public function generate_csv_segment() {

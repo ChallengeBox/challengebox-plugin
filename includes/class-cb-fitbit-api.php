@@ -96,10 +96,15 @@ class CBFitbitAPI {
 		if (!empty($this->v2_token) && !empty($this->v2_owner)) {
 			// Token maintenance: update it if it's expired
 			if ($this->v2_token->hasExpired()) {
-				$this->v2_token = $this->api2->getAccessToken(
-					'refresh_token', array('refresh_token' => $this->v2_token->getRefreshToken())
-				);
-				update_user_meta($this->user_id, $this->v2_token_key, $this->v2_token);
+				try {
+					$this->v2_token = $this->api2->getAccessToken(
+						'refresh_token', array('refresh_token' => $this->v2_token->getRefreshToken())
+					);
+					update_user_meta($this->user_id, $this->v2_token_key, $this->v2_token);
+				} catch (League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
+					//$this->maybe_reauthorize_user();
+					$this->api2 = false;
+				}
 			}
 		}
 

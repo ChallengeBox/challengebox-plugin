@@ -1,9 +1,7 @@
 <?php
 
-use \Carbon\Carbon;
 use ChallengeBox\Includes\Utilities\BaseFactory;
-use Aws\Credentials\CredentialProvider;
-use Aws\S3\S3Client;
+use Carbon\Carbon;
 
 /**
  * Commands for managing ChallengeBox.
@@ -12,8 +10,6 @@ class CBCmd extends WP_CLI_Command {
 
 	private $api;
 	private $options;
-	private $s3Client;
-	private $carbon;
 
 	public function __construct() {
 		$this->api = new CBWoo();
@@ -22,6 +18,7 @@ class CBCmd extends WP_CLI_Command {
 	private function parse_args($args, $assoc_args) {
 		$tz = !empty($assoc_args['timezone']) ? $assoc_args['timezone'] : 'America/New_York';
 		$now = Carbon::now($tz);
+
 		$this->options = (object) array(
 			'all' => !empty($assoc_args['all']),
 			'timezone' => $tz,
@@ -41,6 +38,7 @@ class CBCmd extends WP_CLI_Command {
 			'sku_version' => !empty($assoc_args['sku_version']) ? $assoc_args['sku_version'] : 'v3',
 			'sku' => !empty($assoc_args['sku']) ? $assoc_args['sku'] : null,
 			'limit' => !empty($assoc_args['limit']) ? intval($assoc_args['limit']) : false,
+			'offset' => !empty($assoc_args['offset']) ? intval($assoc_args['offset']) : false,
 			'skip' => !empty($assoc_args['skip']) ? intval($assoc_args['skip']) : false,
 			'points' => !empty($assoc_args['points']) ? intval($assoc_args['points']) : false,
 			'no_points' => !empty($assoc_args['no_points']),
@@ -57,8 +55,11 @@ class CBCmd extends WP_CLI_Command {
 			'save' => !empty($assoc_args['save']),
 			'series' => !empty($assoc_args['series']) ? $assoc_args['series'] : 'water',
 			'channel' => !empty($assoc_args['channel']) ? $assoc_args['channel'] : '@ryan',
-			'save_output' => !empty($assoc_args['save_output']),
-			's3_bucket' => !empty($assoc_args['s3_bucket']) ? $assoc_args['s3_bucket'] : 'challengebox-redshift',
+			'redshift' => !empty($assoc_args['redshift']),
+			'redshift_upload_only' => !empty($assoc_args['redshift-upload-only']),
+			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : CBRedshift::get_defaults()->bucket,
+			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : CBRedshift::get_defaults()->schema,
+			'internal' => !empty($assoc_args['internal']),
 		);
 
 		// Month option should be pegged to the first day
@@ -82,17 +83,18 @@ class CBCmd extends WP_CLI_Command {
 			unset($assoc_args['all']);
 
 			if ('user' == $this->options->orientation) {
+				global $wpdb;
 				WP_CLI::debug("Grabbing user ids...");
-				$args = array_map(function ($user) { return $user->ID; }, get_users());
+				$rows = $wpdb->get_results("select ID from {$wpdb->prefix}users;");
+				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			} elseif ('order' == $this->options->orientation) {
 				WP_CLI::debug("Grabbing order ids...");
-				global $wpdb;
-				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_order';");
+				$rows = $wpdb->get_results("select ID from {$wpdb->prefix}posts where post_type = 'shop_order';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			} elseif ('subscription' == $this->options->orientation) {
 				WP_CLI::debug("Grabbing subscription ids...");
 				global $wpdb;
-				$rows = $wpdb->get_results("select ID from wp_posts where post_type = 'shop_subscription';");
+				$rows = $wpdb->get_results("select ID from {$wpdb->prefix}posts where post_type = 'shop_subscription';");
 				$args = array_map(function ($p) { return $p->ID; }, $rows);
 			}
 		}
@@ -115,44 +117,45 @@ class CBCmd extends WP_CLI_Command {
 			WP_CLI::debug(var_export($this->options, true));
 		}
 
-		if ($this->options->save_output) {
-			$provider = CredentialProvider::ini('redshift', '/home/www-data/.aws/credentials');
-			$provider = CredentialProvider::memoize($provider);
-			$this->s3Client = new S3Client(array(
-				//'profile' => 'redshift',
-				'region' => 'us-east-1',
-				'version' => 'latest',
-				'credentials' => $provider
-			));
+		if ($this->options->redshift) {
+			$this->rs = new CBRedshift(
+				$this->options->redshift_schema, 
+				$this->options->redshift_bucket,
+				null, 'WP_CLI::debug'
+			);
 		}
 
 		//var_dump(array('args'=>$args, 'assoc_args'=>$assoc_args));
 		return array($args, $assoc_args);
 	}
 
-	private function upload_results_to_s3($file_path, $results, $columns, $gzip = true) {
-		$fp = fopen('php://temp', 'rw');
-		WP_CLI\Utils\write_csv($fp, $results, $columns);
-		rewind($fp);
-		if ($gzip) $content = gzencode(stream_get_contents($fp));
-		else $content = stream_get_contents($fp);
-		$result = $this->s3Client->putObject([
-				'Bucket' => $this->options->s3_bucket,
-				'Key'    => "$file_path",
-				'Body'   => $content
-		]);
-		fclose($fp);
-	}
-
-	private function execute_redshift_queries($queries) {
+	private function execute_redshift_queries($queries, $transaction=true) {
 		WP_CLI::debug("Connecting to redshift...");
 		$db = pg_connect(file_get_contents('/home/www-data/.aws/redshift.string'))
 				or WP_CLI::error(pg_last_error());
+		$results = array();
+		if ($transaction) {
+			WP_CLI::debug("BEGIN; -- transaction");
+			pg_query("BEGIN;") or WP_CLI::error(pg_last_error());
+		}
 		foreach ($queries as $query) {
 			//if ($this->options->verbose) 
 			WP_CLI::debug("Executing $query");
-			pg_query($query) or WP_CLI::error(pg_last_error());
+			if($result = pg_query($query)) {
+				$results[] = pg_fetch_all($result);
+			} else {
+				if ($transaction) {
+					WP_CLI::debug("ROLLBACK; -- transaction");
+					pg_query("ROLLBACK;") or WP_CLI::error(pg_last_error());
+				}
+				WP_CLI::error(pg_last_error());
+			}
 		}
+		if ($transaction) {
+			WP_CLI::debug("COMMIT; -- transaction");
+			pg_query("COMMIT;") or WP_CLI::error(pg_last_error());
+		}
+		return $results;
 	}
 
 	/**
@@ -507,13 +510,17 @@ class CBCmd extends WP_CLI_Command {
 					continue;
 				}
 
-				$old_renewal = Carbon::instance(CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at));
+				$old_renewal = Carbon::instance(
+					CBWoo::parse_date_from_api($sub->billing_schedule->next_payment_at)
+				);
 
 				WP_CLI::debug("\tSubscription $sub->id...");
 
 				//
 				// Calculate correct renewal date from the renewal day
 				//
+				if ($this->options->verbose)
+					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day, 'old_renewal'=>$old_renewal, 'api_date'=> $sub->billing_schedule->next_payment_at), true));
 
 				// Potential renewal date in the same month as original renewal
 				$d_this = $old_renewal->copy()->day($renewal_day);
@@ -522,11 +529,11 @@ class CBCmd extends WP_CLI_Command {
 				$d_next = $old_renewal->copy()->day(1)->addMonths(1)->day($renewal_day);
 				
 				if ($this->options->verbose)
-					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day), true));
+					WP_CLI::debug(var_export(array('d_this' => $d_this, 'd_next' => $d_next, 'renewal_day' => $renewal_day, 'old_renewal'=>$old_renewal), true));
 
 				// Spec: If the customer's renewal date falls before the renewal day,
 				// the renewal should be pushed forward to the renewal day.
-				if ($old_renewal < $d_this) {
+				if ($old_renewal->lt($d_this)) {
 					$new_renewal = $d_this;
 					$reason = 'old renewal before renewal day';
 				} else {
@@ -558,6 +565,13 @@ class CBCmd extends WP_CLI_Command {
 				$now = Carbon::now();
 				$box_credit_renewal = $new_renewal->copy()->year($now->year)->month($now->month)->addMonths($months_before_renewal);
 
+				// XXX: OK, THERE IS A BUG HERE
+				// Turns out, if you run this every day, we sometimes don't know whether
+				// the user is owed a box this month. Or rather, box_this_month should be
+				// changed to return whether or not the user SHOULD be shipped a box this 
+				// month not whether they HAVE. In the meantime, if we run this on the 15th
+				// that should be enough time for all the boxes to have shipped, but billing
+				// not to have started yet.
 
 				// Adopt the box-credit model if it's sooner, but also still in the future
 				if ($box_credit_renewal->lte($new_renewal) && $box_credit_renewal->gt(Carbon::now())) {
@@ -698,6 +712,17 @@ class CBCmd extends WP_CLI_Command {
 	 */
 	function order_statuses( $args, $assoc_args ) {
 		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_order_statuses(), true));
+	}
+
+	/**
+	 * Prints out subscription statuses available.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb subscription
+	 */
+	function subscription_statuses( $args, $assoc_args ) {
+		list( $id ) = $args; WP_CLI::line(var_export($this->api->get_subscription_statuses(), true));
 	}
 
 	/**
@@ -1346,13 +1371,17 @@ class CBCmd extends WP_CLI_Command {
 	 * [--flatten]
 	 * : Display result as array rather than object.
 	 *
+	 * [--internal]
+	 * : Return internal version.
+	 *
 	 * ## EXAMPLES
 	 *     wp cb subscription 6691
 	 */
 	function subscription( $args, $assoc_args ) {
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 		list( $id ) = $args;
-		$sub = $this->api->get_subscription($id);
+		if ($this->options->internal) $sub = $this->api->get_subscription_internal($id);
+		else $sub = $this->api->get_subscription($id);
 		if ($this->options->flatten) {
 			$result = json_decode(json_encode($sub), true);
 		} else {
@@ -3165,8 +3194,20 @@ SQL;
 	 * [--verbose]
 	 * : Print out debugging data.
 	 *
-	 * [--save_output]
-	 * : Write results to s3 -> redshift.
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
 	 *
 	 * ## EXAMPLES
 	 *
@@ -3185,16 +3226,21 @@ SQL;
 			'status',
 			'created_date',
 			'completed_date',
-			'sku',
+			'skus',
 			'box_credits',
+			'box_debits',
 			'box_month',
 			'ship_month',
 			'total',
+			'recognized_total',
 			'revenue_items',
+			'recognized_revenue_items',
 			'revenue_ship',
+			'recognized_revenue_ship',
 			'revenue_rush',
-//			'stripe_fee',
-			'refund',
+			'recognized_revenue_rush',
+			//'stripe_fee',
+			//'refund',
 		);
 
 		/**
@@ -3261,36 +3307,52 @@ SQL;
 
 				$parent = find_credit_parent($order, $orders);
 				$parent_credits = CBWoo::calculate_box_credit($parent)['credits'];
+				$my_credits = CBWoo::calculate_box_credit($order)['credits'];
+				if ($parent) {
+					$box_credits = $parent_credits;
+				} else {
+					$box_credits = $my_credits;
+				}
 
 				if (false !== array_search('box', $order_types)) {
 					$find_charge_on = $parent;
 					$parent_id = $parent->id;
+					if ($sku) {
+						$parsed = CBWoo::parse_box_sku($sku);
+						$box_debits = 0 + $parsed->debits;
+					} else {
+						$box_debits = 1;
+					}
 				} else {
 					$find_charge_on = $order;
 					$parent_id = null;
-					$parent_credits = 0;
 				}
 				try {
-					$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
-					$stripe_total = $stripe_charge->amount / 100.0;
-					$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
+					//$stripe_charge = CBStripe::get_order_charge($find_charge_on->id);
+					//$stripe_total = $stripe_charge->amount / 100.0;
+					$stripe_total = $order->total;
+					//$stripe_refunded = $stripe_charge->amount_refunded / 100.0;
 					//$stripe_fee = $stripe_charge->fee / 100.0;
 				} catch (InvalidArgumentException $e) {
 					$stripe_total = 0.0;
-					$stripe_refunded = 0.0;
-					$stripe_fee = 0.0;
+					//$stripe_refunded = 0.0;
+					//$stripe_fee = 0.0;
 				}
 				$line_item_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->line_items));
 				$shipping_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->shipping_lines));
 				$fee_total = array_sum(array_map(function($i) { return $i->total; }, $find_charge_on->fee_lines));
 				$total = $stripe_total;
-				$refunded = $stripe_refunded;
+				//$refunded = $stripe_refunded;
+				$recognized_total = $total;
+				$recognized_line_item_total = $line_item_total;
+				$recognized_shipping_total = $shipping_total;
+				$recognized_fee_total = $fee_total;
 				if (false !== array_search('box', $order_types) && $parent_credits > 0) {
-					$total /= $parent_credits;
-					$line_item_total /= $parent_credits;
-					$shipping_total /= $parent_credits;
-					$fee_total /= $parent_credits;
-					$refunded /= $parent_credits;
+					$recognized_total /= $parent_credits;
+					$recognized_line_item_total /= $parent_credits;
+					$recognized_shipping_total /= $parent_credits;
+					$recognized_fee_total /= $parent_credits;
+					//$refunded /= $parent_credits;
 				}
 
 				$order_row = array(
@@ -3302,15 +3364,20 @@ SQL;
 					'created_date' => $order->created_at,
 					'completed_date' => $order->completed_at,
 					'skus' => $sku,
-					'box_credits' => $parent_credits,
+					'box_credits' => $box_credits,
+					'box_debits' => $box_debits,
 					'box_month' => $month,
 					'ship_month' => $ship_month,
 					'total' => $total,
+					'recognized_total' => $recognized_total,
 					'revenue_items' => $line_item_total,
+					'recognized_revenue_items' => $recognized_line_item_total,
 					'revenue_ship' => $shipping_total,
+					'recognized_revenue_ship' => $recognized_shipping_total,
 					'revenue_rush' => $fee_total,
+					'recognized_revenue_rush' => $recognized_fee_total,
 					//'stripe_fee' => $stripe_fee,
-					'refund' => $refunded,
+					//'refund' => $refunded,
 				);
 				$order_format = array(
 					'%d',  // id
@@ -3324,10 +3391,14 @@ SQL;
 					'%s',  // box_month
 					'%s',  // ship_month
 					'%f',  // total
+					'%f',  // recognized_total
 					'%f',  // revenue_items
+					'%f',  // recognized_revenue_items
 					'%f',  // revenue_ship
+					'%f',  // recognized_revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					'%f',  // recognized_revenue_rush
+					//'%f',  // refund
 				);
 
 				$box_row = array(
@@ -3338,14 +3409,15 @@ SQL;
 					'created_date' => $order_row['created_date'],
 					'completed_date' => $order_row['completed_date'],
 					'sku' => $order_row['skus'],
+					'box_debits' => $order_row['box_debits'],
 					'box_month' => $order_row['box_month'],
 					'ship_month' => $order_row['ship_month'],
-					'total' => $order_row['total'],
-					'revenue_items' => $order_row['revenue_items'],
-					'revenue_ship' => $order_row['revenue_ship'],
-					'revenue_rush' => $order_row['revenue_rush'],
+					'total' => $order_row['recognized_total'],
+					'revenue_items' => $order_row['recognized_revenue_items'],
+					'revenue_ship' => $order_row['recognized_revenue_ship'],
+					'revenue_rush' => $order_row['recognized_revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$box_format = array(
 					'%d',  // id
@@ -3355,13 +3427,14 @@ SQL;
 					'%s',  // created_date
 					'%s',  // completed_date
 					'%s',  // sku
+					'%s',  // box_debits
 					'%s',  // box_month
 					'%s',  // ship_month
 					'%f',  // total
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$box_columns = array(
 					'id',
@@ -3371,13 +3444,14 @@ SQL;
 					'created_date',
 					'completed_date',
 					'sku',
+					'box_debits',
 					'box_month',
 					'ship_month',
 					'total',
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 				$renewal_row = array(
@@ -3393,7 +3467,7 @@ SQL;
 					'revenue_ship' => $order_row['revenue_ship'],
 					'revenue_rush' => $order_row['revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$renewal_format = array(
 					'%d',  // id
@@ -3406,7 +3480,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$renewal_columns = array(
 					'id',
@@ -3420,7 +3494,7 @@ SQL;
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 				$shop_row = array(
@@ -3435,7 +3509,7 @@ SQL;
 					'revenue_ship' => $order_row['revenue_ship'],
 					'revenue_rush' => $order_row['revenue_rush'],
 					//'stripe_fee' => $stripe_fee'],
-					'refund' => $order_row['refund'],
+					//'refund' => $order_row['refund'],
 				);
 				$shop_format = array(
 					'%d',  // id
@@ -3448,7 +3522,7 @@ SQL;
 					'%f',  // revenue_items
 					'%f',  // revenue_ship
 					'%f',  // revenue_rush
-					'%f',  // refund
+					//'%f',  // refund
 				);
 				$shop_columns = array(
 					'id',
@@ -3461,7 +3535,7 @@ SQL;
 					'revenue_items',
 					'revenue_ship',
 					'revenue_rush',
-					'refund',
+					//'refund',
 				);
 
 
@@ -3518,128 +3592,30 @@ SQL;
 		//WP_CLI::debug(var_export($wpdb->queries, true));;
 
 		if (sizeof($results)) {
-			if ($this->options->save_output) {
-				$this->upload_results_to_s3('command_results/orders.csv.gz', $results, $columns);
-				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS orders;",
-					"CREATE TABLE orders (
-						  id INT8 NOT NULL
-						, order_types VARCHAR(16) NOT NULL
-						, user_id INT8 NOT NULL
-						, parent_id INT8 DEFAULT NULL
-						, status VARCHAR(16) DEFAULT NULL
-						, created_date TIMESTAMP NOT NULL
-						, completed_date TIMESTAMP NOT NULL
-						, skus VARCHAR(1024) DEFAULT NULL
-						, box_credits INT8 DEFAULT NULL
-						, box_month VARCHAR(16) DEFAULT NULL
-						, sku_month VARCHAR(16) DEFAULT NULL
-						, total DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
-						)
-						DISTKEY(user_id)
-						SORTKEY(user_id,id);",
-					"COPY orders FROM 's3://challengebox-redshift/command_results/orders.csv.gz' 
-						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
-				));
-				$this->upload_results_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
-				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS box_orders;",
-					"CREATE TABLE box_orders (
-						  id INT8 NOT NULL
-						, user_id INT8 NOT NULL
-						, parent_id INT8 DEFAULT NULL
-						, status VARCHAR(16) DEFAULT NULL
-						, created_date TIMESTAMP NOT NULL
-						, completed_date TIMESTAMP NOT NULL
-						, sku VARCHAR(1024) DEFAULT NULL
-						, box_month VARCHAR(16) DEFAULT NULL
-						, sku_month VARCHAR(16) DEFAULT NULL
-						, total DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
-						)
-						DISTKEY(user_id)
-						SORTKEY(user_id,id);",
-					"COPY box_orders FROM 's3://challengebox-redshift/command_results/box_orders.csv.gz' 
-						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
-				));
-				$this->upload_results_to_s3('command_results/renewal_orders.csv.gz', $renewals, $renewal_columns);
-				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS renewal_orders;",
-					"CREATE TABLE renewal_orders (
-						  id INT8 NOT NULL
-						, user_id INT8 NOT NULL
-						, status VARCHAR(16) DEFAULT NULL
-						, created_date TIMESTAMP NOT NULL
-						, completed_date TIMESTAMP NOT NULL
-						, sku VARCHAR(1024) DEFAULT NULL
-						, box_credits INT8 NOT NULL
-						, total DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
-						)
-						DISTKEY(user_id)
-						SORTKEY(user_id,id);",
-					"COPY renewal_orders FROM 's3://challengebox-redshift/command_results/renewal_orders.csv.gz' 
-						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
-				));
-				$this->upload_results_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
-				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS shop_orders;",
-					"CREATE TABLE shop_orders (
-						  id INT8 NOT NULL
-						, user_id INT8 NOT NULL
-						, status VARCHAR(16) DEFAULT NULL
-						, created_date TIMESTAMP NOT NULL
-						, completed_date TIMESTAMP NOT NULL
-						, skus VARCHAR(1024) DEFAULT NULL
-						, total DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_items DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_ship DECIMAL(10,2) DEFAULT '0.0'
-						, revenue_rush DECIMAL(10,2) DEFAULT '0.0'
-						, refund DECIMAL(10,2) DEFAULT '0.0'
-						)
-						DISTKEY(user_id)
-						SORTKEY(user_id,id);",
-					"COPY shop_orders FROM 's3://challengebox-redshift/command_results/shop_orders.csv.gz' 
-						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
-				));
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/box_orders.csv.gz', $boxes, $box_columns);
+				$this->rs->upload_to_s3('command_results/renewal_orders.csv.gz', $renewals, $renewal_columns);
+				$this->rs->upload_to_s3('command_results/shop_orders.csv.gz', $shops, $shop_columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_box_orders.sql');
+					$this->rs->execute_file('load_renewal_orders.sql');
+					$this->rs->execute_file('load_shop_orders.sql');
+					$this->rs->cleanup_after_load();
+				}
 			} else {
-				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+				//WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+				WP_CLI::debug("Boxes:");
+				WP_CLI\Utils\format_items($this->options->format, $boxes, $box_columns);
+				WP_CLI::debug("Renewals:");
+				WP_CLI\Utils\format_items($this->options->format, $renewals, $renewal_columns);
+				WP_CLI::debug("Shop Orders:");
+				WP_CLI\Utils\format_items($this->options->format, $shops, $shop_columns);
 			}
 		}
 	}
 
 	/**
-	 * Exports order data.
+	 * Exports order data (old, keep it around for old analytics page).
 	 *
 	 * ## OPTIONS
 	 *
@@ -3755,6 +3731,365 @@ SQL;
 			WP_CLI::debug("Boxes");
 			$columns = array('id', 'created_cohort', 'shipped_cohort', 'status', 'customer', 'sku', 'month', 'gender', 't-shirt', 'sku_version', 'ship_month', 'ship_month_guess');
 			WP_CLI\Utils\format_items($this->options->format, $boxes, $columns);
+		}
+	}
+
+	/**
+	 * Exports charge data from stripe.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Iterate through all charges (on by default).
+	 *
+	 * [--limit=<limit>]
+	 * : Stop after processing <limit> charges.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_charges --all
+	 */
+	function export_charges($args, $assoc_args) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'order_id',
+			'user_id',
+			'customer_id',
+			'charge_date',
+			'status',
+			'description',
+			'paid',
+			'captured',
+			'refunded',
+			'disputed',
+			'amount',
+			'stripe_fee',
+			'amount_refunded',
+			'failure_code',
+			'failure_message',
+			'has_fraud_details',
+			'receipt_email',
+			'receipt_number',
+		);
+
+		$limit = 100;
+		$has_more = true;
+		$starting_after = false;
+		function boolize($thing) { return (bool) is_null($thing) ? 1 : ($thing ? 1 : 0); }
+
+		// Grab raw charges
+		$charge_count = 0;
+		while ($has_more) {
+			WP_CLI::debug("GETing $limit charges starting after $starting_after...");
+			$result = CBStripe::get_charges($limit, $starting_after, ['data.balance_transaction']);
+			$has_more = $result->has_more;
+			foreach ($result->data as $charge) {
+				$results[] = array(
+					'id' => $charge['id'],
+					'order_id' => NULL,
+					'user_id' => NULL,
+					'customer_id' => $charge['customer'],
+					'charge_date' => Carbon::createFromTimestamp($charge['created'])->toDateTimeString(),
+					'status' => $charge['status'],
+					'description' => $charge['description'],
+					'paid' => boolize($charge['paid']),
+					'captured' => boolize($charge['captured']),
+					'refunded' => boolize($charge['refunded']),
+					'disputed' => boolize(is_object($charge['dispute'])),
+					'amount' => $charge['amount']/100.0,
+					'stripe_fee' => $charge['balance_transaction']['fee']/100.0,
+					'amount_refunded' => $charge['amount_refunded']/100.0,
+					'failure_code' => $charge['failure_code'],
+					'failure_message' => $charge['failure_message'],
+					'has_fraud_details' => boolize($charge['fraud_details']),
+					'receipt_email' => $charge['receipt_email'],
+					'receipt_number' => $charge['receipt_number'],
+				);
+			 	$starting_after = $charge->id;
+				$charge_count++;
+				if ($this->options->limit && $charge_count >= $this->options->limit) break;
+			}
+			if ($this->options->limit && $charge_count >= $this->options->limit) break;
+		}
+
+		//
+		// Populate order_id
+		//
+		WP_CLI::debug("Mapping charges to orders...");
+		global $wpdb;
+		$charge_ids = array_column($results, 'id');
+		$in_template = implode(',', array_map(function () { return "'%s'"; }, $charge_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as charge_id from {$wpdb->prefix}postmeta where meta_key = '_stripe_charge_id' and meta_value IN ($in_template);", $charge_ids);
+		$rows = $wpdb->get_results($prepared);
+		// Create map of charges to orders
+		$charge2order = array();
+		foreach ($rows as $row) {
+			$charge2order[$row->charge_id] = intval($row->order_id);
+		}
+		// Use the map to fill in order ids
+		foreach ($results as $index => $charge) {
+			if (isset($charge2order[$charge['id']])) {
+				$results[$index]['order_id'] = $charge2order[$charge['id']];
+			} else {
+				// Use the description if we didn't have a database match
+				$matches = array();
+				if (preg_match('/Order (\d+)/', $charge['description'], $matches)) {
+					$results[$index]['order_id'] = intval($matches[1]);
+				}
+			}
+		}
+
+		//
+		// Populate user_id
+		//
+		WP_CLI::debug("Mapping orders to users...");
+		$order_ids = array_column($results, 'order_id');
+		$in_template = implode(',', array_map(function () { return "'%d'"; }, $order_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as user_id from {$wpdb->prefix}postmeta where meta_key = '_customer_user' and post_id IN ($in_template);", $order_ids);
+		$rows = $wpdb->get_results($prepared);
+		$order2user = array();
+		foreach ($rows as $r) $order2user[$r->order_id] = intval($r->user_id);
+		foreach ($results as $i => $r) $results[$i]['user_id'] = $order2user[$r['order_id']];
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/charges.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_charges.sql');
+					$this->rs->cleanup_after_load();
+				}
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+	}
+
+	/**
+	 * Exports refund data from stripe.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Iterate through all refunds (on by default).
+	 *
+	 * [--limit=<limit>]
+	 * : Stop after processing <limit> refunds.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_refunds --all
+	 */
+	function export_refunds($args, $assoc_args) {
+		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'order_id',
+			'user_id',
+			'refund_date',
+			'amount',
+			'stripe_fee_refunded',
+			'charge_id',
+			'reason',
+			'receipt_number',
+			'status',
+		);
+
+		$limit = 100;
+		$has_more = true;
+		$starting_after = false;
+
+		// Grab raw refunds
+		$refund_count = 0;
+		while ($has_more) {
+			WP_CLI::debug("GETing $limit refunds starting after $starting_after...");
+			$result = CBStripe::get_refunds($limit, $starting_after, ['data.balance_transaction']);
+			$has_more = $result->has_more;
+			foreach ($result->data as $refund) {
+				$results[] = array(
+					'id' => $refund['id'],
+					'order_id' => NULL,
+					'refund_date' => Carbon::createFromTimestamp($refund['created'])->toDateTimeString(),
+					'amount' => $refund['amount']/100.0,
+					'stripe_fee_refunded' => abs($refund['balance_transaction']['fee']/100.0),
+					'charge_id' => $refund['charge'],
+					'reason' => $refund['reason'],
+					'receipt_number' => $refund['receipt_number'],
+					'status' => $refund['status'],
+				);
+			 	$starting_after = $refund->id;
+				$refund_count++;
+				if ($this->options->limit && $refund_count >= $this->options->limit) break;
+			}
+			if ($this->options->limit && $refund_count >= $this->options->limit) break;
+		}
+
+		//
+		// Populate order_id
+		//
+		WP_CLI::debug("Mapping refunds to orders...");
+		global $wpdb;
+		$charge_ids = array_column($results, 'charge_id');
+		$in_template = implode(',', array_map(function () { return "'%s'"; }, $charge_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as charge_id from {$wpdb->prefix}postmeta where meta_key = '_stripe_charge_id' and meta_value IN ($in_template);", $charge_ids);
+		$rows = $wpdb->get_results($prepared);
+		// Create map of charges to orders
+		$charge2order = array();
+		foreach ($rows as $row) {
+			$charge2order[$row->charge_id] = intval($row->order_id);
+		}
+		// Use the map to fill in order ids
+		foreach ($results as $index => $refund) {
+			$results[$index]['order_id'] = $charge2order[$refund['charge_id']];
+		}
+
+		//
+		// Populate user_id
+		//
+		WP_CLI::debug("Mapping orders to users...");
+		$order_ids = array_column($results, 'order_id');
+		$in_template = implode(',', array_map(function () { return "'%d'"; }, $order_ids));
+		$prepared = $wpdb->prepare("select post_id as order_id, meta_value as user_id from {$wpdb->prefix}postmeta where meta_key = '_customer_user' and post_id IN ($in_template);", $order_ids);
+		$rows = $wpdb->get_results($prepared);
+		$order2user = array();
+		foreach ($rows as $r) $order2user[$r->order_id] = intval($r->user_id);
+		foreach ($results as $i => $r) $results[$i]['user_id'] = $order2user[$r['order_id']];
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/refunds.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_refunds.sql');
+					$this->rs->cleanup_after_load();
+				}
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+	}
+
+	/**
+	 * Exports user data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--pretend]
+	 * : Don't write anything, just show what we would do.
+	 *
+	 * [--verbose]
+	 * : Print out debugging data.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift-bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_users --all
+	 */
+	function export_users($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$columns = array(
+			'user_id',
+			'registration_date',
+			'subscription_status',
+			'subscription_type',
+			'clothing_gender',
+			'tshirt_size',
+			'pant_size',
+			'glove_size',
+			'sock_size',
+			'challenge_points',
+			'fitbit_oauth_status',
+			'fitness_goal',
+			'special_segment',
+			'has_rush_order',
+			'has_failed_order',
+		);
+		$results = array();
+
+		foreach ($args as $user_id) {
+			$customer = new CBCustomer($user_id, $interactive = false);
+			$user = get_user_by('ID', $customer->get_user_id());
+			WP_CLI::debug("User $user_id...");
+			$data = array(
+				'user_id' => $customer->get_user_id(),
+				'email' => $user->user_email,
+				'first_name' => $user->user_firstname,
+				'last_name' => $user->user_lastname,
+				'registration_date' => $user->user_registered,
+			);
+			$results[] = array_merge($data, $customer->get_segment_data());
+		}
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/users.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_users.sql');
+					$this->rs->cleanup_after_load();
+				}
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
 		}
 	}
 
@@ -3934,7 +4269,101 @@ SQL;
 			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 	}
 
-    /**
+	/**
+	 * Exports subscription data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<sub_id>...]
+	 * : The subscription id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all subscriptions. (Ignores <sub_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate subscriptions in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> subscriptions out of the list given.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_subscriptions
+	 */
+	function export_subscriptions( $args, $assoc_args ) {
+		global $wpdb;
+		$assoc_args['orientation'] = 'subscription';
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'id',
+			'user_id',
+			'status',
+			'period',
+			'interval',
+			'start_date',
+			'end_date',
+			'next_payment_date',
+		);
+
+		foreach ($args as $sub_id) {
+			$sub_id = intval($sub_id);
+			WP_CLI::debug("Subscription $sub_id...");
+			$sub = $this->api->get_subscription_internal($sub_id);
+			$results[] = array(
+				'id' => $sub_id,
+				'user_id' => $sub->customer_id,
+				'status' => $sub->status,
+				'period' => $sub->billing_schedule->period,
+				'interval' => $sub->billing_schedule->interval,
+				'start_date' => $sub->billing_schedule->start_at,
+				'end_date' => $sub->billing_schedule->end_at,
+				'next_payment_date' => $sub->billing_schedule->next_payment_at,
+			);
+		}
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/subscriptions.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_subscriptions.sql');
+					$this->rs->cleanup_after_load();
+				}
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+
+	}
+
+	/**
 	 * Exports subscription event data.
 	 *
 	 * ## OPTIONS
@@ -3951,8 +4380,20 @@ SQL;
 	 * [--limit=<limit>]
 	 * : Only process <limit> subscriptions out of the list given.
 	 *
-	 * [--save_output]
-	 * : Write results to s3 -> redshift.
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
 	 *
 	 * [--format=<format>]
 	 * : Output format.
@@ -3986,8 +4427,10 @@ SQL;
 			//var_dump($rows);
 
 			$found_initial_state = false;
+			$comment_id = false;
 			foreach ($rows as $comment) {
 
+				$comment_id = $comment->comment_ID;
 				$date = $comment->comment_date_gmt; //new Carbon($comment->comment_date_gmt);	
 				$text = $comment->comment_content;	
 				$event = 'other';
@@ -4003,18 +4446,21 @@ SQL;
 					list($_, $old_state, $new_state) = $matches;
 					$old_state = str_replace(' ', '-', strtolower($old_state));
 					$new_state = str_replace(' ', '-', strtolower($new_state));
+					$new_state = str_replace('pending-cancellation', 'pending-cancel', strtolower($new_state));
+					$old_state = str_replace('pending-cancellation', 'pending-cancel', strtolower($old_state));
 
 					// Attach initial state if we didn't have it already
 					if ($found_initial_state === false) {
 						$found_initial_state = true;
 						$results[] = array(
+							'id' => null,
 							'sub_id' => $sub_id,
 							'user_id' => $user_id,
-							'event' => $event,
-							'date' => $sub->post->post_date_gmt,
+							'event' => 'initial-state',
+							'event_date' => $sub->post->post_date_gmt,
 							'old_state' => '',
 							'new_state' => $old_state,
-							'comment' => $text,
+							'comment' => 'Initial state.',
 						);
 					}
 
@@ -4035,52 +4481,50 @@ SQL;
 				}
 
 				$results[] = array(
+					'id' => $comment_id,
 					'sub_id' => $sub_id,
 					'user_id' => $user_id,
 					'event' => $event,
-					'date' => $date,
+					'event_date' => $date,
 					'old_state' => $old_state,
 					'new_state' => $new_state,
 					'comment' => $text,
 				);
 
 			}
+
+			// Attach final state
+			$results[] = array(
+				'id' => null,
+				'sub_id' => $sub_id,
+				'user_id' => $user_id,
+				'event' => 'final-state',
+				'event_date' => Carbon::now()->toDateTimeString(),
+				'old_state' => $new_state,
+				'new_state' => $sub->get_status(),
+				'comment' => 'Final state.',
+			);
+
 		}
 
 		$columns = array(
+			'id',
 			'sub_id',
 			'user_id',
 			'event',
-			'date',
+			'event_date',
 			'old_state',
 			'new_state',
 			'comment',
 		);
 
 		if (sizeof($results)) {
-			if ($this->options->save_output) {
-				$this->upload_results_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
-				$this->execute_redshift_queries(array(
-					"DROP TABLE IF EXISTS sub_events;",
-					"CREATE TABLE sub_events (
-						sub_id INT8 NOT NULL
-						, user_id INT8 NOT NULL
-						, event VARCHAR(32) DEFAULT NULL
-						, date TIMESTAMP NOT NULL
-						, old_state VARCHAR(64) DEFAULT NULL
-						, new_state VARCHAR(64) DEFAULT NULL
-						, comment VARCHAR(1024) DEFAULT NULL
-						)
-						DISTKEY(user_id)
-						SORTKEY(user_id,sub_id);",
-					"COPY sub_events FROM 's3://challengebox-redshift/command_results/subscription_events.csv.gz' 
-						CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
-						CSV
-						IGNOREHEADER AS 1
-						NULL AS ''
-						TIMEFORMAT 'auto' -- AS 'YYYY-MM-DD HH:MI:SS'
-						GZIP;",
-				));
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/subscription_events.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_subscription_events.sql');
+					$this->rs->cleanup_after_load();
+				}
 			} else {
 				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
 			}
@@ -4337,6 +4781,267 @@ SQL;
 		
 	}
 
+	/**
+	 * Prints out a comparison of where the database and code differ on sku box credits.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb debug_box_credits
+	 */
+	function debug_box_credits( $args, $assoc_args ) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$query = <<<SQL
+WITH base AS (SELECT
+  id
+, sku
+, status
+, total
+, box_credits AS box_credits_code
+, CASE
+    WHEN sku = '#livefit' THEN (CASE
+        WHEN box_credits > 0 THEN box_credits
+        ELSE (CASE
+            WHEN total > 0 THEN (CASE WHEN round(total/30.0) > 0 THEN round(total/30.0) ELSE 1 end)
+            ELSE 0
+        END)
+    END)
+    WHEN sku = 'subscription_monthly' THEN 1
+    WHEN sku = 'subscription_3month' THEN 3
+    WHEN sku = 'subscription_12month' THEN 12
+    WHEN sku = 'subscription_monthly-v2' THEN 1
+    WHEN sku = 'subscription_3month-v2' THEN 3
+    WHEN sku = 'subscription_12month-v2' THEN 12
+    WHEN sku = 'subscription_single_box' THEN 1
+    WHEN sku = 'sbox' THEN 1
+    WHEN substring(sku, 1, 5) = 'sbox_' THEN 1
+    WHEN substring(sku, 1, 3) = 'cb_' THEN (CASE
+        WHEN substring(sku, length(sku)-2, 3) = '_3m' THEN 3 
+        WHEN substring(sku, length(sku)-3, 4) = '_12m' THEN 12
+        ELSE 1 
+    END)
+    ELSE 0
+  END::INTEGER AS box_credits_database
+FROM
+    renewal_orders
+)
+
+SELECT
+      sku
+    , count(sku) AS num
+    , box_credits_code
+    , box_credits_database
+FROM
+    base
+WHERE
+    box_credits_code <> box_credits_database
+    OR box_credits_database = 0
+GROUP BY
+    sku, box_credits_code, box_credits_database
+ORDER BY
+    num desc;
+SQL;
+
+		$results = $this->execute_redshift_queries([$query])[0];
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Prints out the box credit ledger for given users(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to grab the ledger for.
+	 *
+	 * [--all]
+	 * : Print out ledger for all users.
+	 *
+	 * [--limit=<limit>]
+	 * : Limit query results to <limit> rows.
+	 *
+	 * [--offset=<offset>]
+	 * : Offset query results by <offset> rows.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb ledger 167
+	 */
+	function ledger( $args, $assoc_args ) {
+		$all = FALSE; if (!empty($assoc_args['all'])) { $all = TRUE; unset($assoc_args['all']); }
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		if ($all) $this->options->all = TRUE;
+
+		$results = array();
+
+		$ledger = new CBLedger();
+		if ($this->options->all) {
+			WP_CLI::debug("Grabbing data for all users...");
+			$results = $ledger->get_ledger($this->options->limit, $this->options->offset);
+		} else {
+			foreach ($args as $user_id) {
+				WP_CLI::debug("Grabbing data for user $user_id...");
+				$results = array_merge($results, $ledger->get_ledger_for_user($user_id));
+			}
+		}
+
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Prints out the box credit ledger summary for given users(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<id>...]
+	 * : The user id (or ids) to grab the ledger summary for.
+	 *
+	 * [--all]
+	 * : Print out ledger summary for all users.
+	 *
+	 * [--limit=<limit>]
+	 * : Limit query results to <limit> rows.
+	 *
+	 * [--offset=<offset>]
+	 * : Offset query results by <offset> rows.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb ledger_summary 167
+	 */
+	function ledger_summary( $args, $assoc_args ) {
+		$all = FALSE; if (!empty($assoc_args['all'])) { $all = TRUE; unset($assoc_args['all']); }
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		if ($all) $this->options->all = TRUE;
+
+		$results = array();
+
+		$ledger = new CBLedger();
+		if ($this->options->all) {
+			WP_CLI::debug("Grabbing data for all users...");
+			$results = $ledger->get_summary($this->options->limit, $this->options->offset);
+		} else {
+			foreach ($args as $user_id) {
+				WP_CLI::debug("Grabbing data for user $user_id...");
+				$results = array_merge($results, $ledger->get_summary_for_user($user_id));
+			}
+		}
+
+		if (sizeof($results)) {
+			$columns = array_keys($results[0]);
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
+	}
+
+	/**
+	 * Loads all redshift data from s3, drops old tables and refreshes views.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--limit=<limit>]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb reload_redshift
+	 */
+	function reload_redshift($args, $assoc_args) {
+		$assoc_args['redshift'] = true;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$this->rs->reload_all();
+	}
+
+	/**
+	 * Cleans up after redshift load, dropping *_old tables and reloading views.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--limit=<limit>]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb cleanup_redshift
+	 */
+	function cleanup_redshift($args, $assoc_args) {
+		$assoc_args['redshift'] = true;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		$this->rs->cleanup_after_load();
+	}
 }
 
 

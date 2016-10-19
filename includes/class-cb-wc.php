@@ -262,13 +262,22 @@ class CBWoo {
 			unset( $subscription_data['completed_at'] );
 		}
 
+		$start_at = $subscription->get_date('start');
+		$start_at = $start_at ? (new Carbon($start_at))->format("Y-m-d\TH:i:s\Z") : '';
+		$trial_end_at = $subscription->get_date('trial_end');
+		$trial_end_at = $trial_end_at ? (new Carbon($trial_end_at))->format("Y-m-d\TH:i:s\Z") : '';
+		$next_payment_at = $subscription->get_date('next_payment');
+		$next_payment_at = $next_payment_at ? (new Carbon($next_payment_at))->format("Y-m-d\TH:i:s\Z") : '';
+		$end_at = $subscription->get_date('end');
+		$end_at = $end_at ? (new Carbon($end_at))->format("Y-m-d\TH:i:s\Z") : '';
+
 		$subscription_data['billing_schedule'] = (object) array(
 			'period'          => $subscription->billing_period,
 			'interval'        => $subscription->billing_interval,
-			'start_at'        => (new Carbon($subscription->start))->format("Y-m-d\TH:i:s\Z"),
-			'trial_end_at'    => (new Carbon($subscription->trial_end))->format("Y-m-d\TH:i:s\Z"),
-			'next_payment_at' => (new Carbon($subscription->next_payment))->format("Y-m-d\TH:i:s\Z"),
-			'end_at'          => (new Carbon($subscription->end))->format("Y-m-d\TH:i:s\Z"),
+			'start_at'        => $start_at,
+			'trial_end_at'    => $trial_end_at,
+			'next_payment_at' => $next_payment_at,
+			'end_at'          => $end_at,
 		);
 
 		if ( ! empty( $subscription->order ) ) {
@@ -848,6 +857,7 @@ class CBWoo {
 	}
 
 	public static function order_counts_as_box_credit($order) {
+		return CBWoo::calculate_box_credit($order)['credits'] > 0;
 		foreach ($order->line_items as $line_item) {
 			if (!empty($line_item->sku)) {
 				if (CBWoo::parse_box_sku($line_item->sku)->is_sub) {

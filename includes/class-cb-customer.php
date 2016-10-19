@@ -64,10 +64,19 @@ class CBCustomer {
 	 * relying on these values can be done quickly.
 	 *
 	 * Values Written:
-	 * - box_month_of_latest_order
-	 * - active_subscriber
 	 * - clothing_gender
 	 * - tshirt_size 
+	 * - box_month_of_latest_order
+	 * - active_subscriber
+	 * - subscription_status
+	 * - subscription_type
+	 * - renewal_date
+	 * - has_failed_order
+	 * - failed_order_payment_url
+	 * - wc_points_balance
+	 * - fitbit_oauth_status
+	 * - has_rush_order
+	 * - mrr_cohort
 	 * 
 	 * This method will not overwrite the following keys unless $overwrite is
 	 * set to true:
