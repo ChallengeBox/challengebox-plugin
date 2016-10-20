@@ -31,6 +31,11 @@ class CBCustomer {
 	 * <user_id>
 	 * : The wordpress user id of the customer.
 	 *
+	 * [<interactive>]
+	 * : Set this to true to enable automatic redirection to fitness tracker sites if
+	 *   credentials are expired. Set to false in scripts so authentication errors will
+	 *   generate exceptions.
+	 *
 	 * # EXAMPLE
 	 *
 	 * $customer = new CBCustomer(167);

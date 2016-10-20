@@ -60,6 +60,8 @@ class CBCmd extends WP_CLI_Command {
 			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : CBRedshift::get_defaults()->bucket,
 			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : CBRedshift::get_defaults()->schema,
 			'internal' => !empty($assoc_args['internal']),
+			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy(),
+			'end_date' => !empty($assoc_args['end-date']) ? new Carbon($assoc_args['end-date'], $tz) : $now->copy(),
 		);
 
 		// Month option should be pegged to the first day
@@ -4504,145 +4506,60 @@ SQL;
 	}
 	
 	/**
-	 * getUserIds
+	 * Ingests raw fitness data from partner APIs for given user(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--skip=<skip>]
+	 * : Skip this first <skip> users out of the list given.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--start-date=<start_date>]
+	 * : The first day for which data will be ingested. Defaults to the start of today.
+	 *
+	 * [--end-date=<end_date>]
+	 * : The last day for which data will be ingested. Defaults to the end of today.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb fitness_data_ingest 167
 	 */
-	public function getUserIds()
-	{
-		// for each user, get their ID
-		$userParams = array(
-			'fields' => array('ID')
+	public function fitness_data_ingest($args, $assoc_args) {
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'user_id', 
+			'status', 
+			'error', 
 		);
-		
-		$users = get_users($userParams);
-		
-		$userIds = array();
-		foreach ($users as $user) {
-			$userIds[] = $user->ID;
-		}
-		
-		return $userIds;
-	}
-	
-	/**
-	 * Get customers fitbit
-	 */
-	public function get_customers_fitbit($userId, $interactive = false)
-	{
-		$customer = new CBCustomer($userId, $interactive);
-		return $customer->fitbit();
-	}
-	
-	/**
-	 * Get Carbon
-	 */
-	public function get_carbon()
-	{
-		if (is_null($this->carbon)) {
-			$this->carbon = new Carbon();
-		}
-		return $this->carbon;
-	}
-	
-	/**
-	 * exec
-	 */
-	protected function exec($command, &$output, &$returnValue) {
-		exec($command, $output, $returnValue);
-	}
-	
-	/**
-	 * getHomePath
-	 */
-	public function getHomePath()
-	{
-		return get_home_path();
-	}
-	
-	/**
-	 * 
-	 */
-	
-	/**
-	 * ingest_daily_tracking
-	 */
-	public function ingest_daily_tracking($args, $assocArgs) {
 
-		// make sure required dates are provided
-		if (count($args) < 2) {
-			echo 'wp cb ingest_daily_tracking <start date> <end date> [<block_size>]';
-			return;
-		}
-
-		$debug = (isset($assocArgs['debug']) && $assocArgs['debug'] == 1);
-		$debugClause = ($debug) ? '--debug' : '';
-		$homePath = $this->getHomePath();
-		
-		$blockSize = (isset($args[2])) ? $args[2] : 100;
-		
-		list($startDate, $endDate) = $args;
-
-		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');			
-		
-		$users = $this->getUserIds();
-		
-		$userBlocks = array_chunk($users, $blockSize);
-		
-		$numberOfUsers = count($users);
-		
-		$successfulUsers = 0;
-		foreach ($userBlocks as $userBlock) {
-			
-			if ($debug) {
-				echo '------------------' . PHP_EOL;
-				echo 'Memory (before block processing): ' . memory_get_usage() . PHP_EOL;
-			}
-			
-			$output = array();
-			
-			$userList = implode(' ', $userBlock);
-			$this->exec('wp cb ingest_daily_tracking_for_user_block ' . $startDate . ' ' . $endDate . ' ' . $userList . ' --allow-root ' . $debugClause . ' --path="' . $homePath . '" ', $output, $numberOfSuccessfulUsers);
-		
-			if ($debug) {
-				foreach ($output as $line) {
-					echo $line . PHP_EOL;
-				}
-			}
-			
-			$successfulUsers += $numberOfSuccessfulUsers;
-
-			if ($debug) {
-				echo 'Memory (after block processing): ' . memory_get_usage() . PHP_EOL;
-			}
-		}
-
-		if ($debug) {
-			echo '------------------' . PHP_EOL;
-			echo 'Total Users: ' . $numberOfUsers . PHP_EOL;
-			echo 'Successful Users: ' . $successfulUsers . PHP_EOL;
-			echo 'Unsuccessful Users: ' . ($numberOfUsers - $successfulUsers) . PHP_EOL;
-		}
-	}
-	
-	/**
-	 * ingest_daily_tracking_for_user_block
-	 */
-	public function ingest_daily_tracking_for_user_block($args, $assocArgs) 
-	{
-		// make sure required dates are provided
-		if (count($args) < 3) {
-			echo 'wp cb ingest_daily_tracking <start date> <end date> <user_id1> [<user_id2> ... <user_id3>]';
-			return;
-		}
-
-		$debug = (isset($assocArgs['debug']) && $assocArgs['debug'] == 1);
-		
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');
-		
-		$startDate = $args[0];
-		$endDate = $args[1];
-		$userIds = array_slice($args, 2);
-		
-		list($startDate, $endDate) = $args;
 
 		// build list of all fitbit activities to be included
 		$activities = array(
@@ -4677,79 +4594,117 @@ SQL;
 				'activities_steps' 
 		);
 
-		// get starts into Carbon format
-		$carbon = $this->get_carbon();
-		$start = $carbon->createFromFormat('Y-m-d', $startDate);
-		$end = $carbon->createFromFormat('Y-m-d', $endDate);
-				
-		
-		$successfullyProcessedUsers = 0;
-		foreach ($userIds as $userId) {
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id");
 			try {
 				
-				// if the user has a fitbit connection
-				$fitbit = $this->get_customers_fitbit($userId);
+				$customer = new CBCustomer($user_id, $interactive=false);
+				$fitbit = $customer->fitbit();
+				if (empty($fitbit)) throw new Exception("fitbit() call failed");
 
-				if (!is_null($fitbit)) {
-						
-					// get fitbit data
-					$rawData = array();
-					foreach ($activities as $activity) {
-						$results = $fitbit->get_cached_time_series($activity, $start, $end);
-						$rawData = array_merge($rawData, array($activity => $results));
-					}
-
-					$cbRawTrackingData->multiSave($userId, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
-
-					if ($debug) {
-						echo 'Success: User ID - ' . $userId . PHP_EOL;
-					}
-					$successfullyProcessedUsers++;
-				
-				} else if ($debug) {
-					echo 'Error: User ID - ' . $userId . ', Not fitbit connection available.' . PHP_EOL;
+				// get fitbit data
+				$rawData = array();
+				foreach ($activities as $activity) {
+					$raw = $fitbit->get_cached_time_series($activity, $this->options->start_date, $this->options->end_date, $raw_data=true);
+					$data = array();
+					foreach ($raw as $r) $data[$r->dateTime] = $r->value;
+					$rawData = array_merge($rawData, array($activity => $data));
 				}
-	
+				$cbRawTrackingData->multiSave($user_id, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
+
+				$results[] = array('user_id' => $user_id, 'status' => 'success', 'error' => NULL);
+				WP_CLI::debug("\t-> Success");
+				
 			} catch (Exception $e) {
-				
-		var_dump($e->getMessage());
-				if ($debug) {
-					echo 'Error: User ID - ' . $userId . ', Message - ' . $e->getMessage() . PHP_EOL;
-				}
+				$results[] = array('user_id' => $user_id, 'status' => 'error', 'error' => $e->getMessage());
+				WP_CLI::debug("\t-> Error " . $e->getMessage());
 			}
 		}
 		
-		return $successfullyProcessedUsers;
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
 	}
 	
-	
 	/**
-	 * aggregate raw data
+	 * Processes raw fitness data into our internal format for given user(s).
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--skip=<skip>]
+	 * : Skip this first <skip> users out of the list given.
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--start-date=<start_date>]
+	 * : The first day for which data will be ingested. Defaults to the start of today.
+	 *
+	 * [--end-date=<end_date>]
+	 * : The last day for which data will be ingested. Defaults to the end of today.
+	 *
+	 * [--verbose]
+	 * : Print out extra information. (Use with --debug or you won't see anything)
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb fitness_data_process 167
 	 */
-	public function aggregate_raw_data($args, $assocArgs)
+	public function fitness_data_process($args, $assoc_args)
 	{
-		// make sure required dates are provided
-		if (count($args) < 2) {
-			echo 'wp cb aggregate_raw_data <start date> <end date>';
-			return;
-		}
-		
-		list($startDate, $endDate) = $args;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'user_id', 
+			'status', 
+			'error', 
+		);
 		
 		// dependencies
 		$baseFactory = BaseFactory::getInstance();
 		$rawDataObject = $baseFactory->generate('CBRawTrackingData');
 		$aggregateDataObject = $baseFactory->generate('CBAggregateTrackingData');
 		
-		$userIds = $this->getUserIds();
-		foreach ($userIds as $userId) {	
-			// get raw data
-			$rawData = $rawDataObject->findByUserIdAndDates($userId, $startDate, $endDate);
-			
-			// aggregate and save the data
-			$aggregateDataObject->aggregateAndSave($rawData);
+		foreach ($args as $user_id) {	
+			WP_CLI::debug("User $user_id");
+			try {
+				// get raw data
+				$rawData = $rawDataObject->findByUserIdAndDates($user_id, $this->options->start_date, $this->options->end_date);
+				// aggregate and save the data
+				$aggregateDataObject->aggregateAndSave($rawData);
+
+				$results[] = array('user_id' => $user_id, 'status' => 'success', 'error' => NULL);
+				WP_CLI::debug("\t-> Success");
+
+			} catch (Exception $e) {
+				$results[] = array('user_id' => $user_id, 'status' => 'error', 'error' => $e->getMessage());
+				WP_CLI::debug("\t-> Error " . $e->getMessage());
+			}
 		}
-		
+		if (sizeof($results)) {
+			WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+		}
 	}
 
 	/**
