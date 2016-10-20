@@ -12,7 +12,7 @@ CREATE TABLE `wp_aggregate_tracking_data` (
 `fairly_active` DECIMAL(12,2) NULL DEFAULT NULL ,
 `lightly_active` DECIMAL(12,2) NULL DEFAULT NULL , 
 `create_date` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP , 
-`last_modified` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
+`last_modified` TIMESTAMP -- on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
 ) ENGINE = InnoDB;
 
 ALTER TABLE `wp_aggregate_tracking_data` 

@@ -280,7 +280,8 @@ class CBRawTrackingData extends BaseFactory
 					'user_id' => $this->user_id, 
 					'date' => $this->date, 
 					'source' => $this->source, 
-					'data' => $this->data
+					'data' => $this->data,
+					'last_modified' => $this->last_modified
 				)
 			);
 
@@ -289,7 +290,8 @@ class CBRawTrackingData extends BaseFactory
 			$wpdb->update(
 				$wpdb->prefix . $this->table_name,
 				array(
-					'data' => $this->data
+					'data' => $this->data,
+					'last_modified' => $this->last_modified
 				),
 				array(
 					'user_id' => $this->user_id, 

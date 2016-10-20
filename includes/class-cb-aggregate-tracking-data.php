@@ -2,6 +2,7 @@
 use ChallengeBox\Includes\Utilities\BaseFactory;
 use ChallengeBox\Includes\Utilities\Cache;
 use ChallengeBox\Includes\Utilities\Time;
+use Carbon\Carbon;
 
 /**
  * CBAggregateTrackingData
@@ -62,13 +63,16 @@ class CBAggregateTrackingData extends BaseFactory
 	/**
 	 * construct
 	 */
-	public function __construct($dataset = array())
+	public function __construct($dataset = array(), $createDate = null, $lastModified = null)
 	{
 		foreach ($dataset as $key => $value) {
 			if (property_exists($this, $key)) {
 				$this->$key = $value;
 			}
 		}
+
+		$this->create_date = (is_null($createDate)) ? Carbon::now() : $createDate;
+		$this->last_modified = (is_null($lastModified)) ? Carbon::now() : $lastModified;
 	}
 	
 	/**
@@ -321,7 +325,9 @@ class CBAggregateTrackingData extends BaseFactory
 					'steps_12k' => $this->steps_12k,
 					'steps_15k' => $this->steps_15k,
 						
-					'wearing_fitbit' => $this->wearing_fitbit
+					'wearing_fitbit' => $this->wearing_fitbit,
+
+					'last_modified' => $this->last_modified
 				)
 			);
 		
@@ -376,7 +382,9 @@ class CBAggregateTrackingData extends BaseFactory
 					'steps_12k' => $this->steps_12k,
 					'steps_15k' => $this->steps_15k,
 						
-					'wearing_fitbit' => $this->wearing_fitbit
+					'wearing_fitbit' => $this->wearing_fitbit,
+
+					'last_modified' => $this->last_modified
 				),
 				array(
 					'user_id' => $this->user_id,
