@@ -77,7 +77,7 @@ class Test_CBRawTrackingData extends BaseTest
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from wp_raw_tracking_data where user_id = %d and date = %s and source = %s'),
+				$this->equalTo('select count(user_id) as num from cb_fitness_data_raw where user_id = %d and date = %s and source = %s'),
 				$this->equalTo(array($userId, $date, $source))
 			)
 			->willReturn($preparedStatement);
@@ -88,7 +88,7 @@ class Test_CBRawTrackingData extends BaseTest
 		$wpdb->expects($this->once())
 			->method('insert')
 			->with(
-				$this->equalTo('wp_raw_tracking_data'),
+				$this->equalTo('cb_fitness_data_raw'),
 				$this->equalTo(array(
 					'user_id' => $userId,
 					'date' => $date,
@@ -139,7 +139,7 @@ class Test_CBRawTrackingData extends BaseTest
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from wp_raw_tracking_data where user_id = %d and date = %s and source = %s'),
+				$this->equalTo('select count(user_id) as num from cb_fitness_data_raw where user_id = %d and date = %s and source = %s'),
 				$this->equalTo(array($userId, $date, $source))
 			)
 			->willReturn($preparedStatement);
@@ -152,7 +152,7 @@ class Test_CBRawTrackingData extends BaseTest
 		$wpdb->expects($this->once())
 			->method('update')
 			->with(
-				$this->equalTo('wp_raw_tracking_data'),
+				$this->equalTo('cb_fitness_data_raw'),
 				$this->equalTo(array(
 					'data' => $dataJson
 				)),
@@ -502,7 +502,7 @@ class Test_CBRawTrackingData extends BaseTest
 			);
 		Cache::setInstance($cache);
 
-		$expectedSql = 'select * from wp_raw_tracking_data where user_id = %d and date in (%s,%s)';
+		$expectedSql = 'select * from cb_fitness_data_raw where user_id = %d and date in (%s,%s)';
 		$expectedParameters = array(
 			$userId, '2016-01-01', '2016-01-02'	
 		);

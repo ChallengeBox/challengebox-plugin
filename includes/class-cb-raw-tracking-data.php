@@ -16,7 +16,7 @@ class CBRawTrackingData extends BaseFactory
 	const FITBIT_V2_SOURCE = 'fitbit-2';	// example for versioning, not currently in use (I don't think)
 	const GARMIN_V1_SOURCE = 'garmin-1';
 	
-	private $table_name = 'raw_tracking_data';
+	private $table_name = 'cb_fitness_data_raw';
 			
 	private $user_id;
 	private $date;
@@ -210,7 +210,7 @@ class CBRawTrackingData extends BaseFactory
 
 			$wpdb = $this->getWpdb();
 			
-			$sql = 'select * from ' . $wpdb->prefix . $this->table_name . ' where user_id = %d and date in ' .
+			$sql = 'select * from ' . $this->table_name . ' where user_id = %d and date in ' .
 					'(' . implode(',', array_fill(0, $numberOfUncachedDates, '%s')) . ')';
 			
 			$injectedParams = $uncachedDates;
@@ -262,7 +262,7 @@ class CBRawTrackingData extends BaseFactory
 		
 		// does the record already exist?
 		$preparedStatement = $wpdb->prepare(
-			'select count(user_id) as num from ' . $wpdb->prefix . $this->table_name . ' where user_id = %d and date = %s and source = %s',
+			'select count(user_id) as num from ' . $this->table_name . ' where user_id = %d and date = %s and source = %s',
 			array($this->user_id, $this->date, $this->source)
 		);
 
@@ -275,7 +275,7 @@ class CBRawTrackingData extends BaseFactory
 		// no? insert a new record
 		if ($count == 0) {
 			$wpdb->insert(
-				$wpdb->prefix . $this->table_name,
+				$this->table_name,
 				array(
 					'user_id' => $this->user_id, 
 					'date' => $this->date, 
@@ -288,7 +288,7 @@ class CBRawTrackingData extends BaseFactory
 		// yes? update the record
 		} else {
 			$wpdb->update(
-				$wpdb->prefix . $this->table_name,
+				$this->table_name,
 				array(
 					'data' => $this->data,
 					'last_modified' => $this->last_modified

@@ -11,7 +11,7 @@ use Carbon\Carbon;
  */
 class CBAggregateTrackingData extends BaseFactory
 {
-	private $table_name = 'aggregate_tracking_data';
+	private $table_name = 'cb_fitness_data';
 	
 	private $user_id;
 	private $date;
@@ -262,7 +262,7 @@ class CBAggregateTrackingData extends BaseFactory
 
 		// does the record already exist?
 		$preparedStatement = $wpdb->prepare(
-			'select count(user_id) as num from ' . $wpdb->prefix . $this->table_name . ' where user_id = %d and date = %s',
+			'select count(user_id) as num from ' . $this->table_name . ' where user_id = %d and date = %s',
 			array($this->user_id, $this->date)
 		);
 		
@@ -275,7 +275,7 @@ class CBAggregateTrackingData extends BaseFactory
 		// no? insert a new record
 		if ($count == 0) {
 			$wpdb->insert(
-				$wpdb->prefix . $this->table_name,
+				$this->table_name,
 				array(
 					'user_id' => $this->user_id,
 					'date' => $this->date,
@@ -334,7 +334,7 @@ class CBAggregateTrackingData extends BaseFactory
 		// yes? update the record
 		} else {
 			$wpdb->update(
-				$wpdb->prefix . $this->table_name,
+				$this->table_name,
 				array(
 					'any_activity' => $this->any_activity,
 					'medium_activity' => $this->medium_activity,

@@ -261,7 +261,7 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from wp_aggregate_tracking_data where user_id = %d and date = %s'),
+				$this->equalTo('select count(user_id) as num from cb_fitness_data where user_id = %d and date = %s'),
 				$this->equalTo(array($userId, $date))
 			)
 			->willReturn($preparedStatement);
@@ -272,7 +272,7 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$wpdb->expects($this->once())
 			->method('insert')
 			->with(
-				$this->equalTo('wp_aggregate_tracking_data'),
+				$this->equalTo('cb_fitness_data'),
 				$this->equalTo(array(
 					'user_id' => $userId,
 					'date' => $date,
@@ -442,7 +442,7 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$wpdb->expects($this->once())
 			->method('prepare')
 			->with(
-				$this->equalTo('select count(user_id) as num from wp_aggregate_tracking_data where user_id = %d and date = %s'),
+				$this->equalTo('select count(user_id) as num from cb_fitness_data where user_id = %d and date = %s'),
 				$this->equalTo(array($userId, $date))
 			)
 			->willReturn($preparedStatement);
@@ -455,7 +455,7 @@ class Test_AggregatedTrackingData extends \BaseTest
 		$wpdb->expects($this->once())
 			->method('update')
 			->with(
-				$this->equalTo('wp_aggregate_tracking_data'),
+				$this->equalTo('cb_fitness_data'),
 				$this->equalTo(array(
 					'any_activity' => $anyActivity,
 					'medium_activity' => $mediumActivity,
