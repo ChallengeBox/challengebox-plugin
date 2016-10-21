@@ -60,7 +60,7 @@ class CBCmd extends WP_CLI_Command {
 			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : CBRedshift::get_defaults()->bucket,
 			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : CBRedshift::get_defaults()->schema,
 			'internal' => !empty($assoc_args['internal']),
-			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy(),
+			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy()->subMonth(),
 			'end_date' => !empty($assoc_args['end-date']) ? new Carbon($assoc_args['end-date'], $tz) : $now->copy(),
 		);
 
@@ -4526,7 +4526,7 @@ SQL;
 	 * : Iterate users in reverse order.
 	 *
 	 * [--start-date=<start_date>]
-	 * : The first day for which data will be ingested. Defaults to the start of today.
+	 * : The first day for which data will be ingested. Defaults to one month ago.
 	 *
 	 * [--end-date=<end_date>]
 	 * : The last day for which data will be ingested. Defaults to the end of today.
@@ -4556,6 +4556,7 @@ SQL;
 		$columns = array(
 			'user_id', 
 			'status', 
+			'data_points_saved', 
 			'error', 
 		);
 
@@ -4596,6 +4597,7 @@ SQL;
 
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id");
+			$saved = 0;
 			try {
 				
 				$customer = new CBCustomer($user_id, $interactive=false);
@@ -4604,19 +4606,25 @@ SQL;
 
 				// get fitbit data
 				$rawData = array();
+				$count = 0;
 				foreach ($activities as $activity) {
+					WP_CLI::debug("\t-> Getting $activity");
 					$raw = $fitbit->get_cached_time_series($activity, $this->options->start_date, $this->options->end_date, $raw_data=true);
 					$data = array();
-					foreach ($raw as $r) $data[$r->dateTime] = $r->value;
+					foreach ($raw as $r) {
+						$data[$r->dateTime] = $r->value;
+						$count++;
+					}
 					$rawData = array_merge($rawData, array($activity => $data));
 				}
+				WP_CLI::debug("\t-> Saving");
 				$cbRawTrackingData->multiSave($user_id, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
-
-				$results[] = array('user_id' => $user_id, 'status' => 'success', 'error' => NULL);
+				$saved = $count;
+				$results[] = array('user_id' => $user_id, 'status' => 'success', 'data_points_saved' => $saved, 'error' => NULL);
 				WP_CLI::debug("\t-> Success");
 				
 			} catch (Exception $e) {
-				$results[] = array('user_id' => $user_id, 'status' => 'error', 'error' => $e->getMessage());
+				$results[] = array('user_id' => $user_id, 'status' => 'error', 'data_points_saved' => $saved, 'error' => $e->getMessage());
 				WP_CLI::debug("\t-> Error " . $e->getMessage());
 			}
 		}
@@ -4647,7 +4655,7 @@ SQL;
 	 * : Iterate users in reverse order.
 	 *
 	 * [--start-date=<start_date>]
-	 * : The first day for which data will be ingested. Defaults to the start of today.
+	 * : The first day for which data will be ingested. Defaults to one month ago.
 	 *
 	 * [--end-date=<end_date>]
 	 * : The last day for which data will be ingested. Defaults to the end of today.
@@ -4678,6 +4686,7 @@ SQL;
 		$columns = array(
 			'user_id', 
 			'status', 
+			'data_rows_updated', 
 			'error', 
 		);
 		
@@ -4688,17 +4697,20 @@ SQL;
 		
 		foreach ($args as $user_id) {	
 			WP_CLI::debug("User $user_id");
+			$saved = 0;
 			try {
 				// get raw data
+				WP_CLI::debug("\t-> Grabbing data");
 				$rawData = $rawDataObject->findByUserIdAndDates($user_id, $this->options->start_date, $this->options->end_date);
 				// aggregate and save the data
-				$aggregateDataObject->aggregateAndSave($rawData);
+				WP_CLI::debug("\t-> Aggregating and saving");
+				$saved = $aggregateDataObject->aggregateAndSave($rawData);
 
-				$results[] = array('user_id' => $user_id, 'status' => 'success', 'error' => NULL);
+				$results[] = array('user_id' => $user_id, 'status' => 'success', 'data_rows_updated' => $saved, 'error' => NULL);
 				WP_CLI::debug("\t-> Success");
 
 			} catch (Exception $e) {
-				$results[] = array('user_id' => $user_id, 'status' => 'error', 'error' => $e->getMessage());
+				$results[] = array('user_id' => $user_id, 'status' => 'error', 'data_rows_updated' => $saved, 'error' => $e->getMessage());
 				WP_CLI::debug("\t-> Error " . $e->getMessage());
 			}
 		}

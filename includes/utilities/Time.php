@@ -28,6 +28,10 @@ class Time extends BaseSingleton {
 
 		$startDate = (is_string($startDate)) ? $this->convertToCarbon($startDate, 'Y-m-d') : $startDate;
 		$endDate = (is_string($endDate)) ? $this->convertToCarbon($endDate, 'Y-m-d') : $endDate;
+
+		// copy() dates so original objects don't get modified
+		$startDate = $startDate->copy();
+		$endDate = $endDate->copy();
 		
 		$dates = [];
 		for($date = $startDate; $date->lte($endDate); $date->addDay()) {

@@ -67,7 +67,7 @@ class CBFitbitAPI {
 
 		
 		
-		if (is_object($fitbit_php) && !empty($v1_token) && !empty($v1_secret)) {
+		if (is_object($fitbit_php) && $v1_token && $v1_secret) {
 			$_SESSION['fitbit_Session'] = 2;
 			$_SESSION['fitbit_Token'] = $v1_token;
 			$_SESSION['fitbit_Secret'] = $v1_secret;
@@ -93,7 +93,7 @@ class CBFitbitAPI {
 		$this->v2_token = get_user_meta($this->user_id, $this->v2_token_key, true);
 		$this->v2_owner = get_user_meta($this->user_id, $this->v2_owner_key, true);
 
-		if (!empty($this->v2_token) && !empty($this->v2_owner)) {
+		if ($this->v2_token && $this->v2_owner) {
 			// Token maintenance: update it if it's expired
 			if ($this->v2_token->hasExpired()) {
 				try {
@@ -290,10 +290,10 @@ class CBFitbitAPI {
 	//
 
 	public function has_v1() {
-		return (bool) (!empty($this->api1));
+		return (bool) ($this->api1);
 	}
 	public function has_v2() {
-		return (bool) ($this->v2_token && $this->v2_owner);
+		return (bool) ($this->v2_token && $this->v2_owner && $this->api2);
 	}
 	public function is_authenticated() {
 		return (bool) ($this->has_v1() || $this->has_v2());

@@ -188,7 +188,7 @@ class CBRawTrackingData extends BaseFactory
 		
 		// get all dates
 		$dates = $time->getDateRange($startDate, $endDate);
-		
+
 		// get cached dates
 		$cachedData = array();
 		$uncachedDates = array();
@@ -212,7 +212,7 @@ class CBRawTrackingData extends BaseFactory
 			
 			$sql = 'select * from ' . $this->table_name . ' where user_id = %d and date in ' .
 					'(' . implode(',', array_fill(0, $numberOfUncachedDates, '%s')) . ')';
-			
+
 			$injectedParams = $uncachedDates;
 			array_unshift($injectedParams, $userId);
 

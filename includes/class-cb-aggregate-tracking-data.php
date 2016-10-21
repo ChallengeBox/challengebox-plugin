@@ -237,8 +237,7 @@ class CBAggregateTrackingData extends BaseFactory
 	public function aggregateAndSave($rawTrackingDataSet = array())
 	{
 		$aggregates = $this->aggregate($rawTrackingDataSet);
-	
-		$this->multiSave($aggregates);
+		return $this->multiSave($aggregates);
 	}
 	
 	/**
@@ -246,11 +245,14 @@ class CBAggregateTrackingData extends BaseFactory
 	 */
 	public function multiSave($aggregates = array()) 
 	{
+		$count = 0;
 		foreach ($aggregates as $userId => $userAggregates) {
 			foreach ($userAggregates as $date => $aggregate) {
 				$aggregate->save();
+				$count++;
 			}
 		}
+		return $count;
 	}
 	
 	/**
