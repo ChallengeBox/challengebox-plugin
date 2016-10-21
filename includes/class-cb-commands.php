@@ -4558,6 +4558,7 @@ SQL;
 			'status', 
 			'data_points_saved', 
 			'error', 
+			'warnings', 
 		);
 
 		$cbRawTrackingData = BaseFactory::getInstance()->generate('CBRawTrackingData');
@@ -4598,11 +4599,13 @@ SQL;
 		foreach ($args as $user_id) {
 			WP_CLI::debug("User $user_id");
 			$saved = 0;
+			$warnings = array();
 			try {
 				
 				$customer = new CBCustomer($user_id, $interactive=false);
 				$fitbit = $customer->fitbit();
 				if (empty($fitbit)) throw new Exception("fitbit() call failed");
+				if ($fitbit->has_v1() && !$fitbit->has_v2()) throw new Exception("user still on OAuth 1.0a");
 
 				// get fitbit data
 				$rawData = array();
@@ -4610,6 +4613,10 @@ SQL;
 				foreach ($activities as $activity) {
 					WP_CLI::debug("\t-> Getting $activity");
 					$raw = $fitbit->get_cached_time_series($activity, $this->options->start_date, $this->options->end_date, $raw_data=true);
+					if (!$raw) {
+						$warnings[] = "no $activity data";
+						continue;
+					}
 					$data = array();
 					foreach ($raw as $r) {
 						$data[$r->dateTime] = $r->value;
@@ -4620,11 +4627,11 @@ SQL;
 				WP_CLI::debug("\t-> Saving");
 				$cbRawTrackingData->multiSave($user_id, CBRawTrackingData::FITBIT_V1_SOURCE, $rawData);
 				$saved = $count;
-				$results[] = array('user_id' => $user_id, 'status' => 'success', 'data_points_saved' => $saved, 'error' => NULL);
+				$results[] = array('user_id' => $user_id, 'status' => 'success', 'data_points_saved' => $saved, 'error' => NULL, 'warnings' => implode(", ", $warnings));
 				WP_CLI::debug("\t-> Success");
 				
 			} catch (Exception $e) {
-				$results[] = array('user_id' => $user_id, 'status' => 'error', 'data_points_saved' => $saved, 'error' => $e->getMessage());
+				$results[] = array('user_id' => $user_id, 'status' => 'error', 'data_points_saved' => $saved, 'error' => $e->getMessage(), 'warnings' => implode(", ", $warnings));
 				WP_CLI::debug("\t-> Error " . $e->getMessage());
 			}
 		}
