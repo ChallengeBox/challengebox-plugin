@@ -4727,6 +4727,140 @@ SQL;
 	}
 
 	/**
+	 * Exports fitness data.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<user_id>...]
+	 * : The user id(s) to check.
+	 *
+	 * [--all]
+	 * : Iterate through all users. (Ignores <user_id>... if found).
+	 *
+	 * [--reverse]
+	 * : Iterate users in reverse order.
+	 *
+	 * [--limit=<limit>]
+	 * : Only process <limit> users out of the list given.
+	 *
+	 * [--redshift]
+	 * : Write results to redshift via s3.
+	 *
+	 * [--redshift-upload-only]
+	 * : Only write results to s3, don't load into the database.
+	 *
+	 * [--redshift-bucket=<redshift_bucket>]
+	 * : Bucket for loading data into redshift. Defaults to
+	 *   "challengebox-redshift-dev" if WP_DEBUG is set otherwise 
+	 *   defaults to "challengebox-redshift"..
+	 *
+	 * [--redshift-schema=<redshfit_schema>]
+	 * : Schema for redshift data. Defaults to "dev" if WP_DEBUG is set
+	 *   otherwise defaults to "production".
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb export_subscriptions
+	 */
+	function export_fitness_data( $args, $assoc_args ) {
+		global $wpdb;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+
+		$results = array();
+		$columns = array(
+			'user_id',
+			'date',
+			'any_activity',
+			'medium_activity',
+			'heavy_activity',
+			'water',
+			'food',
+			'distance',
+			'steps',
+			'very_active',
+			'fairly_active',
+			'lightly_active',
+			'light_30',
+			'light_60',
+			'light_90',
+			'moderate_10',
+			'moderate_30',
+			'moderate_45',
+			'moderate_60',
+			'moderate_90',
+			'heavy_10',
+			'heavy_30',
+			'heavy_45',
+			'heavy_60',
+			'heavy_90',
+			'water_days',
+			'food_days',
+			'food_or_water_days',
+			'distance_1',
+			'distance_2',
+			'distance_3',
+			'distance_4',
+			'distance_5',
+			'distance_6',
+			'distance_8',
+			'distance_10',
+			'distance_15',
+			'steps_8k',
+			'steps_10k',
+			'steps_12k',
+			'steps_15k',
+			'wearing_fitbit',
+			'create_date',
+			'last_modified',
+		);
+
+		foreach ($args as $user_id) {
+			WP_CLI::debug("User $user_id");
+			$column_list = implode(", ", $columns);
+			$sql = $wpdb->prepare("SELECT $column_list FROM cb_fitness_data WHERE user_id = %d", $user_id);
+			foreach ($wpdb->get_results($sql) as $row) {
+				$row = (array) $row;
+				// Rename date column
+				$row['activity_date'] = $row['date'];
+				unset($row['date']);
+				// Sanitize dates
+				$row['create_date'] = $row['create_date'] === "0000-00-00 00:00:00" ? NULL : $row['create_date'];
+				$row['last_modified'] = $row['last_modified'] === "0000-00-00 00:00:00" ? NULL : $row['last_modified'];
+				$results[] = $row;
+
+			}
+		}
+
+		// Rename date column
+		$columns[array_search('date', $columns)] = 'activity_date';
+
+		if (sizeof($results)) {
+			if ($this->options->redshift) {
+				$this->rs->upload_to_s3('command_results/fitness_data.csv.gz', $results, $columns);
+				if (!$this->options->redshift_upload_only) {
+					$this->rs->execute_file('load_fitness_data.sql');
+					$this->rs->cleanup_after_load();
+				}
+			} else {
+				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			}
+		}
+
+	}
+
+
+	/**
 	 * Loads all redshift data from s3, drops old tables and refreshes views.
 	 *
 	 * ## OPTIONS
