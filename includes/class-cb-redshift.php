@@ -129,6 +129,7 @@ class CBRedshift {
 			$this->load_query('load_subscription_events.sql'),
 			$this->load_query('load_subscriptions.sql'),
 			$this->load_query('load_users.sql'),
+			$this->load_query('load_fitness_data.sql'),
 		));
 	}
 
@@ -143,6 +144,7 @@ class CBRedshift {
 			$this->load_query('views.subscription_status.sql'),
 			$this->load_query('views.box_churn.sql'),
 			$this->load_query('views.monthly_analytics.sql'),
+			$this->load_query('views.fitness_improvement.sql'),
 		));
 		// Filter out any internal transactions
 		$query = str_replace('BEGIN;', '', $query);
