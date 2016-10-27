@@ -379,7 +379,7 @@ class CB {
 	/**
 	 * A warning that can be put at the top of pages if user's preferences have not been fully filled out.
 	 */
-	public function pref_warning_shortcode($atts, $content = "") {
+	public static function pref_warning_shortcode($atts, $content = "") {
 		$a = shortcode_atts(array('debug' => false) , $atts);
 		if ($a['debug']) { error_reporting(E_ALL); ini_set('display_errors', true); }
 		if (!is_user_logged_in()) { return ""; } 
@@ -396,7 +396,6 @@ class CB {
 				</div>
 HTML;
 		}
-		return $return;
 	}
 
 
