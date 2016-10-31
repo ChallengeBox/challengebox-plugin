@@ -152,6 +152,8 @@ CREATE VIEW subscription_churn_stage0 AS
         , CASE WHEN a > 0 THEN 1 END AS active
         , lag(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC) AS active_lag
         , lead(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC) AS active_lead
+        , CASE WHEN (a > 0 AND (h > 0 OR c > 0 OR p > 0 OR pc >0)) THEN 1 END AS churn_danger
+        , CASE WHEN current_state <> 'active' AND a > 0 THEN 1 END AS churn_prediction
     FROM
         subscription_churn_month_ends
     ORDER BY
@@ -165,6 +167,7 @@ CREATE VIEW subscription_churn_stage1 AS
         , sum(CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END) ignore nulls OVER (PARTITION BY subscription_id ORDER BY subscription_id, calendar_month ROWS BETWEEN unbounded preceding AND CURRENT row) AS activated_count
         , CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END AS activated
         , CASE WHEN active_lag = 1 AND active IS NULL THEN 1 END AS churned
+        , churn_danger, churn_prediction
     FROM
         subscription_churn_stage0
     ORDER BY
@@ -176,6 +179,7 @@ CREATE VIEW subscription_churn_stage2 AS
     SELECT
         user_id, subscription_id, calendar_month, activated, active, churned
         , CASE WHEN activated = 1 AND activated_count > 1 THEN 1 END AS reactivated
+        , churn_danger, churn_prediction
         /*
         , CASE WHEN churned = 1 AND current_state = 'pending' THEN 1 END AS churned_to_pending
         , CASE WHEN churned = 1 AND current_state = 'on-hold' THEN 1 END AS churned_to_on_hold
@@ -198,9 +202,20 @@ CREATE VIEW subscription_churn_by_calendar_month AS
         , count(DISTINCT subscription_id) AS number_of_subs
         , sum(activated) AS activated
         , sum(active) AS active
-        , sum(churned) AS churned
-        , round(100.0 * sum(churned) / sum(active))::INTEGER AS churn_pct
+        , CASE
+            WHEN calendar_month = to_char(sysdate, 'YYYY-MM')
+            THEN sum(churn_prediction)
+            ELSE lead(sum(churned), 1) OVER (ORDER BY calendar_month)
+          END AS churned
+        , round(100.0 * CASE 
+            WHEN calendar_month = to_char(sysdate, 'YYYY-MM')
+            THEN sum(churn_prediction)
+            ELSE lead(sum(churned), 1) OVER (ORDER BY calendar_month)
+          END / sum(active))::INTEGER
+          AS churn_pct
         , sum(reactivated) AS reactivated
+        , sum(churn_danger) AS churn_danger
+        , sum(churn_prediction) AS churn_prediction
     FROM 
         subscription_churn_stage2
     GROUP BY
