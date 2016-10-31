@@ -16,8 +16,6 @@ class CBAnalytics_Admin {
 		$table->prepare_items();
 		$ss_table = new CBSubStatus_Table();
 		$ss_table->prepare_items();
-		$active_table = new CBCohort_Table();
-		$active_table->prepare_items();
 		?>
 			<div class="wrap">
 				<div id="icon-users" class="icon32">test</div>
@@ -27,9 +25,48 @@ class CBAnalytics_Admin {
 				<h2>Subscription Statuses</h2>
 				<p>Where are they now? This table shows the WooCommerce status of each subscription based on it's start date.</p>
 				<?php $ss_table->display(); ?>
-
-				<h2>Active Cohorts</h2>
-				<?php $active_table->display(); ?>
+		<?php
+		$cohort_table = new CBCohort_Table();
+		$cohort_table->table_data();
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Active Subscriptions</h2>
+				<?php $cohort_table->display(); ?>
+		<?php
+		$cohort_table->variable = 'churned';
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Churned Subscriptions</h2>
+				<?php $cohort_table->display(); ?>
+		<?php
+		$cohort_table->variable = 'activated';
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Activated Subscriptions</h2>
+				<p>Includes both activated and re-activated.</p>
+				<?php $cohort_table->display(); ?>
+		<?php
+		$cohort_table->variable = 'reactivated';
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Re-Activated Subscriptions</h2>
+				<?php $cohort_table->display(); ?>
+		<?php
+		$cohort_table->variable = 'churn_danger';
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Churn-Danger for Subscriptions</h2>
+				<p>A subscription is in churn danger if it enters a non-active state during the given month. This is an experiment to help us predict the number of churned subscriptions at the end of the month.</p>
+				<?php $cohort_table->display(); ?>
+		<?php
+		$cohort_table->variable = 'churn_prediction';
+		$cohort_table->prepare_items();
+		?> 
+				<h2>Churn Prediction for Subscriptions</h2>
+				<p>We predict a subscription will churn if it's current state is not active, but it has been active for at least a day this month.</p>
+				<?php $cohort_table->display(); ?>
+		<?php
+		?>
 			</div>
 		<?php
 	}
@@ -199,15 +236,29 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 }
 
 class CBCohort_Table extends CBMonthly_Table  {
+	private $months_activated;
+	private $calendar_months;
+	private $data;
+	public $variable = 'active';
 	public function prepare_items() {
-		$data = $this->table_data();
-		$this->_column_headers = array(array_keys($data['active']['2016-10']), null, null);
-		$this->items = $data['active'];
+		$columns = $this->get_columns();
+		$hidden = $this->get_hidden_columns();
+		$sortable = $this->get_sortable_columns();
+		$this->_column_headers = array($columns, $hidden, $sortable);
+		$this->items = $this->data[$this->variable];
 	}
-	public function column_default( $item, $column_name ) {
-		return $val;
+	public function get_columns() {
+		$columns = array('month_activated' => '<b>Month Activated</b>');
+		foreach ($this->calendar_months as $month) {
+			if ($month == '2016-01') {
+				$columns[$month] = "<b>Calendar Month</b> <br/> $month";
+			} else {
+				$columns[$month] = "<br/> $month";
+			}
+		}
+		return $columns;
 	}
-	private function table_data() {
+	public function table_data() {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
 		$calendar_months = array();
@@ -230,8 +281,10 @@ class CBCohort_Table extends CBMonthly_Table  {
 				else {
 					$variables[$key] = $true;
 					if (!isset($data[$key])) { $data[$key] = array(); }
-					if (!isset($data[$key][$calendar_month])) { $data[$key][$calendar_month] = array(); }
-					if (!isset($data[$key][$calendar_month][$month_activated])) { $data[$key][$calendar_month][$month_activated] = $value; }
+					if (!isset($data[$key][$month_activated])) { $data[$key][$month_activated] = array('month_activated'=>$month_activated); }
+					if (!isset($data[$key][$month_activated][$calendar_month])) { $data[$key][$month_activated][$calendar_month] = $value; }
+					if (!isset($data[$key]['total'][$calendar_month])) { $data[$key]['total'][$calendar_month] = 0; }
+					$data[$key]['total'][$calendar_month] += $value;
 				}
 			}
 		}
@@ -239,6 +292,11 @@ class CBCohort_Table extends CBMonthly_Table  {
 		ksort($months_activated);
 		$this->calendar_months = array_keys($calendar_months);
 		$this->months_activated = array_keys($months_activated);
+		foreach ($data as $variable => $drow) {
+			ksort($data[$variable]);
+			$data[$variable]['total']['month_activated'] = 'Total';
+		}
+		$this->data = $data;
 		return $data;
 	}
 }
