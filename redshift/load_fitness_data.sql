@@ -52,6 +52,6 @@ CREATE TABLE fitness_data (
 DISTKEY(user_id)
 SORTKEY(user_id, activity_date);
 
-COPY fitness_data FROM 's3://$bucket/command_results/fitness_data.csv.gz' 
+COPY fitness_data FROM 's3://$bucket/command_results/fitness_data/' 
 	CREDENTIALS 'aws_iam_role=arn:aws:iam::150598675937:role/RedshiftCopyUnload'
 	CSV IGNOREHEADER AS 1 NULL AS '' TIMEFORMAT 'auto' GZIP;

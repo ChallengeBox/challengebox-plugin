@@ -62,6 +62,7 @@ class CBCmd extends WP_CLI_Command {
 			'internal' => !empty($assoc_args['internal']),
 			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy()->subWeek(),
 			'end_date' => !empty($assoc_args['end-date']) ? new Carbon($assoc_args['end-date'], $tz) : $now->copy(),
+			'batch_size' => !empty($assoc_args['batch-size']) ? intval($assoc_args['batch-size']) : 500,
 		);
 
 		// Month option should be pegged to the first day
@@ -4743,6 +4744,9 @@ SQL;
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
 	 *
+	 * [--batch-size=<batch_size>]
+	 * : Process batches of <batch_size> users to save memory and breakup import files in s3.
+	 *
 	 * [--redshift]
 	 * : Write results to redshift via s3.
 	 *
@@ -4777,83 +4781,89 @@ SQL;
 		global $wpdb;
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 
-		$results = array();
-		$columns = array(
-			'user_id',
-			'date',
-			'any_activity',
-			'medium_activity',
-			'heavy_activity',
-			'water',
-			'food',
-			'distance',
-			'steps',
-			'very_active',
-			'fairly_active',
-			'lightly_active',
-			'light_30',
-			'light_60',
-			'light_90',
-			'moderate_10',
-			'moderate_30',
-			'moderate_45',
-			'moderate_60',
-			'moderate_90',
-			'heavy_10',
-			'heavy_30',
-			'heavy_45',
-			'heavy_60',
-			'heavy_90',
-			'water_days',
-			'food_days',
-			'food_or_water_days',
-			'distance_1',
-			'distance_2',
-			'distance_3',
-			'distance_4',
-			'distance_5',
-			'distance_6',
-			'distance_8',
-			'distance_10',
-			'distance_15',
-			'steps_8k',
-			'steps_10k',
-			'steps_12k',
-			'steps_15k',
-			'wearing_fitbit',
-			'create_date',
-			'last_modified',
-		);
+		foreach (array_chunk($args, $this->options->batch_size) as $batch_index => $user_batch) {
+			$results = array();
+			$columns = array(
+				'user_id',
+				'date',
+				'any_activity',
+				'medium_activity',
+				'heavy_activity',
+				'water',
+				'food',
+				'distance',
+				'steps',
+				'very_active',
+				'fairly_active',
+				'lightly_active',
+				'light_30',
+				'light_60',
+				'light_90',
+				'moderate_10',
+				'moderate_30',
+				'moderate_45',
+				'moderate_60',
+				'moderate_90',
+				'heavy_10',
+				'heavy_30',
+				'heavy_45',
+				'heavy_60',
+				'heavy_90',
+				'water_days',
+				'food_days',
+				'food_or_water_days',
+				'distance_1',
+				'distance_2',
+				'distance_3',
+				'distance_4',
+				'distance_5',
+				'distance_6',
+				'distance_8',
+				'distance_10',
+				'distance_15',
+				'steps_8k',
+				'steps_10k',
+				'steps_12k',
+				'steps_15k',
+				'wearing_fitbit',
+				'create_date',
+				'last_modified',
+			);
 
-		foreach ($args as $user_id) {
-			WP_CLI::debug("User $user_id");
-			$column_list = implode(", ", $columns);
-			$sql = $wpdb->prepare("SELECT $column_list FROM cb_fitness_data WHERE user_id = %d", $user_id);
-			foreach ($wpdb->get_results($sql) as $row) {
-				$row = (array) $row;
-				// Rename date column
-				$row['activity_date'] = $row['date'];
-				unset($row['date']);
-				// Sanitize dates
-				$row['create_date'] = $row['create_date'] === "0000-00-00 00:00:00" ? NULL : $row['create_date'];
-				$row['last_modified'] = $row['last_modified'] === "0000-00-00 00:00:00" ? NULL : $row['last_modified'];
-				$results[] = $row;
+			foreach ($user_batch as $user_id) {
+				WP_CLI::debug("User $user_id");
+				$column_list = implode(", ", $columns);
+				$sql = $wpdb->prepare("SELECT $column_list FROM cb_fitness_data WHERE user_id = %d", $user_id);
+				foreach ($wpdb->get_results($sql) as $row) {
+					$row = (array) $row;
+					// Rename date column
+					$row['activity_date'] = $row['date'];
+					unset($row['date']);
+					// Sanitize dates
+					$row['create_date'] = $row['create_date'] === "0000-00-00 00:00:00" ? NULL : $row['create_date'];
+					$row['last_modified'] = $row['last_modified'] === "0000-00-00 00:00:00" ? NULL : $row['last_modified'];
+					$results[] = $row;
+				}
+			}
 
+			// Rename date column
+			$columns[array_search('date', $columns)] = 'activity_date';
+
+			// Upload individual batches (and report on them)
+			if (sizeof($results)) {
+				if ($this->options->redshift) {
+					$this->rs->upload_to_s3("command_results/fitness_data/$batch_index.csv.gz", $results, $columns);
+				} else {
+					WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+				}
 			}
 		}
 
-		// Rename date column
-		$columns[array_search('date', $columns)] = 'activity_date';
-
+		// Load into redshift once everything is done
 		if (sizeof($results)) {
-			if ($this->options->redshift) {
-				$this->rs->upload_to_s3('command_results/fitness_data.csv.gz', $results, $columns);
-				if (!$this->options->redshift_upload_only) {
-					$this->rs->execute_file('load_fitness_data.sql');
-					$this->rs->cleanup_after_load();
-				}
-			} else {
-				WP_CLI\Utils\format_items($this->options->format, $results, $columns);
+			if ($this->options->redshift && !$this->options->redshift_upload_only) {
+				$this->rs->execute_file('load_fitness_data.sql');
+				$this->rs->cleanup_after_load();
 			}
 		}
 
