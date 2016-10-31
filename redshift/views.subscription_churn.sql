@@ -50,35 +50,52 @@ CREATE VIEW subscription_churn_calendar_backdrop AS
         calendar_month >= start_date
 ;
 
+DROP VIEW IF EXISTS subscription_event_prep CASCADE;
+CREATE VIEW subscription_event_prep AS
+    SELECT
+          id
+        , subscription_id
+        , user_id
+        , event
+        , event_date
+        , CASE WHEN old_state = '' THEN NULL ELSE old_state END AS old_state
+        , CASE WHEN new_state = '' THEN NULL ELSE new_state END AS new_state
+        , NULL AS comment
+    FROM
+        subscription_events
+;
+
 DROP VIEW IF EXISTS subscription_churn_base CASCADE;
 CREATE VIEW subscription_churn_base AS
-   SELECT 
+    SELECT 
           id
         , user_id
         , subscription_id
         , event
         , event_date
-        , lag(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+        , lag(event_date, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC)
             AS date_previous
-        , coalesce(lead(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id), sysdate)
+        , coalesce(lead(event_date, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC), sysdate)
             AS date_next
         , to_char(event_date, 'YYYY-MM')
             AS calendar_month
-        , lead(to_char(event_date, 'YYYY-MM'), 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+        , lead(to_char(event_date, 'YYYY-MM'), 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC)
             AS calendar_month_next
         , old_state
         , new_state
         , CASE
-            WHEN new_state IS NOT NULL THEN new_state
-            ELSE lag(new_state, 1) IGNORE NULLS OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)
+            WHEN new_state IS NOT NULL AND new_state <> '' THEN new_state
+            ELSE lag(new_state, 1) IGNORE NULLS OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC)
           END
             AS current_state
-        , coalesce(datediff('days', event_date, lead(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id)), 0)
+        , coalesce(datediff('days', event_date, lead(event_date, 1) OVER (PARTITION BY user_id, subscription_id ORDER BY event_date, id DESC)), 0)
             AS days_in_current_state
         , datediff('days', to_char(event_date, 'YYYY-MM-01')::DATE, last_day(to_char(event_date, 'YYYY-MM-01')::DATE)) AS days_in_month
         , comment
     FROM
-       (SELECT * FROM subscription_events UNION SELECT * FROM subscription_churn_calendar_backdrop UNION SELECT * FROM subscription_churn_calendar_frontdrop)
+       (SELECT * FROM subscription_event_prep UNION SELECT * FROM subscription_churn_calendar_backdrop UNION SELECT * FROM subscription_churn_calendar_frontdrop)
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
 ;
 
 DROP VIEW IF EXISTS subscription_churn_state_setup CASCADE;
@@ -93,6 +110,8 @@ CREATE VIEW subscription_churn_state_setup AS
         , CASE WHEN current_state = 'pending-cancel' THEN days_in_current_state ELSE 0 END AS pc
     FROM
         subscription_churn_base
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
 ;
 
 DROP VIEW IF EXISTS subscription_churn_state_sums CASCADE;
@@ -107,6 +126,8 @@ CREATE VIEW subscription_churn_state_sums AS
         , sum(pc) OVER (PARTITION BY subscription_id, calendar_month) AS pc
     FROM
         subscription_churn_state_setup
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
 ;
 
 DROP VIEW IF EXISTS subscription_churn_month_ends CASCADE;
@@ -114,25 +135,40 @@ CREATE VIEW subscription_churn_month_ends AS
     SELECT
         id, user_id, subscription_id, event, event_date, date_previous, calendar_month, calendar_month_next, old_state, new_state
         , current_state, days_in_current_state, days_in_month, a, h, c, p, pc
-        , CASE WHEN a > 0 THEN 1 END AS active
-        , lag(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id) AS active_lag
-        , lead(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id) AS active_lead
     FROM
         subscription_churn_state_sums
     WHERE
         calendar_month <> calendar_month_next
         OR calendar_month_next IS NULL
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
 ;
+
+DROP VIEW IF EXISTS subscription_churn_stage0 CASCADE;
+CREATE VIEW subscription_churn_stage0 AS
+    SELECT
+        id, user_id, subscription_id, event, event_date, date_previous, calendar_month, calendar_month_next, old_state, new_state
+        , current_state, days_in_current_state, days_in_month, a, h, c, p, pc
+        , CASE WHEN a > 0 THEN 1 END AS active
+        , lag(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC) AS active_lag
+        , lead(CASE WHEN a > 0 THEN 1 END, 1) OVER (PARTITION BY subscription_id ORDER BY event_date, id DESC) AS active_lead
+    FROM
+        subscription_churn_month_ends
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
+)
 
 DROP VIEW IF EXISTS subscription_churn_stage1 CASCADE;
 CREATE VIEW subscription_churn_stage1 AS
     SELECT
           user_id, subscription_id, calendar_month, current_state, active, active_lag, active_lead, a, h, c, p, pc
-        , sum(CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END) ignore nulls OVER (PARTITION BY user_id, subscription_id ORDER BY user_id, subscription_id, calendar_month ROWS BETWEEN unbounded preceding AND CURRENT row) AS activated_count
+        , sum(CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END) ignore nulls OVER (PARTITION BY subscription_id ORDER BY subscription_id, calendar_month ROWS BETWEEN unbounded preceding AND CURRENT row) AS activated_count
         , CASE WHEN active = 1 AND active_lag IS NULL THEN 1 END AS activated
         , CASE WHEN active_lag = 1 AND active IS NULL THEN 1 END AS churned
     FROM
-        subscription_churn_month_ends
+        subscription_churn_stage0
+    ORDER BY
+        user_id, subscription_id, event_date, id DESC
 ;
 
 DROP VIEW IF EXISTS subscription_churn_stage2 CASCADE;
@@ -150,6 +186,8 @@ CREATE VIEW subscription_churn_stage2 AS
         */
     FROM
         subscription_churn_stage1
+    ORDER BY
+        user_id, subscription_id, calendar_month
 ;
 
 DROP VIEW IF EXISTS subscription_churn_by_calendar_month CASCADE;
