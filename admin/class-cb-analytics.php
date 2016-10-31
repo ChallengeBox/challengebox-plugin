@@ -16,6 +16,8 @@ class CBAnalytics_Admin {
 		$table->prepare_items();
 		$ss_table = new CBSubStatus_Table();
 		$ss_table->prepare_items();
+		$active_table = new CBCohort_Table();
+		$active_table->prepare_items();
 		?>
 			<div class="wrap">
 				<div id="icon-users" class="icon32">test</div>
@@ -25,6 +27,9 @@ class CBAnalytics_Admin {
 				<h2>Subscription Statuses</h2>
 				<p>Where are they now? This table shows the WooCommerce status of each subscription based on it's start date.</p>
 				<?php $ss_table->display(); ?>
+
+				<h2>Active Cohorts</h2>
+				<?php $active_table->display(); ?>
 			</div>
 		<?php
 	}
@@ -190,5 +195,50 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
 		return $rs->execute_query('SELECT * FROM subscription_status_by_start_month;');
+	}
+}
+
+class CBCohort_Table extends CBMonthly_Table  {
+	public function prepare_items() {
+		$data = $this->table_data();
+		$this->_column_headers = array(array_keys($data['active']['2016-10']), null, null);
+		$this->items = $data['active'];
+	}
+	public function column_default( $item, $column_name ) {
+		return $val;
+	}
+	private function table_data() {
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$rs = new CBRedshift($schema);
+		$calendar_months = array();
+		$months_activated = array();
+		$variables = array();
+		$data = array();
+		// Catlogue rows, columns and variable names
+		foreach ($rs->execute_query('SELECT * FROM subscription_churn_cohort_analysis') as $row) {
+			$calendar_month = null;
+			$month_activated = null;
+			foreach ($row as $key => $value) {
+				if ($key == 'calendar_month') { 
+					$calendar_months[$value] = true;
+					$calendar_month = $value;
+				}
+				if ($key == 'month_activated') {
+					$months_activated[$value] = true;
+					$month_activated = $value;
+				}
+				else {
+					$variables[$key] = $true;
+					if (!isset($data[$key])) { $data[$key] = array(); }
+					if (!isset($data[$key][$calendar_month])) { $data[$key][$calendar_month] = array(); }
+					if (!isset($data[$key][$calendar_month][$month_activated])) { $data[$key][$calendar_month][$month_activated] = $value; }
+				}
+			}
+		}
+		ksort($calendar_months);
+		ksort($months_activated);
+		$this->calendar_months = array_keys($calendar_months);
+		$this->months_activated = array_keys($months_activated);
+		return $data;
 	}
 }
