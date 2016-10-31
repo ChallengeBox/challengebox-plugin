@@ -9,6 +9,7 @@ sudo -u www-data wp cb export_subscription_events --all --redshift --redshift-up
 sudo -u www-data wp cb export_orders --all --redshift --redshift-upload-only "$@"
 sudo -u www-data wp cb export_refunds --redshift --redshift-upload-only "$@"
 sudo -u www-data wp cb export_charges --redshift --redshift-upload-only "$@"
+sudo -u www-data wp cb export_fitness_data --redshift --redshift-upload-only "$@"
 
 # Load data into db
 sudo -u www-data wp cb reload_redshift "$@"
