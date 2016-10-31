@@ -224,45 +224,46 @@ CREATE VIEW subscription_churn_by_calendar_month AS
         calendar_month
 ;
 
-DROP VIEW IF EXISTS subscription_churn_by_calendar_month_debug CASCADE;
-CREATE VIEW subscription_churn_by_calendar_month_debug AS
-    (
-        SELECT * FROM subscription_churn_by_calendar_month
-    )
-    UNION
-    (
-        SELECT 
-              '2016-10 (-total-)' AS calendar_month
-            , max(number_of_users) AS number_of_users
-            , max(number_of_subs) AS number_of_subs
-            , sum(activated) AS activated
-            , NULL AS active
-            , sum(churned) AS churned
-            , round(100.0 * sum(churned) / max(number_of_users))::INTEGER AS churn_pct
-            , sum(reactivated) AS reactivated
-        FROM
-            subscription_churn_by_calendar_month
-        GROUP BY
-            1
-    )
-    UNION
-    (
+DROP VIEW IF EXISTS subscription_churn_month_activated CASCADE;
+CREATE VIEW subscription_churn_month_activated AS
+    SELECT
+          user_id
+        , month_activated
+    FROM (
         SELECT
-              to_char(sysdate, 'YYYY-MM (from subs table)') AS calendar_month
-            , count(user_id) AS number_of_users
-            , count(id) AS number_of_subs
-            , NULL AS activated
-            , count(CASE WHEN status = 'active' THEN 1 end) AS active
-            , count(CASE WHEN status <> 'active' THEN 1 end) AS churned
-            , round(100.0 * count(CASE WHEN status <> 'active' THEN 1 end) / count(user_id))::INTEGER AS churn_pct
-            , NULL AS reactivated
+              user_id
+            , calendar_month AS month_activated
+            , RANK() OVER (PARTITION BY user_id ORDER BY calendar_month) AS row_rank
         FROM
-            subscriptions
-        GROUP BY
-        1
+            subscription_churn_stage2
+        WHERE
+            activated = 1
     )
+    WHERE
+        row_rank = 1
+    GROUP BY
+        user_id, month_activated
     ORDER BY
-        calendar_month
+        user_id, month_activated
+;
+
+DROP VIEW IF EXISTS subscription_churn_cohort_analysis CASCADE;
+CREATE VIEW subscription_churn_cohort_analysis AS
+    SELECT
+          calendar_month
+        , month_activated
+        , sum(activated) AS activated
+        , sum(active) AS active
+        , sum(churned) AS churned
+        , sum(reactivated) AS reactivated
+        , sum(churn_danger) AS churn_danger
+        , sum(churn_prediction) AS churn_prediction
+    FROM 
+         subscription_churn_stage2 NATURAL JOIN subscription_churn_month_activated
+    GROUP BY
+        calendar_month, month_activated
+    ORDER BY
+        calendar_month, month_activated
 ;
 
 COMMIT;
