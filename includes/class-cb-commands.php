@@ -60,7 +60,7 @@ class CBCmd extends WP_CLI_Command {
 			'redshift_bucket' => !empty($assoc_args['redshift-bucket']) ? $assoc_args['redshift-bucket'] : CBRedshift::get_defaults()->bucket,
 			'redshift_schema' => !empty($assoc_args['redshift-schema']) ? $assoc_args['redshift-schema'] : CBRedshift::get_defaults()->schema,
 			'internal' => !empty($assoc_args['internal']),
-			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy()->subMonth(),
+			'start_date' => !empty($assoc_args['start-date']) ? new Carbon($assoc_args['start-date'], $tz) : $now->copy()->subWeek(),
 			'end_date' => !empty($assoc_args['end-date']) ? new Carbon($assoc_args['end-date'], $tz) : $now->copy(),
 		);
 
