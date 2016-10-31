@@ -224,45 +224,4 @@ CREATE VIEW subscription_churn_by_calendar_month AS
         calendar_month
 ;
 
-DROP VIEW IF EXISTS subscription_churn_by_calendar_month_debug CASCADE;
-CREATE VIEW subscription_churn_by_calendar_month_debug AS
-    (
-        SELECT * FROM subscription_churn_by_calendar_month
-    )
-    UNION
-    (
-        SELECT 
-              '2016-10 (-total-)' AS calendar_month
-            , max(number_of_users) AS number_of_users
-            , max(number_of_subs) AS number_of_subs
-            , sum(activated) AS activated
-            , NULL AS active
-            , sum(churned) AS churned
-            , round(100.0 * sum(churned) / max(number_of_users))::INTEGER AS churn_pct
-            , sum(reactivated) AS reactivated
-        FROM
-            subscription_churn_by_calendar_month
-        GROUP BY
-            1
-    )
-    UNION
-    (
-        SELECT
-              to_char(sysdate, 'YYYY-MM (from subs table)') AS calendar_month
-            , count(user_id) AS number_of_users
-            , count(id) AS number_of_subs
-            , NULL AS activated
-            , count(CASE WHEN status = 'active' THEN 1 end) AS active
-            , count(CASE WHEN status <> 'active' THEN 1 end) AS churned
-            , round(100.0 * count(CASE WHEN status <> 'active' THEN 1 end) / count(user_id))::INTEGER AS churn_pct
-            , NULL AS reactivated
-        FROM
-            subscriptions
-        GROUP BY
-        1
-    )
-    ORDER BY
-        calendar_month
-;
-
 COMMIT;
