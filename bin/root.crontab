@@ -7,6 +7,7 @@
 0 10,20 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb generate_order --all --reverse --rush --month=2016-10 --format=csv)
 59 23 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb calculate_churn --all --format=csv)
 57 23,11 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb update_weekly_challenge --all --format=csv)
+10 4 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb fitbit_data_ingest --all --format=csv && /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb fitbit_data_process --all --format=csv)
 #06 13 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb generate_order --all --pretend --format=csv)
 02 16 15 * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb synchronize_renewal --all --format=csv)
 59 22 * * * (cd /var/www/box/wp-content/plugins/challengebox; /var/www/box/wp-content/plugins/challengebox/bin/slack-command.sh sudo -u www-data wp cb export_order_data --all --save)
