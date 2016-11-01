@@ -30,39 +30,39 @@ class CBAnalytics_Admin {
 		$cohort_table->table_data();
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Active Subscriptions</h2>
+				<h2>Active Subscription Cohorts</h2>
 				<?php $cohort_table->display(); ?>
 		<?php
 		$cohort_table->variable = 'churned';
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Churned Subscriptions</h2>
+				<h2>Churned Subscription Cohorts</h2>
 				<?php $cohort_table->display(); ?>
 		<?php
 		$cohort_table->variable = 'activated';
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Activated Subscriptions</h2>
+				<h2>Activated Subscription Cohorts</h2>
 				<p>Includes both activated and re-activated.</p>
 				<?php $cohort_table->display(); ?>
 		<?php
 		$cohort_table->variable = 'reactivated';
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Re-Activated Subscriptions</h2>
+				<h2>Re-Activated Subscription Cohorts</h2>
 				<?php $cohort_table->display(); ?>
 		<?php
 		$cohort_table->variable = 'churn_danger';
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Churn-Danger for Subscriptions</h2>
+				<h2>Churn-Danger for Subscription Cohorts</h2>
 				<p>A subscription is in churn danger if it enters a non-active state during the given month. This is an experiment to help us predict the number of churned subscriptions at the end of the month.</p>
 				<?php $cohort_table->display(); ?>
 		<?php
 		$cohort_table->variable = 'churn_prediction';
 		$cohort_table->prepare_items();
 		?> 
-				<h2>Churn Prediction for Subscriptions</h2>
+				<h2>Churn Prediction for Subscription Cohorts</h2>
 				<p>We predict a subscription will churn if it's current state is not active, but it has been active for at least a day this month.</p>
 				<?php $cohort_table->display(); ?>
 		<?php
