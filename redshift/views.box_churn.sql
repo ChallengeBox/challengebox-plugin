@@ -69,6 +69,7 @@ CREATE VIEW box_churn_by_sku_month_stage1 AS
 SELECT
       user_id
     , sku_month
+    , count(DISTINCT id) AS box_count
     , sum(booked_revenue) AS month_revenue
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
@@ -84,6 +85,7 @@ CREATE VIEW box_churn_by_sku_month_strict_stage1 AS
 SELECT
       user_id
     , sku_month_strict
+    , count(DISTINCT id) AS box_count
     , sum(booked_revenue) AS month_revenue
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
@@ -99,6 +101,7 @@ CREATE VIEW box_churn_by_created_month_stage1 AS
 SELECT
       user_id
     , to_char(created_date, 'YYYY-MM') AS created_month
+    , count(DISTINCT id) AS box_count
     , sum(booked_revenue) AS month_revenue
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
@@ -114,6 +117,7 @@ CREATE VIEW box_churn_by_shipped_month_stage1 AS
 SELECT
       user_id
     , to_char(completed_date, 'YYYY-MM') AS shipped_month
+    , count(DISTINCT id) AS box_count
     , sum(booked_revenue) AS month_revenue
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
@@ -130,6 +134,7 @@ CREATE VIEW box_churn_by_sku_month_stage2 AS
 SELECT
       user_id
     , sku_month
+    , box_count
     , month_revenue
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY sku_month) AS active_lag
@@ -146,6 +151,7 @@ CREATE VIEW box_churn_by_sku_month_strict_stage2 AS
 SELECT
       user_id
     , sku_month_strict
+    , box_count
     , month_revenue
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY sku_month_strict) AS active_lag
@@ -162,6 +168,7 @@ CREATE VIEW box_churn_by_created_month_stage2 AS
 SELECT
       user_id
     , created_month
+    , box_count
     , month_revenue
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY created_month) AS active_lag
@@ -178,6 +185,7 @@ CREATE VIEW box_churn_by_shipped_month_stage2 AS
 SELECT
       user_id
     , shipped_month
+    , box_count
     , month_revenue
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY shipped_month) AS active_lag
@@ -194,6 +202,7 @@ CREATE VIEW box_churn_by_sku_month_stage3 AS
 SELECT
       user_id
     , sku_month
+    , box_count
     , month_revenue
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
@@ -215,6 +224,7 @@ CREATE VIEW box_churn_by_sku_month_strict_stage3 AS
 SELECT
       user_id
     , sku_month_strict
+    , box_count
     , month_revenue
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
@@ -236,6 +246,7 @@ CREATE VIEW box_churn_by_created_month_stage3 AS
 SELECT
       user_id
     , created_month
+    , box_count
     , month_revenue
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
@@ -257,6 +268,7 @@ CREATE VIEW box_churn_by_shipped_month_stage3 AS
 SELECT
       user_id
     , shipped_month
+    , box_count
     , month_revenue
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
@@ -278,6 +290,7 @@ CREATE VIEW box_churn_by_sku_month_stage4 AS
 SELECT
       user_id
     , sku_month
+    , box_count
     , month_revenue
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
@@ -306,6 +319,7 @@ CREATE VIEW box_churn_by_sku_month_strict_stage4 AS
 SELECT
       user_id
     , sku_month_strict
+    , box_count
     , month_revenue
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
@@ -334,6 +348,7 @@ CREATE VIEW box_churn_by_created_month_stage4 AS
 SELECT
       user_id
     , created_month
+    , box_count
     , month_revenue
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
@@ -362,6 +377,7 @@ CREATE VIEW box_churn_by_shipped_month_stage4 AS
 SELECT
       user_id
     , shipped_month
+    , box_count
     , month_revenue
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
@@ -389,7 +405,9 @@ DROP VIEW IF EXISTS box_churn_by_sku_month CASCADE;
 CREATE VIEW box_churn_by_sku_month AS
 SELECT
       sku_month
+    , sum(box_count) AS box_count
     , sum(month_revenue)::decimal(10,2) AS booked_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -413,7 +431,9 @@ DROP VIEW IF EXISTS box_churn_by_sku_month_strict CASCADE;
 CREATE VIEW box_churn_by_sku_month_strict AS
 SELECT
       sku_month_strict
+    , sum(box_count) AS box_count
     , sum(month_revenue)::decimal(10,2) AS booked_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -437,7 +457,9 @@ DROP VIEW IF EXISTS box_churn_by_created_month CASCADE;
 CREATE VIEW box_churn_by_created_month AS
 SELECT
       created_month
+    , sum(box_count) AS box_count
     , sum(month_revenue)::decimal(10,2) AS booked_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -461,7 +483,9 @@ DROP VIEW IF EXISTS box_churn_by_shipped_month CASCADE;
 CREATE VIEW box_churn_by_shipped_month AS
 SELECT
       shipped_month
+    , sum(box_count) AS box_count
     , sum(month_revenue)::decimal(10,2) AS booked_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active

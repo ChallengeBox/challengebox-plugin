@@ -129,7 +129,9 @@ DROP TABLE IF EXISTS monthly_analytics_box_churn CASCADE;
 CREATE TABLE monthly_analytics_box_churn AS
 	SELECT
 		  to_char(to_date(sku_month, 'bYYMM'), 'YYYY-MM') AS calendar_month
+		, box_count
 		, booked_revenue
+		, booked_revenue_per_box
 		, reactivated as box_reactivated
 		, activated as box_activated
 		, active as box_active
@@ -170,7 +172,9 @@ CREATE TABLE monthly_analytics AS
 		, subs_active
 		, subs_churned
 		, subs_churn_pct
+		, box_count
 		, booked_revenue
+		, booked_revenue_per_box
 		, box_reactivated
 		, box_activated
 		, box_active
