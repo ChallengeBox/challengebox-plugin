@@ -10,7 +10,7 @@ tail -f $LOG &
 command="$@"
 echo LOG=$LOG
 curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$(hostname) running '$command'\"}" $URL
-if $command >>$LOG 2>>$LOG
+if nice $command >>$LOG 2>>$LOG
 then
   STATUS="✅"
   VERB="successfully ran"
