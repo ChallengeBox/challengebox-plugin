@@ -1576,8 +1576,8 @@ class CBCmd extends WP_CLI_Command {
 	 * [--all]
 	 * : Iterate through all users. (Ignores <user_id>... if found).
 	 *
-	 * [--date]
-	 * : The year and month to check. (i.e. 2016-04). Defaults to current month.
+	 * [--month=<month>]
+	 * : Year and month to check for points. Format like '2016-05'. Defaults to *previous* month.
 	 *
 	 * [--limit=<limit>]
 	 * : Only process <limit> users out of the list given.
@@ -1601,16 +1601,18 @@ class CBCmd extends WP_CLI_Command {
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp cb apply_month_points 167 --date=2016-04
+	 *     wp cb apply_month_points 167 --month=2016-04
 	 */
 	function apply_month_points( $args, $assoc_args ) {
+		$tz = $this->options->timezone;
+		if (empty($assoc_args['month'])) {
+			$assoc_args['month'] = Carbon::now($tz)->subMonth()->format('Y-m');
+		}
 		list( $args, $assoc_args ) = $this->parse_args($args, $assoc_args);
 
 		$results = array();
 
-		$month_start = clone $this->options->date;
-		$month_start->setTime(0,0);
-		$month_end = clone $month_start; $month_end->modify('last day of');
+		$month_start = clone $this->options->month; $month_start->setTime(0,0);
 		$month = $month_start->format('Y-m');
 		$points_key = 'cb-points-month-v1_' . $month;
 		$points_applied_key = 'cb-points-applied-month-v1_' . $month;
@@ -1678,7 +1680,7 @@ class CBCmd extends WP_CLI_Command {
 					'month points previously applied' => isset($points_applied) ? : NULL,
 					'difference' => isset($difference) ? $difference : NULL,
 					'after total' => isset($after_total) ? $after_total : NULL,
-					'error' => NULL,
+					'error' => $e->getMessage(),
 				);
 
 				if ($this->options->verbose) {
