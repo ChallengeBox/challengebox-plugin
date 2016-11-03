@@ -30,6 +30,50 @@ CREATE VIEW box_churn_backdrop AS
         , 'b' || to_char((calendar_month || '-01 00:00:00')::timestamp, 'YYMM') AS sku_month
         , 'b' || to_char((calendar_month || '-01 00:00:00')::timestamp, 'YYMM') AS sku_month_strict
         , 0::DECIMAL(10,2) AS booked_revenue
+        , 0::DECIMAL(10,2) AS booked_price_items
+        , 0::DECIMAL(10,2) AS booked_price_ship
+        , 0::DECIMAL(10,2) AS booked_price_rush
+        , 0::DECIMAL(10,2) AS booked_price
+        , 0::DECIMAL(10,2) AS booked_stripe_charge_count
+        , 0::DECIMAL(10,2) AS booked_stripe_charge_gross
+        , 0::DECIMAL(10,2) AS booked_stripe_charge_fees
+        , 0::DECIMAL(10,2) AS booked_stripe_charge_net
+        , 0::DECIMAL(10,2) AS booked_stripe_refund_count
+        , 0::DECIMAL(10,2) AS booked_stripe_refund_gross
+        , 0::DECIMAL(10,2) AS booked_stripe_refund_fees
+        , 0::DECIMAL(10,2) AS booked_stripe_refund_net
+        , 0::DECIMAL(10,2) AS booked_stripe_fees_net
+        , 0::DECIMAL(10,2) AS booked_stripe_net
+        , 0::DECIMAL(10,2) AS todate_revenue
+        , 0::DECIMAL(10,2) AS todate_price_items
+        , 0::DECIMAL(10,2) AS todate_price_ship
+        , 0::DECIMAL(10,2) AS todate_price_rush
+        , 0::DECIMAL(10,2) AS todate_price
+        , 0::DECIMAL(10,2) AS todate_stripe_charge_count
+        , 0::DECIMAL(10,2) AS todate_stripe_charge_gross
+        , 0::DECIMAL(10,2) AS todate_stripe_charge_fees
+        , 0::DECIMAL(10,2) AS todate_stripe_charge_net
+        , 0::DECIMAL(10,2) AS todate_stripe_refund_count
+        , 0::DECIMAL(10,2) AS todate_stripe_refund_gross
+        , 0::DECIMAL(10,2) AS todate_stripe_refund_fees
+        , 0::DECIMAL(10,2) AS todate_stripe_refund_net
+        , 0::DECIMAL(10,2) AS todate_stripe_fees_net
+        , 0::DECIMAL(10,2) AS todate_stripe_net
+        , 0::DECIMAL(10,2) AS ideal_revenue
+        , 0::DECIMAL(10,2) AS ideal_price_items
+        , 0::DECIMAL(10,2) AS ideal_price_ship
+        , 0::DECIMAL(10,2) AS ideal_price_rush
+        , 0::DECIMAL(10,2) AS ideal_price
+        , 0::DECIMAL(10,2) AS ideal_stripe_charge_count
+        , 0::DECIMAL(10,2) AS ideal_stripe_charge_gross
+        , 0::DECIMAL(10,2) AS ideal_stripe_charge_fees
+        , 0::DECIMAL(10,2) AS ideal_stripe_charge_net
+        , 0::DECIMAL(10,2) AS ideal_stripe_refund_count
+        , 0::DECIMAL(10,2) AS ideal_stripe_refund_gross
+        , 0::DECIMAL(10,2) AS ideal_stripe_refund_fees
+        , 0::DECIMAL(10,2) AS ideal_stripe_refund_net
+        , 0::DECIMAL(10,2) AS ideal_stripe_fees_net
+        , 0::DECIMAL(10,2) AS ideal_stripe_net
     FROM
         box_orders, months
     WHERE
@@ -53,10 +97,106 @@ SELECT * FROM (
             WHEN sku_month = '' THEN 'b' || to_char(created_date, 'YYMM')
             ELSE sku_month
           END AS sku_month
-        , box_booked_revenue AS booked_revenue
+        , booked_revenue
+        , booked_price_items
+        , booked_price_ship
+        , booked_price_rush
+        , booked_price
+        , booked_stripe_charge_count
+        , booked_stripe_charge_gross
+        , booked_stripe_charge_fees
+        , booked_stripe_charge_net
+        , booked_stripe_refund_count
+        , booked_stripe_refund_gross
+        , booked_stripe_refund_fees
+        , booked_stripe_refund_net
+        , booked_stripe_fees_net
+        , booked_stripe_net
+        , todate_revenue
+        , todate_price_items
+        , todate_price_ship
+        , todate_price_rush
+        , todate_price
+        , todate_stripe_charge_count
+        , todate_stripe_charge_gross
+        , todate_stripe_charge_fees
+        , todate_stripe_charge_net
+        , todate_stripe_refund_count
+        , todate_stripe_refund_gross
+        , todate_stripe_refund_fees
+        , todate_stripe_refund_net
+        , todate_stripe_fees_net
+        , todate_stripe_net
+        , ideal_revenue
+        , ideal_price_items
+        , ideal_price_ship
+        , ideal_price_rush
+        , ideal_price
+        , ideal_stripe_charge_count
+        , ideal_stripe_charge_gross
+        , ideal_stripe_charge_fees
+        , ideal_stripe_charge_net
+        , ideal_stripe_refund_count
+        , ideal_stripe_refund_gross
+        , ideal_stripe_refund_fees
+        , ideal_stripe_refund_net
+        , ideal_stripe_fees_net
+        , ideal_stripe_net
     FROM
-        -- join on just the booked revenue column for boxes in the credit ledger
-        box_orders NATURAL JOIN (SELECT id::BIGINT, box_booked_revenue FROM box_credit_ledger WHERE event_type = 'box')
+        -- join on just the certain columns for boxes in the credit ledger
+        box_orders NATURAL JOIN (
+            SELECT
+                  id::BIGINT
+                , booked_revenue
+                , booked_price_items
+                , booked_price_ship
+                , booked_price_rush
+                , booked_price
+                , booked_stripe_charge_count
+                , booked_stripe_charge_gross
+                , booked_stripe_charge_fees
+                , booked_stripe_charge_net
+                , booked_stripe_refund_count
+                , booked_stripe_refund_gross
+                , booked_stripe_refund_fees
+                , booked_stripe_refund_net
+                , booked_stripe_fees_net
+                , booked_stripe_net
+                , todate_revenue
+                , todate_price_items
+                , todate_price_ship
+                , todate_price_rush
+                , todate_price
+                , todate_stripe_charge_count
+                , todate_stripe_charge_gross
+                , todate_stripe_charge_fees
+                , todate_stripe_charge_net
+                , todate_stripe_refund_count
+                , todate_stripe_refund_gross
+                , todate_stripe_refund_fees
+                , todate_stripe_refund_net
+                , todate_stripe_fees_net
+                , todate_stripe_net
+                , ideal_revenue
+                , ideal_price_items
+                , ideal_price_ship
+                , ideal_price_rush
+                , ideal_price
+                , ideal_stripe_charge_count
+                , ideal_stripe_charge_gross
+                , ideal_stripe_charge_fees
+                , ideal_stripe_charge_net
+                , ideal_stripe_refund_count
+                , ideal_stripe_refund_gross
+                , ideal_stripe_refund_fees
+                , ideal_stripe_refund_net
+                , ideal_stripe_fees_net
+                , ideal_stripe_net
+            FROM
+                box_credit_ledger
+            WHERE
+                event_type = 'box'
+        )
     UNION
         SELECT * FROM box_churn_backdrop
 )
@@ -70,7 +210,51 @@ SELECT
       user_id
     , sku_month
     , count(DISTINCT id) AS box_count
-    , sum(booked_revenue) AS month_revenue
+    , sum(booked_revenue) AS booked_revenue
+    , sum(booked_price_items) AS booked_price_items
+    , sum(booked_price_ship) AS booked_price_ship
+    , sum(booked_price_rush) AS booked_price_rush
+    , sum(booked_price) AS booked_price
+    , sum(booked_stripe_charge_count) AS booked_stripe_charge_count
+    , sum(booked_stripe_charge_gross) AS booked_stripe_charge_gross
+    , sum(booked_stripe_charge_fees) AS booked_stripe_charge_fees
+    , sum(booked_stripe_charge_net) AS booked_stripe_charge_net
+    , sum(booked_stripe_refund_count) AS booked_stripe_refund_count
+    , sum(booked_stripe_refund_gross) AS booked_stripe_refund_gross
+    , sum(booked_stripe_refund_fees) AS booked_stripe_refund_fees
+    , sum(booked_stripe_refund_net) AS booked_stripe_refund_net
+    , sum(booked_stripe_fees_net) AS booked_stripe_fees_net
+    , sum(booked_stripe_net) AS booked_stripe_net
+    , sum(todate_revenue) AS todate_revenue
+    , sum(todate_price_items) AS todate_price_items
+    , sum(todate_price_ship) AS todate_price_ship
+    , sum(todate_price_rush) AS todate_price_rush
+    , sum(todate_price) AS todate_price
+    , sum(todate_stripe_charge_count) AS todate_stripe_charge_count
+    , sum(todate_stripe_charge_gross) AS todate_stripe_charge_gross
+    , sum(todate_stripe_charge_fees) AS todate_stripe_charge_fees
+    , sum(todate_stripe_charge_net) AS todate_stripe_charge_net
+    , sum(todate_stripe_refund_count) AS todate_stripe_refund_count
+    , sum(todate_stripe_refund_gross) AS todate_stripe_refund_gross
+    , sum(todate_stripe_refund_fees) AS todate_stripe_refund_fees
+    , sum(todate_stripe_refund_net) AS todate_stripe_refund_net
+    , sum(todate_stripe_fees_net) AS todate_stripe_fees_net
+    , sum(todate_stripe_net) AS todate_stripe_net
+    , sum(ideal_revenue) AS ideal_revenue
+    , sum(ideal_price_items) AS ideal_price_items
+    , sum(ideal_price_ship) AS ideal_price_ship
+    , sum(ideal_price_rush) AS ideal_price_rush
+    , sum(ideal_price) AS ideal_price
+    , sum(ideal_stripe_charge_count) AS ideal_stripe_charge_count
+    , sum(ideal_stripe_charge_gross) AS ideal_stripe_charge_gross
+    , sum(ideal_stripe_charge_fees) AS ideal_stripe_charge_fees
+    , sum(ideal_stripe_charge_net) AS ideal_stripe_charge_net
+    , sum(ideal_stripe_refund_count) AS ideal_stripe_refund_count
+    , sum(ideal_stripe_refund_gross) AS ideal_stripe_refund_gross
+    , sum(ideal_stripe_refund_fees) AS ideal_stripe_refund_fees
+    , sum(ideal_stripe_refund_net) AS ideal_stripe_refund_net
+    , sum(ideal_stripe_fees_net) AS ideal_stripe_fees_net
+    , sum(ideal_stripe_net) AS ideal_stripe_net
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
     box_churn_base
@@ -86,7 +270,51 @@ SELECT
       user_id
     , sku_month_strict
     , count(DISTINCT id) AS box_count
-    , sum(booked_revenue) AS month_revenue
+    , sum(booked_revenue) AS booked_revenue
+    , sum(booked_price_items) AS booked_price_items
+    , sum(booked_price_ship) AS booked_price_ship
+    , sum(booked_price_rush) AS booked_price_rush
+    , sum(booked_price) AS booked_price
+    , sum(booked_stripe_charge_count) AS booked_stripe_charge_count
+    , sum(booked_stripe_charge_gross) AS booked_stripe_charge_gross
+    , sum(booked_stripe_charge_fees) AS booked_stripe_charge_fees
+    , sum(booked_stripe_charge_net) AS booked_stripe_charge_net
+    , sum(booked_stripe_refund_count) AS booked_stripe_refund_count
+    , sum(booked_stripe_refund_gross) AS booked_stripe_refund_gross
+    , sum(booked_stripe_refund_fees) AS booked_stripe_refund_fees
+    , sum(booked_stripe_refund_net) AS booked_stripe_refund_net
+    , sum(booked_stripe_fees_net) AS booked_stripe_fees_net
+    , sum(booked_stripe_net) AS booked_stripe_net
+    , sum(todate_revenue) AS todate_revenue
+    , sum(todate_price_items) AS todate_price_items
+    , sum(todate_price_ship) AS todate_price_ship
+    , sum(todate_price_rush) AS todate_price_rush
+    , sum(todate_price) AS todate_price
+    , sum(todate_stripe_charge_count) AS todate_stripe_charge_count
+    , sum(todate_stripe_charge_gross) AS todate_stripe_charge_gross
+    , sum(todate_stripe_charge_fees) AS todate_stripe_charge_fees
+    , sum(todate_stripe_charge_net) AS todate_stripe_charge_net
+    , sum(todate_stripe_refund_count) AS todate_stripe_refund_count
+    , sum(todate_stripe_refund_gross) AS todate_stripe_refund_gross
+    , sum(todate_stripe_refund_fees) AS todate_stripe_refund_fees
+    , sum(todate_stripe_refund_net) AS todate_stripe_refund_net
+    , sum(todate_stripe_fees_net) AS todate_stripe_fees_net
+    , sum(todate_stripe_net) AS todate_stripe_net
+    , sum(ideal_revenue) AS ideal_revenue
+    , sum(ideal_price_items) AS ideal_price_items
+    , sum(ideal_price_ship) AS ideal_price_ship
+    , sum(ideal_price_rush) AS ideal_price_rush
+    , sum(ideal_price) AS ideal_price
+    , sum(ideal_stripe_charge_count) AS ideal_stripe_charge_count
+    , sum(ideal_stripe_charge_gross) AS ideal_stripe_charge_gross
+    , sum(ideal_stripe_charge_fees) AS ideal_stripe_charge_fees
+    , sum(ideal_stripe_charge_net) AS ideal_stripe_charge_net
+    , sum(ideal_stripe_refund_count) AS ideal_stripe_refund_count
+    , sum(ideal_stripe_refund_gross) AS ideal_stripe_refund_gross
+    , sum(ideal_stripe_refund_fees) AS ideal_stripe_refund_fees
+    , sum(ideal_stripe_refund_net) AS ideal_stripe_refund_net
+    , sum(ideal_stripe_fees_net) AS ideal_stripe_fees_net
+    , sum(ideal_stripe_net) AS ideal_stripe_net
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
     box_churn_base
@@ -102,7 +330,51 @@ SELECT
       user_id
     , to_char(created_date, 'YYYY-MM') AS created_month
     , count(DISTINCT id) AS box_count
-    , sum(booked_revenue) AS month_revenue
+    , sum(booked_revenue) AS booked_revenue
+    , sum(booked_price_items) AS booked_price_items
+    , sum(booked_price_ship) AS booked_price_ship
+    , sum(booked_price_rush) AS booked_price_rush
+    , sum(booked_price) AS booked_price
+    , sum(booked_stripe_charge_count) AS booked_stripe_charge_count
+    , sum(booked_stripe_charge_gross) AS booked_stripe_charge_gross
+    , sum(booked_stripe_charge_fees) AS booked_stripe_charge_fees
+    , sum(booked_stripe_charge_net) AS booked_stripe_charge_net
+    , sum(booked_stripe_refund_count) AS booked_stripe_refund_count
+    , sum(booked_stripe_refund_gross) AS booked_stripe_refund_gross
+    , sum(booked_stripe_refund_fees) AS booked_stripe_refund_fees
+    , sum(booked_stripe_refund_net) AS booked_stripe_refund_net
+    , sum(booked_stripe_fees_net) AS booked_stripe_fees_net
+    , sum(booked_stripe_net) AS booked_stripe_net
+    , sum(todate_revenue) AS todate_revenue
+    , sum(todate_price_items) AS todate_price_items
+    , sum(todate_price_ship) AS todate_price_ship
+    , sum(todate_price_rush) AS todate_price_rush
+    , sum(todate_price) AS todate_price
+    , sum(todate_stripe_charge_count) AS todate_stripe_charge_count
+    , sum(todate_stripe_charge_gross) AS todate_stripe_charge_gross
+    , sum(todate_stripe_charge_fees) AS todate_stripe_charge_fees
+    , sum(todate_stripe_charge_net) AS todate_stripe_charge_net
+    , sum(todate_stripe_refund_count) AS todate_stripe_refund_count
+    , sum(todate_stripe_refund_gross) AS todate_stripe_refund_gross
+    , sum(todate_stripe_refund_fees) AS todate_stripe_refund_fees
+    , sum(todate_stripe_refund_net) AS todate_stripe_refund_net
+    , sum(todate_stripe_fees_net) AS todate_stripe_fees_net
+    , sum(todate_stripe_net) AS todate_stripe_net
+    , sum(ideal_revenue) AS ideal_revenue
+    , sum(ideal_price_items) AS ideal_price_items
+    , sum(ideal_price_ship) AS ideal_price_ship
+    , sum(ideal_price_rush) AS ideal_price_rush
+    , sum(ideal_price) AS ideal_price
+    , sum(ideal_stripe_charge_count) AS ideal_stripe_charge_count
+    , sum(ideal_stripe_charge_gross) AS ideal_stripe_charge_gross
+    , sum(ideal_stripe_charge_fees) AS ideal_stripe_charge_fees
+    , sum(ideal_stripe_charge_net) AS ideal_stripe_charge_net
+    , sum(ideal_stripe_refund_count) AS ideal_stripe_refund_count
+    , sum(ideal_stripe_refund_gross) AS ideal_stripe_refund_gross
+    , sum(ideal_stripe_refund_fees) AS ideal_stripe_refund_fees
+    , sum(ideal_stripe_refund_net) AS ideal_stripe_refund_net
+    , sum(ideal_stripe_fees_net) AS ideal_stripe_fees_net
+    , sum(ideal_stripe_net) AS ideal_stripe_net
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
     box_churn_base
@@ -118,7 +390,51 @@ SELECT
       user_id
     , to_char(completed_date, 'YYYY-MM') AS shipped_month
     , count(DISTINCT id) AS box_count
-    , sum(booked_revenue) AS month_revenue
+    , sum(booked_revenue) AS booked_revenue
+    , sum(booked_price_items) AS booked_price_items
+    , sum(booked_price_ship) AS booked_price_ship
+    , sum(booked_price_rush) AS booked_price_rush
+    , sum(booked_price) AS booked_price
+    , sum(booked_stripe_charge_count) AS booked_stripe_charge_count
+    , sum(booked_stripe_charge_gross) AS booked_stripe_charge_gross
+    , sum(booked_stripe_charge_fees) AS booked_stripe_charge_fees
+    , sum(booked_stripe_charge_net) AS booked_stripe_charge_net
+    , sum(booked_stripe_refund_count) AS booked_stripe_refund_count
+    , sum(booked_stripe_refund_gross) AS booked_stripe_refund_gross
+    , sum(booked_stripe_refund_fees) AS booked_stripe_refund_fees
+    , sum(booked_stripe_refund_net) AS booked_stripe_refund_net
+    , sum(booked_stripe_fees_net) AS booked_stripe_fees_net
+    , sum(booked_stripe_net) AS booked_stripe_net
+    , sum(todate_revenue) AS todate_revenue
+    , sum(todate_price_items) AS todate_price_items
+    , sum(todate_price_ship) AS todate_price_ship
+    , sum(todate_price_rush) AS todate_price_rush
+    , sum(todate_price) AS todate_price
+    , sum(todate_stripe_charge_count) AS todate_stripe_charge_count
+    , sum(todate_stripe_charge_gross) AS todate_stripe_charge_gross
+    , sum(todate_stripe_charge_fees) AS todate_stripe_charge_fees
+    , sum(todate_stripe_charge_net) AS todate_stripe_charge_net
+    , sum(todate_stripe_refund_count) AS todate_stripe_refund_count
+    , sum(todate_stripe_refund_gross) AS todate_stripe_refund_gross
+    , sum(todate_stripe_refund_fees) AS todate_stripe_refund_fees
+    , sum(todate_stripe_refund_net) AS todate_stripe_refund_net
+    , sum(todate_stripe_fees_net) AS todate_stripe_fees_net
+    , sum(todate_stripe_net) AS todate_stripe_net
+    , sum(ideal_revenue) AS ideal_revenue
+    , sum(ideal_price_items) AS ideal_price_items
+    , sum(ideal_price_ship) AS ideal_price_ship
+    , sum(ideal_price_rush) AS ideal_price_rush
+    , sum(ideal_price) AS ideal_price
+    , sum(ideal_stripe_charge_count) AS ideal_stripe_charge_count
+    , sum(ideal_stripe_charge_gross) AS ideal_stripe_charge_gross
+    , sum(ideal_stripe_charge_fees) AS ideal_stripe_charge_fees
+    , sum(ideal_stripe_charge_net) AS ideal_stripe_charge_net
+    , sum(ideal_stripe_refund_count) AS ideal_stripe_refund_count
+    , sum(ideal_stripe_refund_gross) AS ideal_stripe_refund_gross
+    , sum(ideal_stripe_refund_fees) AS ideal_stripe_refund_fees
+    , sum(ideal_stripe_refund_net) AS ideal_stripe_refund_net
+    , sum(ideal_stripe_fees_net) AS ideal_stripe_fees_net
+    , sum(ideal_stripe_net) AS ideal_stripe_net
     , CASE WHEN sum(booked_revenue) > 0 THEN 1 ELSE 0 END AS active
 FROM
     box_churn_base
@@ -135,7 +451,51 @@ SELECT
       user_id
     , sku_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY sku_month) AS active_lag
     , lag(active, 2) OVER (PARTITION BY user_id ORDER BY sku_month) AS active_lag2
@@ -152,7 +512,51 @@ SELECT
       user_id
     , sku_month_strict
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY sku_month_strict) AS active_lag
     , lag(active, 2) OVER (PARTITION BY user_id ORDER BY sku_month_strict) AS active_lag2
@@ -169,7 +573,51 @@ SELECT
       user_id
     , created_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY created_month) AS active_lag
     , lag(active, 2) OVER (PARTITION BY user_id ORDER BY created_month) AS active_lag2
@@ -186,7 +634,51 @@ SELECT
       user_id
     , shipped_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , lag(active, 1) OVER (PARTITION BY user_id ORDER BY shipped_month) AS active_lag
     , lag(active, 2) OVER (PARTITION BY user_id ORDER BY shipped_month) AS active_lag2
@@ -203,7 +695,51 @@ SELECT
       user_id
     , sku_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
     , CASE WHEN active = 1 AND (active_lag2 IS NULL OR active_lag2 = 0) AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated2
@@ -225,7 +761,51 @@ SELECT
       user_id
     , sku_month_strict
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
     , CASE WHEN active = 1 AND (active_lag2 IS NULL OR active_lag2 = 0) AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated2
@@ -247,7 +827,51 @@ SELECT
       user_id
     , created_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
     , CASE WHEN active = 1 AND (active_lag2 IS NULL OR active_lag2 = 0) AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated2
@@ -269,7 +893,51 @@ SELECT
       user_id
     , shipped_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , active
     , CASE WHEN active = 1 AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated_raw
     , CASE WHEN active = 1 AND (active_lag2 IS NULL OR active_lag2 = 0) AND (active_lag IS NULL OR active_lag = 0) THEN 1 ELSE 0 END AS activated2
@@ -291,7 +959,51 @@ SELECT
       user_id
     , sku_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
     , active
@@ -320,7 +1032,51 @@ SELECT
       user_id
     , sku_month_strict
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
     , active
@@ -349,7 +1105,51 @@ SELECT
       user_id
     , created_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
     , active
@@ -378,7 +1178,51 @@ SELECT
       user_id
     , shipped_month
     , box_count
-    , month_revenue
+    , booked_revenue
+    , booked_price_items
+    , booked_price_ship
+    , booked_price_rush
+    , booked_price
+    , booked_stripe_charge_count
+    , booked_stripe_charge_gross
+    , booked_stripe_charge_fees
+    , booked_stripe_charge_net
+    , booked_stripe_refund_count
+    , booked_stripe_refund_gross
+    , booked_stripe_refund_fees
+    , booked_stripe_refund_net
+    , booked_stripe_fees_net
+    , booked_stripe_net
+    , todate_revenue
+    , todate_price_items
+    , todate_price_ship
+    , todate_price_rush
+    , todate_price
+    , todate_stripe_charge_count
+    , todate_stripe_charge_gross
+    , todate_stripe_charge_fees
+    , todate_stripe_charge_net
+    , todate_stripe_refund_count
+    , todate_stripe_refund_gross
+    , todate_stripe_refund_fees
+    , todate_stripe_refund_net
+    , todate_stripe_fees_net
+    , todate_stripe_net
+    , ideal_revenue
+    , ideal_price_items
+    , ideal_price_ship
+    , ideal_price_rush
+    , ideal_price
+    , ideal_stripe_charge_count
+    , ideal_stripe_charge_gross
+    , ideal_stripe_charge_fees
+    , ideal_stripe_charge_net
+    , ideal_stripe_refund_count
+    , ideal_stripe_refund_gross
+    , ideal_stripe_refund_fees
+    , ideal_stripe_refund_net
+    , ideal_stripe_fees_net
+    , ideal_stripe_net
     , CASE WHEN activation_count > 1 AND activated_raw = 1 THEN 1 ELSE 0 END AS reactivated
     , activated_raw AS activated
     , active
@@ -406,8 +1250,54 @@ CREATE VIEW box_churn_by_sku_month AS
 SELECT
       sku_month
     , sum(box_count) AS box_count
-    , sum(month_revenue)::decimal(10,2) AS booked_revenue
-    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
+    , sum(booked_revenue)::DECIMAL(10,2) AS booked_revenue
+    , sum(ideal_revenue)::DECIMAL(10,2) AS ideal_revenue
+    , sum(todate_revenue)::DECIMAL(10,2) AS todate_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_net_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -432,8 +1322,54 @@ CREATE VIEW box_churn_by_sku_month_strict AS
 SELECT
       sku_month_strict
     , sum(box_count) AS box_count
-    , sum(month_revenue)::decimal(10,2) AS booked_revenue
-    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
+    , sum(booked_revenue)::DECIMAL(10,2) AS booked_revenue
+    , sum(ideal_revenue)::DECIMAL(10,2) AS ideal_revenue
+    , sum(todate_revenue)::DECIMAL(10,2) AS todate_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_net_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -458,8 +1394,54 @@ CREATE VIEW box_churn_by_created_month AS
 SELECT
       created_month
     , sum(box_count) AS box_count
-    , sum(month_revenue)::decimal(10,2) AS booked_revenue
-    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
+    , sum(booked_revenue)::DECIMAL(10,2) AS booked_revenue
+    , sum(ideal_revenue)::DECIMAL(10,2) AS ideal_revenue
+    , sum(todate_revenue)::DECIMAL(10,2) AS todate_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_net_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active
@@ -484,8 +1466,54 @@ CREATE VIEW box_churn_by_shipped_month AS
 SELECT
       shipped_month
     , sum(box_count) AS box_count
-    , sum(month_revenue)::decimal(10,2) AS booked_revenue
-    , CASE WHEN sum(box_count) > 0 THEN sum(month_revenue) / sum(box_count) ELSE 0 END::decimal(10,2) AS booked_revenue_per_box
+    , sum(booked_revenue)::DECIMAL(10,2) AS booked_revenue
+    , sum(ideal_revenue)::DECIMAL(10,2) AS ideal_revenue
+    , sum(todate_revenue)::DECIMAL(10,2) AS todate_revenue
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_revenue) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_revenue_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_items) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_items_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_ship) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_ship_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price_rush) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_rush_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_price) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_price_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_charge_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_charge_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_count) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_count_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_gross) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_gross_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_fees) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_fees_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_refund_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_refund_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_fees_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_fees_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(booked_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS booked_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(ideal_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS ideal_stripe_net_per_box
+    , CASE WHEN sum(box_count) > 0 THEN sum(todate_stripe_net) / sum(box_count) ELSE 0 END::DECIMAL(10,2) AS todate_stripe_net_per_box
     , sum(reactivated) AS reactivated
     , sum(activated) AS activated
     , sum(active) AS active

@@ -16,6 +16,8 @@ class CBAnalytics_Admin {
 		$table->prepare_items();
 		$ss_table = new CBSubStatus_Table();
 		$ss_table->prepare_items();
+		$bd_table = new CBBoxDetail_Table();
+		$bd_table->prepare_items();
 		?>
 			<div class="wrap">
 				<div id="icon-users" class="icon32">test</div>
@@ -25,6 +27,9 @@ class CBAnalytics_Admin {
 				<h2>Subscription Statuses</h2>
 				<p>Where are they now? This table shows the WooCommerce status of each subscription based on it's start date.</p>
 				<?php $ss_table->display(); ?>
+
+				<h2>Box Detail</h2>
+				<?php $bd_table->display(); ?>
 		<?php
 		$cohort_table = new CBCohort_Table();
 		$cohort_table->table_data();
@@ -234,6 +239,51 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
 		return $rs->execute_query('SELECT * FROM subscription_status_by_start_month;');
+	}
+}
+
+class CBBoxDetail_Table extends CBMonthly_Table  {
+	public function prepare_items() {
+		$columns = $this->get_columns();
+		$hidden = $this->get_hidden_columns();
+		$sortable = $this->get_sortable_columns();
+		$data = $this->table_data();
+		$this->_column_headers = array($columns, $hidden, $sortable);
+		$this->items = $data;
+	}
+	public function get_columns() {
+		$columns = array(
+			'sku_month' => 'SKU Month',
+			'box_count' => 'Boxes',
+			'booked_revenue' => 'Revenue',
+			'booked_price_per_box' => 'Price',
+		);
+		return $columns;
+	}
+	public function column_default( $item, $column_name ) {
+		// Handle ideal/booked/todate columns
+		if (preg_match('/^(ideal_|booked_|todate_)/', $column_name)) {
+			$column_base = implode('_', array_slice(explode('_', $column_name), 1));
+			$booked = $item['booked_'.$column_base];
+			$ideal = $item['ideal_'.$column_base];
+			$todate = $item['todate_'.$column_base];
+			return implode(' / ', array_map($this->format_number, [$booked, $ideal, $todate]));
+		} else {
+			$val = $item[$column_name];
+			if (is_numeric($val) && $val == 0) return '';
+			if ($column_name !== 'start_month' && $column_name !== 'total') {
+				return $this->format_percent_column($val, $item['total']);
+			}
+			if (is_numeric($val)) {
+				return '<b>' . $this->format_number($val) . '</b>';
+			}
+			return $val;
+		}
+	}
+	private function table_data() {
+		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
+		$rs = new CBRedshift($schema);
+		return $rs->execute_query('SELECT * FROM box_churn_by_sku_month;');
 	}
 }
 
