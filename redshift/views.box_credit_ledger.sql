@@ -5,9 +5,9 @@ CREATE VIEW refund_totals_by_charge AS
 	SELECT
 		  charge_id
 		, count(id) AS stripe_refund_count
-		, - sum(amount) AS stripe_refund_gross
+		, sum(amount) AS stripe_refund_gross
 		, sum(stripe_fee_refunded) AS stripe_refund_fees
-		, sum(stripe_fee_refunded - amount) AS stripe_refund_net
+		, sum(amount - stripe_fee_refunded) AS stripe_refund_net
 	FROM
 		refunds
 	WHERE
@@ -24,14 +24,14 @@ CREATE VIEW charge_totals_by_order AS
 		  order_id
 		, count(id) AS stripe_charge_count
 		, sum(amount) AS stripe_charge_gross
-		, -sum(stripe_fee) AS stripe_charge_fees
+		, sum(stripe_fee) AS stripe_charge_fees
 		, sum(amount - stripe_fee) AS stripe_charge_net
 		, sum(coalesce(stripe_refund_count,0)) AS stripe_refund_count
 		, sum(coalesce(stripe_refund_gross,0)) AS stripe_refund_gross
 		, sum(coalesce(stripe_refund_fees,0)) AS stripe_refund_fees
 		, sum(coalesce(stripe_refund_net,0)) AS stripe_refund_net
-		, sum(coalesce(stripe_refund_fees,0) - stripe_fee) AS stripe_fees_net
-		, sum(amount - stripe_fee + coalesce(stripe_refund_net,0)) AS stripe_net
+		, sum(stripe_fee - coalesce(stripe_refund_fees,0)) AS stripe_fees_net
+		, sum(amount - stripe_fee - coalesce(stripe_refund_net,0)) AS stripe_net
 	FROM
 		charges
 	FULL JOIN
