@@ -16,8 +16,6 @@ class CBAnalytics_Admin {
 		$table->prepare_items();
 		$ss_table = new CBSubStatus_Table();
 		$ss_table->prepare_items();
-		$bd_table = new CBBoxDetail_Table();
-		$bd_table->prepare_items();
 		?>
 			<div class="wrap">
 				<div id="icon-users" class="icon32">test</div>
@@ -28,9 +26,26 @@ class CBAnalytics_Admin {
 				<p>Where are they now? This table shows the WooCommerce status of each subscription based on it's start date.</p>
 				<?php $ss_table->display(); ?>
 
-				<h2>Box Detail</h2>
+		<?php
+		$bd_table = new CBBoxDetail_Table();
+		$bd_table->prepare_items('box_churn_by_sku_month', 'sku_month', 'SKU Month');
+		?>
+				<h2>Box Details</h2>
+				<p>
+					Legend: <b>Booked Number</b> / <b>Ideal Number</b> / <b>To-Date Number</b> <br/>
+					<dl>
+						<dt>Booked Number</dt><dd>The share of customer payment assigned to this box for this month. For example, if customer pays $100 for five months, booked revenue for the first month is $20. If we issue a $50 refund, booked revenue for the first month goes to $10. This number gets lower when we issue refunds or ship the customer free boxes past their credit.</dd>
+						<dt>Ideal Number</dt><dd>Metric reflecting no refunds and no extra boxes issued.</dd>
+						<dt>To-Date Number</dt><dd>The metric if we were not to fulfill any more orders from now on. Illustrates the impact of customer pre-payment.</dd>
+					</dl>
+				</p>
 				<?php $bd_table->display(); ?>
 		<?php
+		$bd_table->prepare_items('box_churn_by_created_month', 'created_month', 'Created Month');
+		$bd_table->display();
+		$bd_table->prepare_items('box_churn_by_shipped_month', 'shipped_month', 'Shipped Month');
+		$bd_table->display();
+
 		$cohort_table = new CBCohort_Table();
 		$cohort_table->table_data();
 		$cohort_table->prepare_items();
@@ -148,12 +163,16 @@ class CBMonthly_Table extends WP_List_Table  {
 		);
 	}
 	protected function format_number($val) {
-		if ($val == 0) $val = '';
+		if ($val == 0) return '';
 		if ($val > 1000.0) {
-			if (is_float($val)) $val = number_format($val, 2);
-			else $val = number_format($val);
+			return number_format(intval($val));
+		} else {
+			if (is_float($val)) {
+				return number_format($val, 2);
+			} else {
+				return number_format($val);
+			}
 		}
-		return $val;
 	}
 	protected function format_percent($val, $total) {
 		if ($total > 0) $pct = 100.0 * $val / $total;	
@@ -224,6 +243,9 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 		);
 		return $columns;
 	}
+	public function get_hidden_columns() {
+		return array();
+	}
 	public function column_default( $item, $column_name ) {
 		$val = $item[$column_name];
 		if (is_numeric($val) && $val == 0) return '';
@@ -243,47 +265,51 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 }
 
 class CBBoxDetail_Table extends CBMonthly_Table  {
-	public function prepare_items() {
-		$columns = $this->get_columns();
+	public function prepare_items($table, $index_column, $index_title) {
+		$columns = $this->get_columns($index_column, $index_title);
 		$hidden = $this->get_hidden_columns();
 		$sortable = $this->get_sortable_columns();
-		$data = $this->table_data();
+		$data = $this->table_data($table);
 		$this->_column_headers = array($columns, $hidden, $sortable);
 		$this->items = $data;
 	}
-	public function get_columns() {
+	public function get_columns($index_column, $index_title) {
 		$columns = array(
-			'sku_month' => 'SKU Month',
+			$index_column => $index_title,
 			'box_count' => 'Boxes',
-			'booked_revenue' => 'Revenue',
+			'booked_revenue' => 'Total Revenue',
+			'booked_revenue_per_box' => 'Rev/Box',
 			'booked_price_per_box' => 'Price',
+			'booked_price_items_per_box' => 'Item Price',
+			'booked_price_ship_per_box' => 'Ship Price',
+			'booked_price_rush_per_box' => 'Rush Price',
+			'booked_stripe_refund_net_per_box' => 'Refund Impact',
+			'booked_stripe_fees_net_per_box' => 'Stripe Fees (Net)',
 		);
 		return $columns;
+	}
+	public function get_hidden_columns() {
+		return array();
 	}
 	public function column_default( $item, $column_name ) {
 		// Handle ideal/booked/todate columns
 		if (preg_match('/^(ideal_|booked_|todate_)/', $column_name)) {
 			$column_base = implode('_', array_slice(explode('_', $column_name), 1));
-			$booked = $item['booked_'.$column_base];
-			$ideal = $item['ideal_'.$column_base];
-			$todate = $item['todate_'.$column_base];
-			return implode(' / ', array_map($this->format_number, [$booked, $ideal, $todate]));
+			$booked = floatval($item['booked_'.$column_base]);
+			$ideal = floatval($item['ideal_'.$column_base]);
+			$todate = floatval($item['todate_'.$column_base]);
+			return '<b>' . implode('</b> / <b>', [$this->format_number($booked), $this->format_number($ideal), $this->format_number($todate)]) . '</b>';
 		} else {
 			$val = $item[$column_name];
 			if (is_numeric($val) && $val == 0) return '';
-			if ($column_name !== 'start_month' && $column_name !== 'total') {
-				return $this->format_percent_column($val, $item['total']);
-			}
-			if (is_numeric($val)) {
-				return '<b>' . $this->format_number($val) . '</b>';
-			}
+			if (is_numeric($val)) return '<b>' . $this->format_number($val) . '</b>';
 			return $val;
 		}
 	}
-	private function table_data() {
+	private function table_data($table) {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
-		return $rs->execute_query('SELECT * FROM box_churn_by_sku_month;');
+		return $rs->execute_query("SELECT * FROM $table;");
 	}
 }
 
