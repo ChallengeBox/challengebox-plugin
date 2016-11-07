@@ -265,17 +265,23 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 }
 
 class CBBoxDetail_Table extends CBMonthly_Table  {
+	private $table;
+	private $index_column;
+	private $index_title;
 	public function prepare_items($table, $index_column, $index_title) {
-		$columns = $this->get_columns($index_column, $index_title);
+		$this->table = $table ? $table : $this->table;
+		$this->index_column = $index_column ? $index_column : $this->index_column;
+		$this->index_title = $index_title ? $index_title : $this->index_title;
+		$columns = $this->get_columns();
 		$hidden = $this->get_hidden_columns();
 		$sortable = $this->get_sortable_columns();
 		$data = $this->table_data($table);
 		$this->_column_headers = array($columns, $hidden, $sortable);
 		$this->items = $data;
 	}
-	public function get_columns($index_column, $index_title) {
+	public function get_columns() {
 		$columns = array(
-			$index_column => $index_title,
+			$this->index_column => $this->index_title,
 			'box_count' => 'Boxes',
 			'booked_revenue' => 'Total Revenue',
 			'booked_revenue_per_box' => 'Rev/Box',
@@ -306,10 +312,10 @@ class CBBoxDetail_Table extends CBMonthly_Table  {
 			return $val;
 		}
 	}
-	private function table_data($table) {
+	private function table_data() {
 		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
 		$rs = new CBRedshift($schema);
-		return $rs->execute_query("SELECT * FROM $table;");
+		return $rs->execute_query("SELECT * FROM $this->table;");
 	}
 }
 
