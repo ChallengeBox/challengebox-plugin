@@ -49,7 +49,7 @@ class CBWeeklyChallenge {
 		}
 		*/
 
-		$this->entry_open   = $date->copy()->startOfWeek()->subWeek()->addDays(4);
+		$this->entry_open   = $date->copy()->startOfWeek()->subWeek(); // ->addDays(4);
 		$this->entry_closed = $date->copy()->endOfWeek()->subWeek();
 
 		$this->load_global();
