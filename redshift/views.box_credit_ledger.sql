@@ -410,6 +410,8 @@ CREATE VIEW box_credit_ledger_base AS
 		, total
 		, revenue
 		, renewal_revenue
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_net / box_credits_since_last_renewal ELSE 0 END AS ideal_revenue
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_net / box_credits_since_last_renewal ELSE 0 END AS ideal_revenue_including_refunds
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_renewal_revenue / max_boxes_since_last_renewal ELSE 0 END AS todate_revenue
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_price_items / max_boxes_since_last_renewal ELSE 0 END AS todate_price_items
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_price_ship / max_boxes_since_last_renewal ELSE 0 END AS todate_price_ship
@@ -425,7 +427,6 @@ CREATE VIEW box_credit_ledger_base AS
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_net / max_boxes_since_last_renewal ELSE 0 END AS todate_stripe_refund_net
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_fees_net / max_boxes_since_last_renewal ELSE 0 END AS todate_stripe_fees_net
 		, CASE WHEN kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_net / max_boxes_since_last_renewal ELSE 0 END AS todate_stripe_net
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_renewal_revenue / box_credits_since_last_renewal ELSE 0 END AS ideal_revenue
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_price_items / box_credits_since_last_renewal ELSE 0 END AS ideal_price_items
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_price_ship / box_credits_since_last_renewal ELSE 0 END AS ideal_price_ship
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_price_rush / box_credits_since_last_renewal ELSE 0 END AS ideal_price_rush
@@ -434,12 +435,18 @@ CREATE VIEW box_credit_ledger_base AS
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_gross / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_charge_gross
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_fees / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_charge_fees
 		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_charge_net
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_count / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_count
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_gross / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_gross
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_fees / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_fees
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_net
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_fees_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_fees_net
-		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_net
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_count / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_count_including_refunds
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_gross / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_gross_including_refunds
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_fees / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_fees_including_refunds
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_refund_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_refund_net_including_refunds
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_fees_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_fees_net_including_refunds
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_net_including_refunds
+		, 0 AS ideal_stripe_refund_count
+		, 0 AS ideal_stripe_refund_gross
+		, 0 AS ideal_stripe_refund_fees
+		, 0 AS ideal_stripe_refund_net
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_fees / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_fees_net
+		, CASE WHEN box_credits_since_last_renewal > 0 AND kind = 'box' AND status IN ('completed', 'refunded', 'processing') THEN last_stripe_charge_net / box_credits_since_last_renewal ELSE 0 END AS ideal_stripe_net
 		, box_credits
 		, box_credits_alt
 		, box_debits
@@ -473,7 +480,7 @@ CREATE VIEW box_credit_ledger AS
 		, total AS amt
 		, revenue
 		, renewal_revenue
-		, least(todate_revenue, ideal_revenue) AS booked_revenue, ideal_revenue , todate_revenue
+		, least(todate_revenue, ideal_revenue_including_refunds) AS booked_revenue, ideal_revenue, todate_revenue
 		, least(ideal_price_items, todate_price_items) AS booked_price_items, ideal_price_items, todate_price_items
 		, least(ideal_price_ship, todate_price_ship) AS booked_price_ship, ideal_price_ship, todate_price_ship
 		, least(ideal_price_rush, todate_price_rush) AS booked_price_rush, ideal_price_rush, todate_price_rush
@@ -482,12 +489,12 @@ CREATE VIEW box_credit_ledger AS
 		, least(todate_stripe_charge_gross, ideal_stripe_charge_gross) AS booked_stripe_charge_gross, todate_stripe_charge_gross, ideal_stripe_charge_gross
 		, least(ideal_stripe_charge_fees, todate_stripe_charge_fees) AS booked_stripe_charge_fees, ideal_stripe_charge_fees, todate_stripe_charge_fees
 		, least(ideal_stripe_charge_net, todate_stripe_charge_net) AS booked_stripe_charge_net, ideal_stripe_charge_net, todate_stripe_charge_net
-		, least(todate_stripe_refund_count, ideal_stripe_refund_count) AS booked_stripe_refund_count, todate_stripe_refund_count, ideal_stripe_refund_count
-		, least(todate_stripe_refund_gross, ideal_stripe_refund_gross) AS booked_stripe_refund_gross, todate_stripe_refund_gross, ideal_stripe_refund_gross
-		, least(todate_stripe_refund_fees, ideal_stripe_refund_fees) AS booked_stripe_refund_fees, todate_stripe_refund_fees, ideal_stripe_refund_fees
-		, least(todate_stripe_refund_net, ideal_stripe_refund_net) AS booked_stripe_refund_net, todate_stripe_refund_net, ideal_stripe_refund_net
-		, least(todate_stripe_fees_net, ideal_stripe_fees_net) AS booked_stripe_fees_net, todate_stripe_fees_net, ideal_stripe_fees_net
-		, least(todate_stripe_net, ideal_stripe_net) AS booked_stripe_net, todate_stripe_net, ideal_stripe_net
+		, least(todate_stripe_refund_count, ideal_stripe_refund_count_including_refunds) AS booked_stripe_refund_count, todate_stripe_refund_count, ideal_stripe_refund_count
+		, least(todate_stripe_refund_gross, ideal_stripe_refund_gross_including_refunds) AS booked_stripe_refund_gross, todate_stripe_refund_gross, ideal_stripe_refund_gross
+		, least(todate_stripe_refund_fees, ideal_stripe_refund_fees_including_refunds) AS booked_stripe_refund_fees, todate_stripe_refund_fees, ideal_stripe_refund_fees
+		, least(todate_stripe_refund_net, ideal_stripe_refund_net_including_refunds) AS booked_stripe_refund_net, todate_stripe_refund_net, ideal_stripe_refund_net
+		, least(todate_stripe_fees_net, ideal_stripe_fees_net_including_refunds) AS booked_stripe_fees_net, todate_stripe_fees_net, ideal_stripe_fees_net
+		, least(todate_stripe_net, ideal_stripe_net_including_refunds) AS booked_stripe_net, todate_stripe_net, ideal_stripe_net
 		, total_revenue
 		, total_renewal_revenue
 		, last_renewal_revenue
