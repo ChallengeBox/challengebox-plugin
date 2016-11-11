@@ -725,7 +725,7 @@ class CBWoo {
 		}
 
 		// Subscription skus
-		if ('subscription' == $exploded[0]) {
+		if ('subscription' == $exploded[0] || 'starter' == $exploded[0]) {
 			switch (sizeof($exploded)) {
 				case 2: list($subscription, $plan) = $exploded; break;
 				case 3: list($subscription, $plan, $singlebox) = $exploded; break;
@@ -735,14 +735,28 @@ class CBWoo {
 				case 'single': 
 				case 'single-v2': 
 					$plan = 'Single Box'; $credits = 1; break;
+				case 'membership': // starter_membership
 				case 'monthly':
 				case 'monthly-v2':
+				case 'community-1mo-v1':
+				case 'basics-1mo-v1':
+				case 'essentials-1mo-v1':
 					$plan = 'Month to Month'; $credits = 1; break;
 				case '3month':
 				case '3month-v2':
+				case 'community-3mo-v1':
+				case 'basics-3mo-v1':
+				case 'essentials-3mo-v1':
 					$plan = '3 Month'; $credits = 3; break;
+				case 'community-6mo-v1':
+				case 'basics-6mo-v1':
+				case 'essentials-6mo-v1':
+					$plan = '6 Month'; $credits = 6; break;
 				case '12month':
 				case '12month-v2':
+				case 'community-12mo-v1':
+				case 'basics-12mo-v1':
+				case 'essentials-12mo-v1':
 					$plan = '12 Month'; $credits = 12; break;
 				default: throw new InvalidSku($sku . ': unexpected plan type');
 			}
