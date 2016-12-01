@@ -24,6 +24,8 @@ class CBRedshift {
 	protected static $default_bucket_production = 'challengebox-redshift';
 	protected static $default_bucket_dev = 'challengebox-redshift-dev';
 
+	protected static $default_local_s3_dir = '/tmp/s3';
+
 	protected $debug_enabled;
 	protected $debug_func;
 	protected $db;
@@ -47,11 +49,13 @@ class CBRedshift {
 		}
 	}
 
-	public function __construct($schema=null, $bucket=null, $cxn_string=null, $debug=false) {
+	public function __construct($schema=null, $bucket=null, $cxn_string=null, $debug=false, $local_s3_dir=null) {
 		$default = CBRedshift::get_defaults();
 		$this->debug_enabled = is_callable($debug) ? true : (bool) $debug;
 		$this->debug_func = is_callable($debug) ? $debug : 'var_dump';
 		$this->debug($default);
+
+		$this->local_s3_dir = isset($local_s3_dir) ? $local_s3_dir : CBRedshift::$default_local_s3_dir;
 
 		$this->schema = isset($schema) ? $schema : $default->schema;
 		$this->bucket = isset($bucket) ? $bucket : $default->bucket;
@@ -83,7 +87,7 @@ class CBRedshift {
 			$query = str_replace('$schema', $this->schema, $query);
 			$query = str_replace('$bucket', $this->bucket, $query);
 		}
-		$this->debug("Executing query:\n$query");
+		$this->debug("Executing Redshift query:\n$query");
 		$result = pg_query($query);
 		if (!$result) throw new Exception(pg_last_error());
 		return pg_fetch_all($result);
@@ -114,6 +118,57 @@ class CBRedshift {
 				'Body'   => $content
 		]);
 		fclose($fp);
+	}
+
+	//
+	// MySQL interface (for loading redshift views back to local db)
+	//
+
+	public function download_from_s3($file_path) {
+		$dir = implode('/', array(
+			$this->local_s3_dir,
+			$this->bucket,
+			dirname($file_path)
+		));
+		mkdir($dir, 0755, true);
+		$result = $this->s3Client->getObject([
+				'Bucket' => $this->bucket,
+				'Key'    => "$file_path",
+				'SaveAs' => "/tmp/s3/$this->bucket/$file_path",
+		]);
+	}
+
+	public function load_mysql_query($filename) {
+		$mysql_dir = realpath(__DIR__.'/../mysql');
+		$this->debug("Loading query from $mysql_dir/$filename");
+		return file_get_contents("$mysql_dir/$filename");
+	}
+
+	public function execute_mysql_file($filename) {
+		$query = $this->load_mysql_query($filename);
+		return $this->execute_mysql_query($query);
+	}
+
+	public function execute_mysql_query($query, $replace=true) {
+		global $wpdb;
+		if ($replace) {
+			$query = str_replace('$schema', $this->schema, $query);
+			$query = str_replace('$bucket', $this->bucket, $query);
+		}
+		$queries = explode(';', $query);
+		$results = array();
+		foreach ($queries as $q) {
+			if (!strlen(trim($q))) continue;
+			$this->debug("Executing MySQL query:\n$q");
+			$result = $wpdb->query($q);
+			if (false === $result) throw new Exception($wpdb->last_error);
+			array_push($results, $result);
+		}
+		if (sizeof($results) > 1) {
+			return $results;
+		} else {
+			return $results[0];
+		}
 	}
 
 	/**

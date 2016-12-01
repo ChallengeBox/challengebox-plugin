@@ -28,7 +28,7 @@ class CBAnalytics_Admin {
 
 		<?php
 		$bd_table = new CBBoxDetail_Table();
-		$bd_table->prepare_items('box_churn_by_sku_month', 'sku_month', 'SKU Month');
+		$bd_table->prepare_items('cb_analytics_box_churn_by_sku_month', 'sku_month', 'SKU Month');
 		?>
 				<h2>Box Details</h2>
 				<p>
@@ -41,9 +41,9 @@ class CBAnalytics_Admin {
 				</p>
 				<?php $bd_table->display(); ?>
 		<?php
-		$bd_table->prepare_items('box_churn_by_created_month', 'created_month', 'Created Month');
+		$bd_table->prepare_items('cb_analytics_box_churn_by_created_month', 'created_month', 'Created Month');
 		$bd_table->display();
-		$bd_table->prepare_items('box_churn_by_shipped_month', 'shipped_month', 'Shipped Month');
+		$bd_table->prepare_items('cb_analytics_box_churn_by_shipped_month', 'shipped_month', 'Shipped Month');
 		$bd_table->display();
 
 		$cohort_table = new CBCohort_Table();
@@ -214,9 +214,8 @@ class CBMonthly_Table extends WP_List_Table  {
 	}
 
 	private function table_data() {
-		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
-		$rs = new CBRedshift($schema);
-		return $rs->execute_query('SELECT * FROM monthly_analytics ORDER BY calendar_month;');
+		global $wpdb;
+		return $wpdb->get_results('SELECT * FROM cb_analytics_monthly_analytics ORDER BY calendar_month;', ARRAY_A);
 	}
 }
 
@@ -258,9 +257,8 @@ class CBSubStatus_Table extends CBMonthly_Table  {
 		return $val;
 	}
 	private function table_data() {
-		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
-		$rs = new CBRedshift($schema);
-		return $rs->execute_query('SELECT * FROM subscription_status_by_start_month;');
+		global $wpdb;
+		return $wpdb->get_results('SELECT * FROM cb_analytics_subscription_status_by_start_month ORDER BY start_month;', ARRAY_A);
 	}
 }
 
@@ -313,9 +311,8 @@ class CBBoxDetail_Table extends CBMonthly_Table  {
 		}
 	}
 	private function table_data() {
-		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
-		$rs = new CBRedshift($schema);
-		return $rs->execute_query("SELECT * FROM $this->table;");
+		global $wpdb;
+		return $wpdb->get_results("SELECT * FROM $this->table;", ARRAY_A);
 	}
 }
 
@@ -343,14 +340,13 @@ class CBCohort_Table extends CBMonthly_Table  {
 		return $columns;
 	}
 	public function table_data() {
-		$schema = isset($_GET['schema']) ? $_GET['schema'] : null;
-		$rs = new CBRedshift($schema);
+		global $wpdb;
 		$calendar_months = array();
 		$months_activated = array();
 		$variables = array();
 		$data = array();
 		// Catlogue rows, columns and variable names
-		foreach ($rs->execute_query('SELECT * FROM subscription_churn_cohort_analysis') as $row) {
+		foreach ($wpdb->get_results('SELECT * FROM cb_analytics_subscription_churn_cohort_analysis', ARRAY_A) as $row) {
 			$calendar_month = null;
 			$month_activated = null;
 			foreach ($row as $key => $value) {

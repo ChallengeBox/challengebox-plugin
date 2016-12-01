@@ -4935,6 +4935,52 @@ SQL;
 		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
 		$this->rs->cleanup_after_load();
 	}
+
+	/**
+	 * Load analytics results from our redshift analysis database
+	 * back into MySQL for display.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--all]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--limit=<limit>]
+	 * : Dummy option, does nothing.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 *  ---
+	 *  default: table
+	 *  options:
+	 *    - table
+	 *    - yaml
+	 *    - csv
+	 *    - json
+	 *  ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp cb load_analytics_results_from_redshift
+	 */
+	function load_analytics_results_from_redshift($args, $assoc_args) {
+		$assoc_args['redshift'] = true;
+		list($args, $assoc_args) = $this->parse_args($args, $assoc_args);
+		foreach (array(
+			'box_churn_by_sku_month',
+			'box_churn_by_created_month',
+			'box_churn_by_shipped_month',
+			'monthly_analytics',
+			'subscription_status_by_start_month',
+			'subscription_churn_cohort_analysis',
+		) as $table) {
+			$query = $this->rs->load_query('unload_table.sql');
+			$query = str_replace('$table', $table, $query);
+			$this->rs->execute_query($query);
+			$this->rs->download_from_s3("from_redshift/$table.csv.gz000");
+			$this->rs->execute_mysql_file("load_$table.sql");
+		}
+	}
 }
 
 
